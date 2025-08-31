@@ -1,63 +1,42 @@
+/*
+    Based on Neil Kolban example for IDF: https://github.com/nkolban/esp32-snippets/blob/master/cpp_utils/tests/BLE%20Tests/SampleServer.cpp
+    Ported to Arduino ESP32 by Evandro Copercini
+    updates by chegewara
+*/
+
 #include <BLEDevice.h>
 #include <BLEUtils.h>
 #include <BLEServer.h>
-#include <BLEAdvertising.h>
-#include <BLEPeriodicAdvertising.h>
 
-#define BUTTON_PIN 0
+// See the following for generating UUIDs:
+// https://www.uuidgenerator.net/
 
-BLEServer *pServer;
-BLEAdvertising *pAdvertising;
-BLEPeriodicAdvertising *pPeriodicAdv;
-BLECharacteristic *pCharacteristic;
-
-#define SERVICE_UUID        "12345678-1234-1234-1234-1234567890ab"
-#define CHARACTERISTIC_UUID "87654321-4321-4321-4321-0987654321ab"
+#define SERVICE_UUID        "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
+#define CHARACTERISTIC_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
 
 void setup() {
   Serial.begin(115200);
-  pinMode(BUTTON_PIN, INPUT_PULLUP);
+  Serial.println("Starting BLE work!");
 
-  BLEDevice::init("Cube_Trigger");
-  pServer = BLEDevice::createServer();
-
+  BLEDevice::init("Long name works now");
+  BLEServer *pServer = BLEDevice::createServer();
   BLEService *pService = pServer->createService(SERVICE_UUID);
-  pCharacteristic = pService->createCharacteristic(
-                      CHARACTERISTIC_UUID,
-                      BLECharacteristic::PROPERTY_READ   |
-                      BLECharacteristic::PROPERTY_WRITE  |
-                      BLECharacteristic::PROPERTY_NOTIFY
-                    );
-  pCharacteristic->setValue("Idle");
+  BLECharacteristic *pCharacteristic =
+    pService->createCharacteristic(CHARACTERISTIC_UUID, BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_WRITE);
+
+  pCharacteristic->setValue("Hello World says Neil");
   pService->start();
-
-  // 创建广播
-  pAdvertising = BLEDevice::getAdvertising();
+  // BLEAdvertising *pAdvertising = pServer->getAdvertising();  // this still is working for backward compatibility
+  BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
+  pAdvertising->addServiceUUID(SERVICE_UUID);
   pAdvertising->setScanResponse(true);
-
-  // 配置周期广播
-  pPeriodicAdv = pAdvertising->getPeriodicAdvertising();
+  pAdvertising->setMinPreferred(0x06);  // functions that help with iPhone connections issue
+  pAdvertising->setMinPreferred(0x12);
+  BLEDevice::startAdvertising();
+  Serial.println("Characteristic defined! Now you can read it in your phone!");
 }
 
 void loop() {
-  if (digitalRead(BUTTON_PIN) == LOW) {
-    Serial.println("Button pressed → Start periodic advertising with WAKEUP");
-    
-    BLEAdvertisementData advData;
-    advData.setName("Cube_Trigger");
-    advData.setManufacturerData("WAKEUP");  // 唤醒信号
-    pAdvertising->setAdvertisementData(advData);
-
-    pAdvertising->start();
-    pPeriodicAdv->start();  // 开启 periodic advertising
-
-    // 更新 GATT 值，等 Client 来连
-    pCharacteristic->setValue("Triggered");
-
-    delay(5000);  // 广播5秒
-    pPeriodicAdv->stop();
-    pAdvertising->stop();
-    Serial.println("Stop advertising");
-  }
-  delay(100);
+  // put your main code here, to run repeatedly:
+  delay(2000);
 }
