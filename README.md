@@ -39,3 +39,5 @@
 
 ## 8月31更新
 - 蓝牙正常建立连接的过程包含了一开始的server广播和client监听，也就是说不需要periodic_advertising和periodic_sync，直接server等待client连接就行
+## 9月8更新
+- 
