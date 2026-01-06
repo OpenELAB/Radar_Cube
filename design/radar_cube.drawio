@@ -1,0 +1,474 @@
+<mxfile host="Electron" agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/29.0.3 Chrome/140.0.7339.249 Electron/38.7.0 Safari/537.36" version="29.0.3">
+  <diagram name="第 1 页" id="Up8kLSkavfCG7bSTxml-">
+    <mxGraphModel dx="2037" dy="58" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-76" value="&lt;div style=&quot;&quot;&gt;&lt;br&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;align=left;" vertex="1" parent="1">
+          <mxGeometry x="560" y="2420" width="1070" height="840" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-145" value="" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="1210" y="2505" width="220" height="175" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-144" value="" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="893" y="2505" width="300" height="435" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-143" value="" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="580" y="2505" width="300" height="735" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-1" value="毫米波雷达驱动代码建议&lt;div&gt;1. 数字都用宏表示这样更清楚&lt;/div&gt;&lt;div&gt;2. 滤波算法单独一个函数或者类&lt;/div&gt;&lt;div&gt;3. 根据手册应该只有两种数据帧，一种下发和上报，payload不要夹杂在state&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;里面&lt;/span&gt;&lt;/div&gt;&lt;div&gt;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;4. 完整的frame全部提取出来之后再单独处理，根据length字段可以知道frame边界，以及这个帧是否有效&lt;/span&gt;&lt;/div&gt;&lt;div&gt;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;5. 驱动全部模块化，lora通信，espnow，sensor等，统一接口&lt;/span&gt;&lt;/div&gt;" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="50" y="1360" width="560" height="140" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-5" value="模式：&lt;div&gt;None - 换电池重新上电 - 直接睡眠&lt;br&gt;&lt;div&gt;Unpiar&amp;nbsp; 未配对模式&lt;br&gt;&lt;div&gt;Normal 正常模式&lt;/div&gt;&lt;div&gt;Pair 配对模式&lt;/div&gt;&lt;div&gt;Test 测试模式&lt;/div&gt;&lt;div&gt;Config 配置模式（预留 OTA？）&lt;/div&gt;&lt;/div&gt;&lt;/div&gt;" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="640" y="1370" width="340" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-6" value="指示灯行为：&lt;div&gt;慢闪烁 - 闪烁次数对应不同模式&lt;/div&gt;&lt;div&gt;常亮 - 通信中&lt;/div&gt;&lt;div&gt;快闪烁 - error&lt;/div&gt;&lt;div&gt;呼吸灯 - 未配对&lt;/div&gt;&lt;div&gt;雷达模块-额外红色led闪烁 - 低电量&lt;/div&gt;&lt;div&gt;待补充&lt;/div&gt;" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="640" y="1470" width="310" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-7" value="蜂鸣器行为（具体参数组合有待进一步测试和确定）：&lt;div&gt;&amp;gt;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;1.5m&amp;nbsp; &amp;nbsp; &amp;nbsp; &amp;nbsp; &amp;nbsp; &amp;nbsp;无反应&lt;/span&gt;&lt;/div&gt;&lt;div&gt;1-1.5m&amp;nbsp; &amp;nbsp; &amp;nbsp; &amp;nbsp; &amp;nbsp; 1hz&lt;/div&gt;&lt;div&gt;60-100cm&amp;nbsp; &amp;nbsp; &amp;nbsp;2hz&lt;/div&gt;&lt;div&gt;35 - 60cm&amp;nbsp; &amp;nbsp; &amp;nbsp;4hz&lt;/div&gt;&lt;div&gt;&amp;lt;35cm&amp;nbsp; &amp;nbsp; &amp;nbsp; &amp;nbsp; &amp;nbsp;长鸣&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;特殊蜂鸣器行为，表示error&amp;nbsp; &amp;nbsp; &amp;nbsp; &amp;nbsp;-&amp;nbsp; 下行音，&amp;nbsp;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;频率连续变化&lt;/span&gt;&lt;/div&gt;&lt;div&gt;特殊蜂鸣器行为，表示配对成功 - 上行音，&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;频率连续变化&lt;/span&gt;&lt;/div&gt;&lt;div&gt;特殊蜂鸣器行为，表示电量低/电量极低，提醒用户充电， 下行音，&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;频率阶梯变化&lt;/span&gt;&lt;/div&gt;" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="640" y="1570" width="360" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-18" value="注意事项：&lt;div&gt;必须手动进入配对模式，如果发现未配对直接睡眠就行。不然逻辑会更复杂&lt;/div&gt;" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="640" y="1730" width="250" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-30" value="&lt;b&gt;以防万一可以车内模块通过lora唤醒的时候，同时接收espnow数据，防止leida模块ack包丢包的情况&lt;/b&gt;" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="940" y="1360" width="310" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-40" value="1. 上电/唤醒初始化工作&lt;div&gt;打印设备/调试信息&lt;/div&gt;&lt;div&gt;硬件初始化 - GPIO &amp;amp; 蜂鸣器&lt;/div&gt;&lt;div&gt;检查是否配对过&lt;/div&gt;" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="100" y="1945" width="200" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-41" value="2. 根据按钮识以及睡眠唤醒理由别当前模式&lt;div&gt;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;user button&lt;/span&gt;&lt;/div&gt;&lt;div&gt;- 短按 normal mode&lt;/div&gt;&lt;div&gt;- 长按（3s）Pair模式&lt;/div&gt;&lt;div&gt;dev button&lt;/div&gt;&lt;div&gt;- 短按 test mode&lt;/div&gt;&lt;div&gt;- 长按 config mode&lt;/div&gt;&lt;div&gt;Unpair 未配对模式&lt;/div&gt;&lt;div&gt;None 一配对无按键操作 - 直接睡眠&lt;/div&gt;" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="100" y="1995" width="250" height="140" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-42" value="3. 对应模式处理&lt;div&gt;Unpair 未配对模式 - 发出提醒并进入睡眠&lt;br&gt;&lt;div&gt;&lt;span style=&quot;&quot;&gt;Nomral 正常模式 - 正常的一次倒车雷达运行&lt;/span&gt;&lt;div style=&quot;&quot;&gt;Pair 配对模式，车内外模块进行配对，记录通信mac地址&lt;/div&gt;&lt;div style=&quot;&quot;&gt;Test 测试模式，用于开发和工厂测试硬件&lt;/div&gt;&lt;div style=&quot;&quot;&gt;Config 配置模式，预留日后按需使用，可用于新版本/临时修改设备配置&lt;/div&gt;&lt;/div&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;br&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;读取自身电池电量 - 低电量报警&lt;/div&gt;" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="100" y="2155" width="430" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-43" value="车内模块程序设计" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="50" y="1920" width="190" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-44" value="4. 配置深度睡眠及其唤醒，然后进入睡眠" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="100" y="2270" width="176" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-45" value="Unpair 模式&lt;div&gt;发出蜂鸣器提醒，然后进入睡眠&lt;/div&gt;" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="100" y="2320" width="180" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-46" value="Normal模式&lt;div&gt;初始化lora硬件&lt;/div&gt;&lt;div&gt;初始化espnow硬件&lt;/div&gt;&lt;div&gt;控制lora模块发送唤醒数据包&lt;/div&gt;&lt;div&gt;接收到雷达模块lora ack后，开始通过espnow接收雷达模块的数据，此时如果检测到雷达模块电量低，报警&lt;/div&gt;&lt;div&gt;持续接收，解析并通过蜂鸣器显示距离&lt;/div&gt;&lt;div&gt;同时设置userbutton为中断gpio，如果期间用户按下按钮则告知雷达模块停止工作，并且进入睡眠等待下一次唤醒&lt;/div&gt;" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="100" y="2350" width="441" height="140" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-47" value="Test 模式&lt;div&gt;有待补充&lt;/div&gt;" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="100" y="2620" width="60" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-48" value="Config模式&lt;div&gt;有待补充&lt;/div&gt;" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="64" y="2660" width="140" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-49" value="Pair配对模式&lt;div&gt;初始化espnow&lt;/div&gt;&lt;div&gt;循环发送配对请求&lt;/div&gt;&lt;div&gt;收到雷达模块回复后，记录其mac地址，并且更新nvs 字段paired&lt;/div&gt;&lt;div&gt;发出提示音配对成功&lt;/div&gt;&lt;div&gt;进入睡眠等待唤醒&lt;/div&gt;" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="100" y="2490" width="400" height="130" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-50" value="&lt;b&gt;车内模块程序设计&lt;/b&gt;" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="988" y="1920" width="190" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-51" value="&lt;div style=&quot;&quot;&gt;&lt;br&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;align=left;" vertex="1" parent="1">
+          <mxGeometry x="978" y="1960" width="220" height="170" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-75" value="&lt;div style=&quot;&quot;&gt;&lt;br&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;align=left;" vertex="1" parent="1">
+          <mxGeometry x="968" y="2140" width="242" height="250" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-80" value="&lt;div style=&quot;&quot;&gt;Test&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;align=left;" vertex="1" parent="1">
+          <mxGeometry x="1470" y="2505" width="30" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-81" value="&lt;div style=&quot;&quot;&gt;Config&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;align=left;" vertex="1" parent="1">
+          <mxGeometry x="1540" y="2505" width="50" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-82" value="&lt;b&gt;是否需要一个专用于ce认证的模式，不用无限唤醒模式&lt;/b&gt;" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="938" y="1400" width="310" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-83" value="&lt;span style=&quot;forced-color-adjust: none;&quot;&gt;&lt;b&gt;1. 上电/唤醒初始化工作&lt;/b&gt;&lt;/span&gt;&lt;div style=&quot;forced-color-adjust: none;&quot;&gt;&lt;br style=&quot;forced-color-adjust: none; color: rgb(0, 0, 0); font-family: Helvetica; font-size: 12px; font-style: normal; font-variant-ligatures: normal; font-variant-caps: normal; font-weight: 400; letter-spacing: normal; orphans: 2; text-align: left; text-indent: 0px; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: normal; background-color: rgb(236, 236, 236); text-decoration-thickness: initial; text-decoration-style: initial; text-decoration-color: initial;&quot;&gt;&lt;/div&gt;" style="text;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="1023" y="1960" width="140" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-84" value="&lt;span style=&quot;color: rgb(0, 0, 0); font-family: Helvetica; font-size: 12px; font-style: normal; font-variant-ligatures: normal; font-variant-caps: normal; font-weight: 400; letter-spacing: normal; orphans: 2; text-align: left; text-indent: 0px; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: normal; text-decoration-thickness: initial; text-decoration-style: initial; text-decoration-color: initial; float: none; display: inline !important;&quot;&gt;2. 模式识别&lt;/span&gt;" style="text;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="1049.75" y="2140" width="76.5" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-85" value="&lt;span style=&quot;color: rgb(0, 0, 0); font-family: Helvetica; font-size: 12px; font-style: normal; font-variant-ligatures: normal; font-variant-caps: normal; letter-spacing: normal; orphans: 2; text-align: left; text-indent: 0px; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: normal; text-decoration-thickness: initial; text-decoration-style: initial; text-decoration-color: initial; float: none; display: inline !important;&quot;&gt;&lt;b style=&quot;&quot;&gt;3. 模式处理&lt;/b&gt;&lt;/span&gt;" style="text;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="1036.25" y="2420" width="90" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-86" value="&lt;span style=&quot;text-align: left;&quot;&gt;打印设备/调试信息&lt;/span&gt;" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="1023" y="1990" width="125" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-88" value="&lt;span style=&quot;color: rgb(0, 0, 0); font-family: Helvetica; font-size: 12px; font-style: normal; font-variant-ligatures: normal; font-variant-caps: normal; font-weight: 400; letter-spacing: normal; orphans: 2; text-align: left; text-indent: 0px; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: normal; text-decoration-thickness: initial; text-decoration-style: initial; text-decoration-color: initial; float: none; display: inline !important;&quot;&gt;硬件初始化 - GPIO &amp;amp; 蜂鸣器&lt;/span&gt;" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="1003" y="2027.5" width="170" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-89" value="&lt;span style=&quot;color: rgb(0, 0, 0); font-family: Helvetica; font-size: 12px; font-style: normal; font-variant-ligatures: normal; font-variant-caps: normal; font-weight: 400; letter-spacing: normal; orphans: 2; text-align: left; text-indent: 0px; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: normal; text-decoration-thickness: initial; text-decoration-style: initial; text-decoration-color: initial; float: none; display: inline !important;&quot;&gt;检查是否配对过 - 读取nvs&lt;/span&gt;" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="1013" y="2070" width="160" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-90" value="Normal - 短按User button" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="993" y="2170" width="180" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-91" value="Pair - 长按Userbutton超过3秒" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="988" y="2200" width="206" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-92" value="Test - 短按dev button" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="1017.25" y="2230" width="140" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-93" value="Config - 长按dev button" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="1017" y="2260" width="140" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-94" value="Unpair - 上述都未发生并且nvs显示unpair" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="988" y="2290" width="193" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-95" value="Normal模式" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="654" y="2530" width="80" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-96" value="&lt;div style=&quot;forced-color-adjust: none; color: rgb(0, 0, 0); font-family: Helvetica; font-size: 12px; font-style: normal; font-variant-ligatures: normal; font-variant-caps: normal; letter-spacing: normal; orphans: 2; text-align: left; text-indent: 0px; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: normal; text-decoration-thickness: initial; text-decoration-style: initial; text-decoration-color: initial;&quot;&gt;&lt;span&gt;初始化lora硬件&lt;/span&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="649" y="2560" width="100" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-97" value="&lt;div style=&quot;forced-color-adjust: none; color: rgb(0, 0, 0); font-family: Helvetica; font-size: 12px; font-style: normal; font-variant-ligatures: normal; font-variant-caps: normal; letter-spacing: normal; orphans: 2; text-align: left; text-indent: 0px; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: normal; text-decoration-thickness: initial; text-decoration-style: initial; text-decoration-color: initial;&quot;&gt;初始化espnow硬件&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="644" y="2590" width="110" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-100" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="7CyqZpYL4BO0aw3nbGov-98" target="7CyqZpYL4BO0aw3nbGov-99">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-98" value="&lt;div style=&quot;forced-color-adjust: none; color: rgb(0, 0, 0); font-family: Helvetica; font-size: 12px; font-style: normal; font-variant-ligatures: normal; font-variant-caps: normal; letter-spacing: normal; orphans: 2; text-align: left; text-indent: 0px; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: normal; text-decoration-thickness: initial; text-decoration-style: initial; text-decoration-color: initial;&quot;&gt;控制lora模块发送唤醒数据包&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="619" y="2660" width="160" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-102" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="7CyqZpYL4BO0aw3nbGov-99" target="7CyqZpYL4BO0aw3nbGov-101">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-105" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="7CyqZpYL4BO0aw3nbGov-99" target="7CyqZpYL4BO0aw3nbGov-98">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="809" y="2750" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="799" y="2750" />
+              <mxPoint x="799" y="2675" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-99" value="收到ACK？" style="rhombus;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="664" y="2720" width="70" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-101" value="&lt;div style=&quot;forced-color-adjust: none; color: rgb(0, 0, 0); font-family: Helvetica; font-size: 12px; font-style: normal; font-variant-ligatures: normal; font-variant-caps: normal; letter-spacing: normal; orphans: 2; text-align: left; text-indent: 0px; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: normal; text-decoration-thickness: initial; text-decoration-style: initial; text-decoration-color: initial;&quot;&gt;&lt;span&gt;蜂鸣器显示雷达连接成功&lt;/span&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="619" y="2810" width="160" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-103" value="yes" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="689" y="2770" width="60" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-106" value="No" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="719" y="2720" width="60" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-107" value="尝试3次不成功就报警" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="809" y="2700" width="60" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-108" value="&lt;div style=&quot;forced-color-adjust: none; color: rgb(0, 0, 0); font-family: Helvetica; font-size: 12px; font-style: normal; font-variant-ligatures: normal; font-variant-caps: normal; letter-spacing: normal; orphans: 2; text-align: left; text-indent: 0px; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: normal; text-decoration-thickness: initial; text-decoration-style: initial; text-decoration-color: initial;&quot;&gt;espnow接收雷达模块的数据&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="619" y="2888" width="160" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-117" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="7CyqZpYL4BO0aw3nbGov-109" target="7CyqZpYL4BO0aw3nbGov-116">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-119" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="7CyqZpYL4BO0aw3nbGov-109" target="7CyqZpYL4BO0aw3nbGov-108">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="854" y="3045" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="819" y="3045" />
+              <mxPoint x="819" y="2903" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-109" value="userbutton&lt;div&gt;按下&lt;/div&gt;" style="rhombus;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="661.5" y="3010" width="75" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-114" value="解析雷达数据" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="619" y="2930" width="160" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-115" value="蜂鸣器鸣叫" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="619" y="2970" width="160" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-116" value="通过espnow告知雷达模块停止工作" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="619" y="3110" width="160" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-120" value="No" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="729" y="3020" width="60" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-121" value="yes" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="689" y="3070" width="60" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-122" value="&lt;div style=&quot;forced-color-adjust: none; color: rgb(0, 0, 0); font-family: Helvetica; font-size: 12px; font-style: normal; font-variant-ligatures: normal; font-variant-caps: normal; letter-spacing: normal; orphans: 2; text-align: left; text-indent: 0px; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: normal; text-decoration-thickness: initial; text-decoration-style: initial; text-decoration-color: initial;&quot;&gt;设置userbutton 中断gpio&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="644" y="2620" width="110" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-123" value="重新配置和进入睡眠" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="618" y="3200" width="160" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-124" value="Pair 配对模式" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="975" y="2520" width="80" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-126" value="&lt;div style=&quot;forced-color-adjust: none; color: rgb(0, 0, 0); font-family: Helvetica; font-size: 12px; font-style: normal; font-variant-ligatures: normal; font-variant-caps: normal; letter-spacing: normal; orphans: 2; text-align: left; text-indent: 0px; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: normal; text-decoration-thickness: initial; text-decoration-style: initial; text-decoration-color: initial;&quot;&gt;初始化espnow硬件&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="960" y="2560" width="110" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-128" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="7CyqZpYL4BO0aw3nbGov-129" target="7CyqZpYL4BO0aw3nbGov-132">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-129" value="&lt;div style=&quot;forced-color-adjust: none; color: rgb(0, 0, 0); font-family: Helvetica; font-size: 12px; font-style: normal; font-variant-ligatures: normal; font-variant-caps: normal; letter-spacing: normal; orphans: 2; text-align: left; text-indent: 0px; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: normal; text-decoration-thickness: initial; text-decoration-style: initial; text-decoration-color: initial;&quot;&gt;发送配对请求&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="940" y="2610" width="160" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-130" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="7CyqZpYL4BO0aw3nbGov-132" target="7CyqZpYL4BO0aw3nbGov-133">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-131" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="7CyqZpYL4BO0aw3nbGov-132" target="7CyqZpYL4BO0aw3nbGov-129">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1130" y="2700" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="1120" y="2700" />
+              <mxPoint x="1120" y="2625" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-132" value="收到ACK？" style="rhombus;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="985" y="2670" width="70" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-133" value="&lt;div style=&quot;forced-color-adjust: none; color: rgb(0, 0, 0); font-family: Helvetica; font-size: 12px; font-style: normal; font-variant-ligatures: normal; font-variant-caps: normal; letter-spacing: normal; orphans: 2; text-align: left; text-indent: 0px; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: normal; text-decoration-thickness: initial; text-decoration-style: initial; text-decoration-color: initial;&quot;&gt;&lt;span&gt;蜂鸣器显示配对成功&lt;/span&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="940" y="2760" width="160" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-134" value="yes" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="1010" y="2720" width="60" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-135" value="No" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="1040" y="2670" width="60" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-137" value="尝试N次" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="1120" y="2650" width="60" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-138" value="重新配置和进入睡眠" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="938" y="2893" width="160" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-139" value="&lt;span style=&quot;text-align: left;&quot;&gt;记录其mac地址，并且更新nvs 字段paired&lt;/span&gt;" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="938" y="2853" width="160" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-140" value="&lt;span style=&quot;color: rgb(0, 0, 0); font-family: Helvetica; font-size: 12px; font-style: normal; font-variant-ligatures: normal; font-variant-caps: normal; font-weight: 400; letter-spacing: normal; orphans: 2; text-align: left; text-indent: 0px; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: normal; text-decoration-thickness: initial; text-decoration-style: initial; text-decoration-color: initial; float: none; display: inline !important;&quot;&gt;Unpair 模式&lt;/span&gt;" style="text;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="1270" y="2510" width="80" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-141" value="&lt;div style=&quot;forced-color-adjust: none; color: rgb(0, 0, 0); font-family: Helvetica; font-size: 12px; font-style: normal; font-variant-ligatures: normal; font-variant-caps: normal; letter-spacing: normal; orphans: 2; text-align: left; text-indent: 0px; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: normal; text-decoration-thickness: initial; text-decoration-style: initial; text-decoration-color: initial;&quot;&gt;发出蜂鸣器提醒未配对&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="1248" y="2545" width="140" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-142" value="&lt;div style=&quot;forced-color-adjust: none; color: rgb(0, 0, 0); font-family: Helvetica; font-size: 12px; font-style: normal; font-variant-ligatures: normal; font-variant-caps: normal; letter-spacing: normal; orphans: 2; text-align: left; text-indent: 0px; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: normal; text-decoration-thickness: initial; text-decoration-style: initial; text-decoration-color: initial;&quot;&gt;&lt;span style=&quot;text-align: center;&quot;&gt;重新配置和进入睡眠&lt;/span&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="1263" y="2585" width="110" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-147" value="&lt;div style=&quot;&quot;&gt;&lt;br&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;align=left;" vertex="1" parent="1">
+          <mxGeometry x="1910" y="2388.75" width="1070" height="495" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-148" value="" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="2560" y="2473.75" width="220" height="175" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-149" value="" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="2243" y="2473.75" width="300" height="380" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-150" value="" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="1928" y="2456.25" width="300" height="397.5" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-151" value="&lt;b&gt;车尾模块程序设计&lt;/b&gt;" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="2328" y="1915" width="190" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-152" value="&lt;div style=&quot;&quot;&gt;&lt;br&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;align=left;" vertex="1" parent="1">
+          <mxGeometry x="2318" y="1955" width="220" height="160" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-153" value="&lt;div style=&quot;&quot;&gt;&lt;br&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;align=left;" vertex="1" parent="1">
+          <mxGeometry x="2313" y="2135" width="230" height="235" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-154" value="&lt;div style=&quot;&quot;&gt;Test&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;align=left;" vertex="1" parent="1">
+          <mxGeometry x="2820" y="2473.75" width="30" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-155" value="&lt;div style=&quot;&quot;&gt;Config&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;align=left;" vertex="1" parent="1">
+          <mxGeometry x="2890" y="2473.75" width="50" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-156" value="&lt;span style=&quot;forced-color-adjust: none;&quot;&gt;&lt;b&gt;1. 上电/唤醒初始化工作&lt;/b&gt;&lt;/span&gt;&lt;div style=&quot;forced-color-adjust: none;&quot;&gt;&lt;br style=&quot;forced-color-adjust: none; color: rgb(0, 0, 0); font-family: Helvetica; font-size: 12px; font-style: normal; font-variant-ligatures: normal; font-variant-caps: normal; font-weight: 400; letter-spacing: normal; orphans: 2; text-align: left; text-indent: 0px; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: normal; background-color: rgb(236, 236, 236); text-decoration-thickness: initial; text-decoration-style: initial; text-decoration-color: initial;&quot;&gt;&lt;/div&gt;" style="text;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="2363" y="1955" width="140" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-157" value="&lt;span style=&quot;color: rgb(0, 0, 0); font-family: Helvetica; font-size: 12px; font-style: normal; font-variant-ligatures: normal; font-variant-caps: normal; font-weight: 400; letter-spacing: normal; orphans: 2; text-align: left; text-indent: 0px; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: normal; text-decoration-thickness: initial; text-decoration-style: initial; text-decoration-color: initial; float: none; display: inline !important;&quot;&gt;2. 模式识别&lt;/span&gt;" style="text;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="2394.75" y="2135" width="76.5" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-158" value="&lt;span style=&quot;color: rgb(0, 0, 0); font-family: Helvetica; font-size: 12px; font-style: normal; font-variant-ligatures: normal; font-variant-caps: normal; letter-spacing: normal; orphans: 2; text-align: left; text-indent: 0px; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: normal; text-decoration-thickness: initial; text-decoration-style: initial; text-decoration-color: initial; float: none; display: inline !important;&quot;&gt;&lt;b style=&quot;&quot;&gt;3. 模式处理&lt;/b&gt;&lt;/span&gt;" style="text;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="2386.25" y="2388.75" width="90" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-159" value="&lt;span style=&quot;text-align: left;&quot;&gt;打印设备/调试信息&lt;/span&gt;" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="2363" y="1985" width="125" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-160" value="&lt;span style=&quot;color: rgb(0, 0, 0); font-family: Helvetica; font-size: 12px; font-style: normal; font-variant-ligatures: normal; font-variant-caps: normal; font-weight: 400; letter-spacing: normal; orphans: 2; text-align: left; text-indent: 0px; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: normal; text-decoration-thickness: initial; text-decoration-style: initial; text-decoration-color: initial; float: none; display: inline !important;&quot;&gt;硬件初始化 - GPIO + lora空中唤醒&lt;/span&gt;" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="2343" y="2022.5" width="170" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-161" value="&lt;span style=&quot;color: rgb(0, 0, 0); font-family: Helvetica; font-size: 12px; font-style: normal; font-variant-ligatures: normal; font-variant-caps: normal; font-weight: 400; letter-spacing: normal; orphans: 2; text-align: left; text-indent: 0px; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: normal; text-decoration-thickness: initial; text-decoration-style: initial; text-decoration-color: initial; float: none; display: inline !important;&quot;&gt;检查是否配对过 - 读取nvs&lt;/span&gt;" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="2353" y="2065" width="160" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-162" value="Normal - lora引脚唤醒" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="2338" y="2165" width="180" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-163" value="Pair - 长按Userbutton超过3秒" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="2333" y="2195" width="206" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-164" value="Test - 短按dev button" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="2362.25" y="2225" width="140" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-165" value="Config - 长按dev button" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="2362" y="2255" width="140" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-166" value="Unpair - 上述都未发生并且nvs显示unpair" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="2333" y="2285" width="193" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-167" value="Normal模式" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="2004" y="2498.75" width="80" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-169" value="&lt;div style=&quot;forced-color-adjust: none; color: rgb(0, 0, 0); font-family: Helvetica; font-size: 12px; font-style: normal; font-variant-ligatures: normal; font-variant-caps: normal; letter-spacing: normal; orphans: 2; text-align: left; text-indent: 0px; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: normal; text-decoration-thickness: initial; text-decoration-style: initial; text-decoration-color: initial;&quot;&gt;初始化espnow硬件&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="1994" y="2558.75" width="110" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-170" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="7CyqZpYL4BO0aw3nbGov-171" target="7CyqZpYL4BO0aw3nbGov-174">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-171" value="&lt;div style=&quot;forced-color-adjust: none; color: rgb(0, 0, 0); font-family: Helvetica; font-size: 12px; font-style: normal; font-variant-ligatures: normal; font-variant-caps: normal; letter-spacing: normal; orphans: 2; text-align: left; text-indent: 0px; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: normal; text-decoration-thickness: initial; text-decoration-style: initial; text-decoration-color: initial;&quot;&gt;读取解析雷达传感器并espnow传出&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="1969" y="2628.75" width="160" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-172" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="7CyqZpYL4BO0aw3nbGov-174">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="2049" y="2778.75" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-173" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="7CyqZpYL4BO0aw3nbGov-174" target="7CyqZpYL4BO0aw3nbGov-171">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="2159" y="2718.75" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="2149" y="2718.75" />
+              <mxPoint x="2149" y="2643.75" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-174" value="收到stop？" style="rhombus;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="2014" y="2688.75" width="70" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-176" value="yes" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="2039" y="2738.75" width="60" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-177" value="No" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="2069" y="2688.75" width="60" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-188" value="&lt;div style=&quot;forced-color-adjust: none; color: rgb(0, 0, 0); font-family: Helvetica; font-size: 12px; font-style: normal; font-variant-ligatures: normal; font-variant-caps: normal; letter-spacing: normal; orphans: 2; text-align: left; text-indent: 0px; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: normal; text-decoration-thickness: initial; text-decoration-style: initial; text-decoration-color: initial;&quot;&gt;初始化雷达传感器并且试读取多次&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="1994" y="2588.75" width="110" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-189" value="重新配置和进入睡眠" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="1969" y="2778.75" width="160" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-190" value="Pair 配对模式" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="2325" y="2488.75" width="80" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-191" value="&lt;div style=&quot;forced-color-adjust: none; color: rgb(0, 0, 0); font-family: Helvetica; font-size: 12px; font-style: normal; font-variant-ligatures: normal; font-variant-caps: normal; letter-spacing: normal; orphans: 2; text-align: left; text-indent: 0px; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: normal; text-decoration-thickness: initial; text-decoration-style: initial; text-decoration-color: initial;&quot;&gt;初始化espnow硬件&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="2310" y="2528.75" width="110" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-192" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="7CyqZpYL4BO0aw3nbGov-193" target="7CyqZpYL4BO0aw3nbGov-196">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-193" value="&lt;div style=&quot;forced-color-adjust: none; color: rgb(0, 0, 0); font-family: Helvetica; font-size: 12px; font-style: normal; font-variant-ligatures: normal; font-variant-caps: normal; letter-spacing: normal; orphans: 2; text-align: left; text-indent: 0px; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: normal; text-decoration-thickness: initial; text-decoration-style: initial; text-decoration-color: initial;&quot;&gt;等待车内模块请求&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="2290" y="2578.75" width="160" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-194" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="7CyqZpYL4BO0aw3nbGov-196" target="7CyqZpYL4BO0aw3nbGov-197">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-195" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="7CyqZpYL4BO0aw3nbGov-196" target="7CyqZpYL4BO0aw3nbGov-193">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="2480" y="2668.75" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="2470" y="2668.75" />
+              <mxPoint x="2470" y="2593.75" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-196" value="收到ACK？" style="rhombus;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="2335" y="2638.75" width="70" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-197" value="&lt;div style=&quot;forced-color-adjust: none; color: rgb(0, 0, 0); font-family: Helvetica; font-size: 12px; font-style: normal; font-variant-ligatures: normal; font-variant-caps: normal; letter-spacing: normal; orphans: 2; text-align: left; text-indent: 0px; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: normal; text-decoration-thickness: initial; text-decoration-style: initial; text-decoration-color: initial;&quot;&gt;&lt;span&gt;LED显示配对成功&lt;/span&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="2290" y="2728.75" width="160" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-198" value="yes" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="2360" y="2688.75" width="60" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-199" value="No" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="2390" y="2638.75" width="60" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-200" value="尝试N次" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="2470" y="2618.75" width="60" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-201" value="重新配置和进入睡眠" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="2290" y="2808.75" width="160" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-202" value="&lt;span style=&quot;text-align: left;&quot;&gt;记录其mac地址，并且更新nvs 字段paired&lt;/span&gt;" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="2290" y="2768.75" width="160" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-203" value="&lt;span style=&quot;color: rgb(0, 0, 0); font-family: Helvetica; font-size: 12px; font-style: normal; font-variant-ligatures: normal; font-variant-caps: normal; font-weight: 400; letter-spacing: normal; orphans: 2; text-align: left; text-indent: 0px; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: normal; text-decoration-thickness: initial; text-decoration-style: initial; text-decoration-color: initial; float: none; display: inline !important;&quot;&gt;Unpair 模式&lt;/span&gt;" style="text;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="2620" y="2478.75" width="80" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-204" value="&lt;div style=&quot;forced-color-adjust: none; color: rgb(0, 0, 0); font-family: Helvetica; font-size: 12px; font-style: normal; font-variant-ligatures: normal; font-variant-caps: normal; letter-spacing: normal; orphans: 2; text-align: left; text-indent: 0px; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: normal; text-decoration-thickness: initial; text-decoration-style: initial; text-decoration-color: initial;&quot;&gt;led提醒未配对&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="2590" y="2518.75" width="140" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-205" value="&lt;div style=&quot;forced-color-adjust: none; color: rgb(0, 0, 0); font-family: Helvetica; font-size: 12px; font-style: normal; font-variant-ligatures: normal; font-variant-caps: normal; letter-spacing: normal; orphans: 2; text-align: left; text-indent: 0px; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: normal; text-decoration-thickness: initial; text-decoration-style: initial; text-decoration-color: initial;&quot;&gt;&lt;span style=&quot;text-align: center;&quot;&gt;重新配置和进入睡眠&lt;/span&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="2605" y="2558.75" width="110" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-206" value="1. 上电/唤醒初始化工作&lt;div&gt;打印设备/调试信息&lt;/div&gt;&lt;div&gt;硬件初始化 - GPIO， Lora空中唤醒模式（可以根据lora配置特性进行优化，这里每次都设置一次可能耽误时间，比如每次pair之后设置一次）&lt;/div&gt;&lt;div&gt;检查是否配对过&lt;/div&gt;" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="3060" y="1995" width="440" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-207" value="2. 根据按钮识以及睡眠唤醒理由别当前模式&lt;div&gt;lora模块唤醒 - normal模式&lt;br&gt;&lt;div&gt;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;user button&lt;/span&gt;&lt;/div&gt;&lt;div&gt;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;- 长按（3s）Pair模式&lt;/span&gt;&lt;/div&gt;&lt;div&gt;dev button&lt;/div&gt;&lt;div&gt;- 短按 test mode&lt;/div&gt;&lt;div&gt;- 长按 config mode&lt;/div&gt;&lt;/div&gt;&lt;div&gt;Unpair 未配对模式&lt;/div&gt;" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="3060" y="2035" width="410" height="140" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-208" value="3. 对应模式处理&lt;div&gt;Unpair 未配对模式 - 发出提醒并进入睡眠&lt;br&gt;&lt;div&gt;&lt;span style=&quot;&quot;&gt;Nomral 正常模式 - 进入睡眠等待&lt;/span&gt;&lt;div style=&quot;&quot;&gt;Pair 配对模式，车内外模块进行配对，记录通信mac地址&lt;/div&gt;&lt;div style=&quot;&quot;&gt;Test 测试模式，用于开发和工厂测试硬件&lt;/div&gt;&lt;div style=&quot;&quot;&gt;Config 配置模式，预留日后按需使用，可用于新版本/临时修改设备配置&lt;/div&gt;&lt;/div&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;br&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;读取自身电池电量 - 低电量led报警，极低电量led报警并停止工作&lt;/div&gt;" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="3060" y="2175" width="430" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-209" value="车尾雷达模块程序设计" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="3020" y="1955" width="190" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-210" value="4. 配置深度睡眠及其唤醒，然后进入睡眠" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="3060" y="2300" width="220" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-211" value="Unpair 模式&lt;div&gt;通过led呼吸灯提醒，5秒后进入睡眠&lt;/div&gt;" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="3067" y="2355" width="273" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-212" value="Test 模式&lt;div&gt;有待补充&lt;/div&gt;" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="3067" y="2655" width="60" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-213" value="Config模式&lt;div&gt;有待补充&lt;/div&gt;" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="3031" y="2695" width="140" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-214" value="Pair配对模式&lt;div&gt;初始化espnow&lt;/div&gt;&lt;div&gt;循环发送配对请求&lt;/div&gt;&lt;div&gt;收到雷达模块回复后，记录其mac地址，并且更新nvs 字段paired&lt;/div&gt;&lt;div&gt;发出提示音配对成功&lt;/div&gt;&lt;div&gt;进入睡眠等待唤醒&lt;/div&gt;" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="3070" y="2525" width="400" height="130" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-215" value="Normal模式&lt;div&gt;初始化雷达传感器，并且试读取多次判断是否雷达工作正常&lt;br&gt;&lt;div&gt;初始化espnow硬件&lt;/div&gt;&lt;div&gt;控制lora模块发送ack数据包（发三次）&lt;/div&gt;&lt;div&gt;持续定期读取雷达传感器数据并且通过espnow发送给车内模块&lt;/div&gt;&lt;div&gt;如果超过3秒没有获得车内模块ack反馈，停止工作并进入睡眠&lt;/div&gt;&lt;/div&gt;" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="3067" y="2385" width="441" height="140" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-216" value="&lt;div style=&quot;forced-color-adjust: none; color: rgb(0, 0, 0); font-family: Helvetica; font-size: 12px; font-style: normal; font-variant-ligatures: normal; font-variant-caps: normal; letter-spacing: normal; orphans: 2; text-align: left; text-indent: 0px; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: normal; text-decoration-thickness: initial; text-decoration-style: initial; text-decoration-color: initial;&quot;&gt;lora发送3次ack，包含电池电量情况&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="1994" y="2528.75" width="110" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-218" value="open point" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="943" y="1330" width="60" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-219" value="&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;text-align: center;&quot;&gt;&lt;b&gt;4. 配置深度睡眠及其唤醒，然后进入睡眠&lt;/b&gt;&lt;/span&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;align=left;" vertex="1" parent="1">
+          <mxGeometry x="962" y="3280" width="232" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-220" value="&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;text-align: center;&quot;&gt;&lt;b&gt;4. 配置深度睡眠及其唤醒，然后进入睡眠&lt;/b&gt;&lt;/span&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;align=left;" vertex="1" parent="1">
+          <mxGeometry x="2329" y="2951.25" width="232" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-221" value="&lt;b&gt;低电量：两档，比如低于3.4v开始提醒，低于3.2停止工作&lt;/b&gt;&lt;div&gt;&lt;b&gt;低电量只是报警提醒充电，极低电量报警加停止工作，因为此时测距数据不在可靠&lt;/b&gt;&lt;/div&gt;" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="936" y="1450" width="310" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-223" value="&lt;span style=&quot;text-align: left;&quot;&gt;读取自身电池电量 - 低电量报警&lt;/span&gt;" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="1023" y="2338" width="125" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-226" value="&lt;div style=&quot;forced-color-adjust: none; color: rgb(0, 0, 0); font-family: Helvetica; font-size: 12px; font-style: normal; font-variant-ligatures: normal; font-variant-caps: normal; letter-spacing: normal; orphans: 2; text-align: left; text-indent: 0px; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: normal; text-decoration-thickness: initial; text-decoration-style: initial; text-decoration-color: initial;&quot;&gt;检查雷达模块电量 - 低-&amp;gt;报警一次，极低-&amp;gt; 报警并停止工作&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="612.5" y="2843" width="171" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-227" value="&lt;b&gt;低电量时期，如果考虑到尽力保证最后一次倒车工作，可以尝试将espnow替换成lora通信，应该功耗低一点&lt;/b&gt;" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="934" y="1520" width="310" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-228" value="&lt;div style=&quot;forced-color-adjust: none; color: rgb(0, 0, 0); font-family: Helvetica; font-size: 12px; font-style: normal; font-variant-ligatures: normal; font-variant-caps: normal; letter-spacing: normal; orphans: 2; text-align: left; text-indent: 0px; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: normal; text-decoration-thickness: initial; text-decoration-style: initial; text-decoration-color: initial;&quot;&gt;（和ack后面那次不重复）检查雷达模块电量- 低-&amp;gt;报警一次，极低-&amp;gt; 报警并停止工作&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="613.5" y="3150" width="171" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-229" value="&lt;div style=&quot;forced-color-adjust: none; color: rgb(0, 0, 0); font-family: Helvetica; font-size: 12px; font-style: normal; font-variant-ligatures: normal; font-variant-caps: normal; letter-spacing: normal; orphans: 2; text-align: left; text-indent: 0px; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: normal; text-decoration-thickness: initial; text-decoration-style: initial; text-decoration-color: initial;&quot;&gt;检查雷达模块电量 - 低-&amp;gt;报警一次，极低-&amp;gt; 报警并停止工作&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="934" y="2800" width="171" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="7CyqZpYL4BO0aw3nbGov-230" value="&lt;span style=&quot;text-align: left;&quot;&gt;读取自身电池电量 - 低电量led报警，极低电量led报警并停止工作&lt;/span&gt;" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="2344.5" y="2320" width="167" height="45" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

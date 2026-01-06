@@ -1,10 +1,23 @@
-// 所有的gpio引脚和应用相关的配置参数，可以通过init函数输入每个模块，也可以模块内部直接读取宏定义
+// 所有的gpio引脚和应用相关的配置参数，可以通过init函数输入每个模块，也可以模块内部直接读取宏定义，重点是两个设备固件复用同一份模块实现作为lib，两个设备固件只需要不同的宏定义以及main里面的逻辑
 // 核心思路是模块化代码，这样保持主程序里面逻辑代码简洁干净，便于代码维护，以及后续代码复用
 // 可以用c++的类，也可以用c风格进行模块化，核心思路是一样的，习惯哪种就用哪种
 // 每个模块我设计了基本的api函数，可以根据实际需求自行修改和增删。但是注意提供给外部使用的函数和给模块内部使用的函数的区分。
 // 还有就是这些模块是可能需要复用给车内车外两个不同设备使用的，不同的gpio，主控等，实现的时候注意兼容性
 // 这里面列举的模块的函数api的参数列表，返回值都按需修改
 // 新的模块按需添加，比如一些工具模块，或者数据处理模块等
+
+
+// enum 放class外部还是内部自由选择, 命名也可以适当修改
+enum BEEPMODE {
+    NONE,
+    SLOW_BEEP,
+    NORMAL_BEEP,
+    FAST_BEEP,
+    RISE_TONE_CONT, // continous
+    DOWN_TONE_CONT,
+    RISE_TONE_DIST, // discret
+    DOWN_TONE_DIST
+};
 
 class BeeperController {
     // 控制蜂鸣器，通过外部给定的模式进行对应的鸣叫
@@ -52,13 +65,21 @@ class LEDControler {
     // ... 可能还有其他函数需要补充，按需添加
 };
 
+enum BATTERY_STAT {
+    NORMAL,
+    LOW_ENGERGY,
+    NO_ENGERGY
+}
+
 class PowerManager {
     // 把睡眠相关的代码都放到这个模块进行统一操作，保持住文件里代码逻辑简洁
     // 负责对唤醒条件进行设置,进入睡眠，以及提供唤醒理由（如果需要）
+    // 负责电池电量管理
     void set_wakeup();
     void sleep();
     void get_wakeup_reason();
     // ... 可能还有其他函数需要补充，按需添加
+    void get_battery_value();
 };
 
 class ComManager {
@@ -87,6 +108,22 @@ class ESPNow {
     // ... 可能还有其他函数需要补充，按需添加
 };
 
+enum SYSTEM_MODE {
+    NORMAL_MODE,
+    UNPAIR_MODE,
+    PAIR_MODE,
+    TEST_MODE,
+    CONFIG_MODE,
+    UNKNOW
+};
+
+class ModeManager {
+    // 负责根据按钮，睡眠唤醒理由，以及配对情况判断当前进入什么模式
+    void init(); // 初始化gpio
+    void check_mode(); 
+    void set_isr(); // 设置userbutton中断
+    void stop_by_user(); // 检查user是否按下按钮中断倒车流程
+}
 
 // 还有一个重要部分是通信部分的协议设计，lora和espnow通信格式都应该遵循统一协议规则. 这个等后续强化通信功能的时候再改
 struct RC_Packet {
@@ -95,7 +132,7 @@ struct RC_Packet {
     uint8_t pkt_type;
     uint8_t pkt_len;
     uint8_t seq_num;
-    uint32_t data;
+    uint32_t data;    // ACK data 应包含雷达模块电源数据
 }
 
 // 另一个是按钮管理部分的，这部分暂时先直接写主程序里面，之后再封装
