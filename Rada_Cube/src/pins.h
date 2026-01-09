@@ -9,7 +9,7 @@
 #ifdef INSIDE
     #define LED_PIN         3
     #define BEEPER_PIN      4
-    #define BATTERY_PIN
+    #define BATTERY_PIN     
     #define BUTTON_PIN
     #define LORA_RX
     #define LORA_TX
