@@ -241,8 +241,8 @@
 #include <Arduino.h>
 #include <HardwareSerial.h> 
 
-#define TRIG   4
-#define ECHO   5
+#define TRIG   5
+#define ECHO   4
 #define ALPHA 0.3
 
 float filteredDistance = -1;
@@ -321,11 +321,11 @@ void Rada_onReceive()
     }
 }
 
+//  状态机
 enum : uint8_t{HUNT_AA, HUNT_55, PAYLOAD};
 uint8_t state = HUNT_AA;
 uint8_t rxBuf[14];
 uint8_t rxCnt = 0;
-
 
 void setup()
 {
@@ -372,6 +372,19 @@ void loop()
                         uint16_t dist = fr.dist;
                         int16_t angle = (int16_t)fr.angle;
                         float angle_deg = angle * 0.01f;
+
+
+                        // if(filteredDistance < 0)
+                        // {
+                        //     filteredDistance = dist;
+                        // }
+                        // else
+                        // {
+                        //     filteredDistance = filteredDistance + ALPHA * (dist - filteredDistance);
+                        // }
+                        Serial.print("Distance:");
+                        Serial.println(dist);
+
                         // for(int i = 0; i < 14; i++)
                         // {
                         //     Serial.printf("%02X ", rxBuf[i]);
@@ -383,6 +396,26 @@ void loop()
                         // Serial.printf("distant: %.2f cm\n", x_dist);
                         // Serial.print("distant: ");
                         // Serial.println(x_dist);
+
+                        // // 测试，直接对距离数据进行滤波
+                        // if(dist < 20.0f)
+                        // {
+                        //     dist = 20.0f; // 最小距离
+                        // }
+                        // else if(dist > 250.0f)
+                        // {
+                        //     dist = 250.0f; // 最大距离
+                        // }
+                        // if(filteredDistance < 0)
+                        // {
+                        //     filteredDistance = dist;
+                        // }
+                        // else
+                        // {
+                        //     filteredDistance  = filteredDistance + ALPHA * (dist - filteredDistance);
+                        // }
+                        // Serial.print("distant: ");
+                        // Serial.println(filteredDistance);
 
                         //先算出距离，然后进行滤波
                         // // 异常数据处理
@@ -406,45 +439,44 @@ void loop()
                         // Serial.print("distant: ");
                         // Serial.println(filteredDistance);
 
-                        // 先对距离和角度分别滤波，在计算水平坐标
-                        if(angle_deg > 60.0f || angle_deg < -60.0f)
-                        {
-                            // 超出有效角度范围
-                            state = HUNT_AA;
-                            break;
-                        }
-                        if(dist < 20.0f)
-                        {
-                            dist = 20.0f;
-                        }
-                        else if(dist > 250.0f)
-                        {
-                            dist = 250.0f;
-                        }
-                        // 距离滤波
-                        if(filteredDistance < 0)
-                        {
-                            filteredDistance = dist;
-                        }
-                        else
-                        {
-                            filteredDistance  = filteredDistance + ALPHA * (dist - filteredDistance);
-                        }
-                        // 角度滤波
-                        if(filteredAngle < 0)
-                        {
-                            filteredAngle = angle_deg;
-                        }
-                        else
-                        {
-                            filteredAngle  = filteredAngle + ALPHA * (angle_deg - filteredAngle);
-                        }
-                        // 计算水平坐标
-                        float angle_rad = filteredAngle * PI / 180.0f;
-                        float x_dist = filteredDistance * cos(angle_rad);
-                        Serial.print("distant: ");
-                        Serial.println(x_dist);
-
+                        // // 先对距离和角度分别滤波，在计算水平坐标
+                        // if(angle_deg > 60.0f || angle_deg < -60.0f)
+                        // {
+                        //     // 超出有效角度范围
+                        //     state = HUNT_AA;
+                        //     break;
+                        // }
+                        // if(dist < 20.0f)
+                        // {
+                        //     dist = 20.0f;
+                        // }
+                        // else if(dist > 250.0f)
+                        // {
+                        //     dist = 250.0f;
+                        // }
+                        // // 距离滤波
+                        // if(filteredDistance < 0)
+                        // {
+                        //     filteredDistance = dist;
+                        // }
+                        // else
+                        // {
+                        //     filteredDistance  = filteredDistance + ALPHA * (dist - filteredDistance);
+                        // }
+                        // // 角度滤波
+                        // if(filteredAngle < 0)
+                        // {
+                        //     filteredAngle = angle_deg;
+                        // }
+                        // else
+                        // {
+                        //     filteredAngle  = filteredAngle + ALPHA * (angle_deg - filteredAngle);
+                        // }
+                        // // 计算水平坐标
+                        // float angle_rad = filteredAngle * PI / 180.0f;
+                        // float x_dist = filteredDistance * cos(angle_rad);
+                        // Serial.print("distant: ");
+                        // Serial.println(x_dist);
                     }
                     state = HUNT_AA;
                 }

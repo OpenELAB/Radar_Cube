@@ -15,7 +15,6 @@ enum LED_SPEED
     LED_SPEED_3 = 20, // 呼吸周期 5.12s
 };
 
-
 enum BEEP
 {
     BEEPER_PERIOD_1 = 1000, // 蜂鸣周期1s
@@ -24,6 +23,12 @@ enum BEEP
     BEEPER_PERIOD_LONG = 0  // 长鸣
 };
 
+enum BATTERY_STAT
+{
+    NORMAL,
+    LOW_ENGERGY,
+    NO_ENGERGY
+};
 
 // 定义LED类
 class LEDControler
@@ -34,11 +39,22 @@ public:
     void breath(LED_SPEED speed);
 };
 
+// 定义蜂鸣器类
 class BeeperControler
 {
 public:
     void init();
     void beep(BEEP type);
+};
+
+// 定义电池管理类
+class PowerManager
+{
+public:
+    void init();
+    void sleep();
+    void get_wakeup_reason();
+    void get_battery__value();
 };
 
 

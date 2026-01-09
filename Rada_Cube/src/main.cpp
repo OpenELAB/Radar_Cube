@@ -82,3 +82,29 @@ void loop()
 {
 
 }
+
+
+
+// void setup()
+// {
+//   Serial.begin(115200);
+//   // ---------------------------- 检测按键唤醒原因 ---------------------------------
+//   esp_sleep_wakeup_cause_t wakeup_reason;
+//   wakeup_reason = esp_sleep_get_wakeup_cause();
+//   switch(wakeup_reason)
+//   {
+//     case ESP_SLEEP_WAKEUP_GPIO: printf("wake caused by RTC_IO"); break;
+//     default : printf("Wakeup was not caused by deep sleep: %d\r\n",wakeup_reason); break;
+//   }
+// // ------------------------------------------------------------------------------
+
+
+//   esp_deep_sleep_enable_gpio_wakeup(BIT(5), ESP_GPIO_WAKEUP_GPIO_LOW);
+//   esp_deep_sleep_start();
+
+// }
+
+// void loop()
+// {
+
+// }

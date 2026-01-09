@@ -1,6 +1,6 @@
 import serial, time, struct
 
-PORT = ""
+PORT = "COM3"
 BAUD = 9600
 ser = serial.Serial(PORT, BAUD)
 
