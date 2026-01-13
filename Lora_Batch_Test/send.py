@@ -16,7 +16,7 @@ def reader():
                     print("<<<收到：", pkt.decode(errors='ignore'))
                 except:
                     print("非文本数据：", pkt.hex('', 1))
-        time.sleep(0.05)
+        time.sleep(0.01)
 
 threading.Thread(target=reader, daemon=True).start()
 
@@ -31,26 +31,28 @@ idx = 0
 # 6.AT+MID=17\r\n //设置唤醒ID为17
 # 7.AT+MODE=1\r\n //退出配置模式
 ser.write(b"AT+MODE=0\r\n")
-time.sleep(1)
+time.sleep(0.01)
 ser.write(b"AT+VER\r\n")
-time.sleep(1)
+time.sleep(0.01)
 ser.write(b"AT+RFCH=18\r\n")
-time.sleep(1)
+time.sleep(0.01)
 ser.write(b"AT+PID=255\r\n")
-time.sleep(1)
+time.sleep(0.01)
 ser.write(b"AT+MAMP=2\r\n")
-time.sleep(1)
+time.sleep(0.01)
 ser.write(b"AT+MLPWR=1\r\n")
-time.sleep(1)
+time.sleep(0.01)
 ser.write(b"AT+MID=17\r\n")
-time.sleep(1)
+time.sleep(0.01)
 ser.write(b"AT+MODE=1\r\n")
-time.sleep(1)
+time.sleep(0.01)
 
 while True:
-    tx_us = int(time.time_ns() / 1000)
-    buf = struct.pack("<IQ", idx, tx_us)
-    ser.write(buf)
-    print(f"Sent idx={idx} tx_us={tx_us}")
-    idx += 1
-    time.sleep(2.5)
+    time.sleep(5)
+# while idx < 1000:
+    # tx_us = int(time.time_ns() / 1000)
+    # buf = struct.pack("<IQ", idx, tx_us)
+    # ser.write(buf)
+    # print(f"Sent idx={idx} tx_us={tx_us}")
+    # idx += 1
+    # time.sleep(2.5)
