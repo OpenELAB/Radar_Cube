@@ -50,49 +50,76 @@ const char* wireless_wake_cmd[] =
 };
 const int wireless_wake_len = sizeof(wireless_wake_cmd) / sizeof(wireless_wake_cmd[0]);
 
-
+// 接收标志位
+volatile bool flag = false;
+// 发送信息次数
+int send_count = 0;
+// 记录超时次数
+int timeout_count = 0;
+// 测试次数
+int test_count = 0;
 void setup()
 {
     Serial0.begin(115200);
     LoraSerial.begin(9600, SERIAL_8N1, LORA_RX_PIN, LORA_TX_PIN);
     pinMode(LORA_CE_PIN, OUTPUT);
     digitalWrite(LORA_CE_PIN, LOW);
+    delay(1000);
+    for(int i = 0; i < wireless_wake_len; i++)
+    {
+        send_at_wait_response(wireless_wake_cmd[i]);
+    }
 
     // 初始化ESP-NOW，设置接收监听函数
     WiFi.mode(WIFI_STA);
     // 打印自身的mac地址
-    Serial0.print("myself mac is:");
-    Serial0.println(WiFi.macAddress());
+    // Serial0.print("myself mac is:");
+    // Serial0.println(WiFi.macAddress());
 
     if(esp_now_init() != ESP_OK)
     {
         Serial0.println("Error initializing ESP-NOW");
         ESP.restart();
     }
+
+    esp_now_peer_info_t peer = {};
+    memcpy(peer.peer_addr, send_mac, 6);
+    peer.channel = 0;
+    peer.encrypt = 0;
+    if(esp_now_add_peer(&peer) != ESP_OK)
+    {
+        Serial0.println("Failed to add peer");
+    }
+
     esp_now_register_recv_cb(esp_now_receive_cb);
-
-    // 初始化配置
-    for (int i = 0; i < init_config_len; i++)
-    {
-        send_at_wait_response(init_config_cmd[i]);
-    }
-
-    // 进入无线唤醒模式
-    for (int i = 0; i < wireless_wake_len; i++)
-    {
-        send_at_wait_response(wireless_wake_cmd[i]);
-    }
-
-
 }
 
 void loop()
 {
-    
+    while(test_count < 20)
+    {
+        send_count++;
+        test_count++;
+        Serial0.printf("send_count: %d\r\n", send_count);
+        flag = false;
+        uint32_t send_start = millis();
+        LoraSerial.printf("%d\r\n", send_count);
+        // 等待espnow的接收标志位和判断超时时间
+        while(!flag && millis() - send_start < 10000);
+        if(millis() - send_start >= 10000)
+        {
+            timeout_count++;
+            Serial0.printf("Time out count: %d\r\n", timeout_count);
+        }
+        else
+        {
+            Serial0.printf("consum time: %d\r\n", millis() - send_start);
+            delay(2000);
+        }
+    }
+
+    delay(1000);
 }
-
-
-
 
 // 发送AT指令，等待响应
 bool send_at_wait_response(const char* cmd, int timeout)
@@ -154,6 +181,7 @@ void esp_now_receive_cb(const esp_now_recv_info_t* info, const uint8_t* data, in
     {
         uint32_t val = *(uint32_t*)data;
         Serial0.printf("ESP-NOW Received: %d\r\n", val);
+        flag = true;
     }
 }
 
