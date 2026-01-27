@@ -1,29 +1,49 @@
 #include <Arduino.h>
-
+#include <Preferences.h>
 #include "pins.h"
 #include "sensor.h"
+#include "lora.h"
 #include "config.h"
 
-PowerManager Power;
+LoraManager Lora;
 
-// 唤醒原因打印测试
 void setup()
 {
-    Power.get_wakeup_reason();
-    pinMode(WAKE_BUTTON_PIN, INPUT);
-    pinMode(DEV_BUTTON_PIN, INPUT);
-    
-    delay(1000);
-
-    printf("going to sleep\r\n");
-    esp_deep_sleep_enable_gpio_wakeup(BIT(WAKE_BUTTON_PIN) | BIT(DEV_BUTTON_PIN), ESP_GPIO_WAKEUP_GPIO_LOW);
-    esp_deep_sleep_start();
+    Lora.init();
+    if(!Lora.lora_config())
+    {
+        esp_restart();
+    }
 }
 
 void loop()
 {
 
 }
+
+
+
+
+// PowerManager Power;
+
+// // 唤醒原因打印测试
+// void setup()
+// {
+//     Power.get_wakeup_reason();
+//     pinMode(WAKE_BUTTON_PIN, INPUT);
+//     pinMode(DEV_BUTTON_PIN, INPUT);
+    
+//     delay(1000);
+
+//     printf("going to sleep\r\n");
+//     esp_deep_sleep_enable_gpio_wakeup(BIT(WAKE_BUTTON_PIN) | BIT(DEV_BUTTON_PIN), ESP_GPIO_WAKEUP_GPIO_LOW);
+//     esp_deep_sleep_start();
+// }
+
+// void loop()
+// {
+
+// }
 
 
 

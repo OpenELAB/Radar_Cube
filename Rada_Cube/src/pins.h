@@ -7,14 +7,14 @@
 
 // 定义车内模块的引脚
 #ifdef INSIDE
-    #define LED_PIN                 10
-    #define BEEPER_PIN              4
-    #define BATTERY_PIN             3
-    #define WAKE_BUTTON_PIN         5  
-    #define DEV_BUTTON_PIN          1
-    #define LORA_RX_PIN             6
-    #define LORA_TX_PIN             7
-    #define LORA_CE_PIN             0
+    #define LED_PIN                 GPIO_NUM_10
+    #define BEEPER_PIN              GPIO_NUM_4
+    #define BATTERY_PIN             GPIO_NUM_3
+    #define WAKE_BUTTON_PIN         GPIO_NUM_5  
+    #define DEV_BUTTON_PIN          GPIO_NUM_1
+    #define LORA_RX_PIN             GPIO_NUM_6
+    #define LORA_TX_PIN             GPIO_NUM_7
+    #define LORA_CE_PIN             GPIO_NUM_0
 #endif
 
 
@@ -32,10 +32,7 @@
 
 #endif
 
-#define LED_FREQ       1000
 
-#define BEEPER_FREQ    1800
-#define BEEPER_DUTY    4
 
 
 #endif

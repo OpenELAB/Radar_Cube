@@ -1,8 +1,10 @@
 // 定义LED、蜂鸣器的类
 #include <Arduino.h>
+#include "esp_check.h"
 #include "freertos/FreeRTOS.h"
 #include "sensor.h"
 #include "pins.h"
+#include "config.h"
 
 // 初始化LED引脚
 void LEDControler::init()
@@ -62,6 +64,7 @@ void BeeperControler::beep_stop()
     ledcWrite(BEEPER_PIN, 0);
 }
 
+
 // 电池电量采样初始化
 void PowerManager::init()
 {
@@ -83,15 +86,19 @@ uint8_t PowerManager::get_battery_value()
         Vbatt += analogReadMilliVolts(BATTERY_PIN);
     }
     // 1：2 分压，计算实际电压值
-    float Vbattf = (Vbatt * 2) / 32 / 1000.0;
-    if (Vbattf < 3.0)
+    float Vbattf = (Vbatt * 2) / 32.0 / 1000.0;
+    if (Vbattf < BATTERY_LOW_THRESHOLD)
     {
-        Vbattf = 3.0;
+        Vbattf = BATTERY_LOW_THRESHOLD;
+    }
+    if(Vbatt > BATTERY_HIGH_THRESHOLD)
+    {
+        Vbattf = BATTERY_HIGH_THRESHOLD;
     }
     // 输出电压值
     printf("battery voltage: %.3f\n", Vbattf);
     // 计算电池电量百分比
-    uint8_t bat_perc = (Vbattf -3.0) * 100.0f / (4.2 - 3.0) + 0.5f;
+    uint8_t bat_perc = (Vbattf - BATTERY_LOW_THRESHOLD) * 100.0f / (BATTERY_HIGH_THRESHOLD - BATTERY_LOW_THRESHOLD) + 0.5f;
     printf("battery percentage: %d%%\n", bat_perc);
     return bat_perc;
 }
@@ -105,10 +112,6 @@ void PowerManager::get_wakeup_reason()
     {
         case ESP_SLEEP_WAKEUP_GPIO:
         {
-            // uint64_t status = esp_sleep_get_ext1_wakeup_status();
-            // if(status & (1ULL << WAKE_BUTTON_PIN)) printf("Wakeup cause by WAKE_BUTTON\r\n");
-            // if(status & (1ULL << DEV_BUTTON_PIN)) printf("Wakeup cause by DEV_BUTTON\r\n");
-            // break;
             printf("Wakeup cause by RTC GPIO\r\n");
             break;
         }
@@ -118,12 +121,33 @@ void PowerManager::get_wakeup_reason()
     }
 }
 
-// 进入睡眠模式
-void PowerManager::sleep()
+// 等待唤醒按键电平复位
+void PowerManager::wait_wakeup_button_intend()
 {
+   printf("Waiting wakeup button intend ......\r\n");
+   while(gpio_get_level(WAKE_BUTTON_PIN) == HIGH  || gpio_get_level(DEV_BUTTON_PIN) == HIGH)
+   {
+        vTaskDelay(pdMS_TO_TICKS(10));
+   }
+   printf("GPIO is now high ...\r\n");
+}
+
+// 进入睡眠模式
+esp_err_t PowerManager::deep_sleep()
+{
+    // 等待唤醒引脚电平复位
+    wait_wakeup_button_intend();
     // 配置按键唤醒引脚
     esp_deep_sleep_enable_gpio_wakeup(BIT(WAKE_BUTTON_PIN) | BIT(DEV_BUTTON_PIN), ESP_GPIO_WAKEUP_GPIO_LOW);
     // 进入睡眠
     printf("Going to sleep\r\n");
     esp_deep_sleep_start();
+    // 不会执行到这里
+    return ESP_OK;
 }
+
+// 按键扫描
+
+
+
+

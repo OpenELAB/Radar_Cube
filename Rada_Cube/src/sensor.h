@@ -57,12 +57,10 @@ class PowerManager
 {
 public:
     void init();
-    void sleep();
+    esp_err_t deep_sleep();
+    void wait_wakeup_button_intend();
     void get_wakeup_reason();
     uint8_t get_battery_value();
 };
-
-
-
 
 #endif
