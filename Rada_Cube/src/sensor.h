@@ -1,6 +1,7 @@
 #ifndef __SENSOR_H__
 #define __SENSOR_H__
 
+// LED频闪周期
 enum LED_PERIOD
 {
     LED_PERIOD_1 = 2000, // 频闪周期2s
@@ -8,6 +9,7 @@ enum LED_PERIOD
     LED_PERIOD_3 = 500, // 频闪周期0.5s
 };
 
+// LED呼吸灯周期
 enum LED_SPEED
 {
     LED_SPEED_1 = 10, // 呼吸周期 2.56s
@@ -15,6 +17,7 @@ enum LED_SPEED
     LED_SPEED_3 = 20, // 呼吸周期 5.12s
 };
 
+// 蜂鸣器鸣叫周期
 enum BEEP
 {
     BEEPER_PERIOD_1 = 1000, // 蜂鸣周期1s
@@ -23,11 +26,12 @@ enum BEEP
     BEEPER_PERIOD_LONG = 0  // 长鸣
 };
 
+// 电池状态
 enum BATTERY_STAT
 {
     NORMAL,
     LOW_ENGERGY,
-    NO_ENGERGY
+    NO_ENERGY
 };
 
 // 定义LED类
@@ -45,6 +49,7 @@ class BeeperControler
 public:
     void init();
     void beep(BEEP type);
+    void beep_stop();
 };
 
 // 定义电池管理类
@@ -52,12 +57,10 @@ class PowerManager
 {
 public:
     void init();
-    void sleep();
+    esp_err_t deep_sleep();
+    void wait_wakeup_button_intend();
     void get_wakeup_reason();
-    void get_battery__value();
+    uint8_t get_battery_value();
 };
-
-
-
 
 #endif
