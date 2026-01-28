@@ -16,9 +16,9 @@ void LEDControler::init()
 void LEDControler::blink(LED_PERIOD period)
 {
     const uint32_t led_period = period / 2;
-    digitalWrite(LED_PIN, HIGH);
+    digitalWrite(LED_PIN, LED_ACTIVE_LEVEL);
     vTaskDelay(pdMS_TO_TICKS(led_period));
-    digitalWrite(LED_PIN, LOW);
+    digitalWrite(LED_PIN, LED_INACTIVE_LEVEL);
     vTaskDelay(pdMS_TO_TICKS(led_period));
 }
 
@@ -63,7 +63,6 @@ void BeeperControler::beep_stop()
 {
     ledcWrite(BEEPER_PIN, 0);
 }
-
 
 // 电池电量采样初始化
 void PowerManager::init()
@@ -112,11 +111,11 @@ void PowerManager::get_wakeup_reason()
     {
         case ESP_SLEEP_WAKEUP_GPIO:
         {
-            printf("Wakeup cause by RTC GPIO\r\n");
+            printf("[Info] Wakeup cause by RTC GPIO\r\n");
             break;
         }
         default:
-            printf("Wakeup cause by other: %d\r\n", wakeup_reason);
+            printf("[Info] Wakeup cause by other: %d\r\n", wakeup_reason);
             break;
     }
 }
@@ -124,12 +123,10 @@ void PowerManager::get_wakeup_reason()
 // 等待唤醒按键电平复位
 void PowerManager::wait_wakeup_button_intend()
 {
-   printf("Waiting wakeup button intend ......\r\n");
-   while(gpio_get_level(WAKE_BUTTON_PIN) == HIGH  || gpio_get_level(DEV_BUTTON_PIN) == HIGH)
+   while(gpio_get_level(WAKE_BUTTON_PIN) == GPIO_INACTIVE_LEVEL  || gpio_get_level(DEV_BUTTON_PIN) == GPIO_INACTIVE_LEVEL)
    {
         vTaskDelay(pdMS_TO_TICKS(10));
    }
-   printf("GPIO is now high ...\r\n");
 }
 
 // 进入睡眠模式
@@ -140,14 +137,28 @@ esp_err_t PowerManager::deep_sleep()
     // 配置按键唤醒引脚
     esp_deep_sleep_enable_gpio_wakeup(BIT(WAKE_BUTTON_PIN) | BIT(DEV_BUTTON_PIN), ESP_GPIO_WAKEUP_GPIO_LOW);
     // 进入睡眠
-    printf("Going to sleep\r\n");
+    printf("[Info] Going to sleep\r\n");
     esp_deep_sleep_start();
     // 不会执行到这里
     return ESP_OK;
 }
 
-// 按键扫描
+// 按键唤醒引脚初始化为输入模式
+void PowerManager::wakeup_gpio_init()
+{
+    pinMode(WAKE_BUTTON_PIN, INPUT);
+    pinMode(DEV_BUTTON_PIN, INPUT);
+}
 
+
+// 按键扫描
+void PowerManager::wake_button_detection()
+{
+    vTaskDelay(pdMS_TO_TICKS(20));
+    bool wake_button_level = digitalRead(WAKE_BUTTON_PIN);
+    bool dev_button_level = digitalRead(DEV_BUTTON_PIN);
+    printf("[Info] wake_button_level: %d, dev_button_level: %d\n", wake_button_level, dev_button_level);
+}
 
 
 
