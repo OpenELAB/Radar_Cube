@@ -5,21 +5,44 @@
 #include "lora.h"
 #include "config.h"
 
+PowerManager Power;
 LoraManager Lora;
 
+// 按键唤醒扫描，检测哪个按键唤醒了深度睡眠
 void setup()
 {
-    Lora.init();
-    if(!Lora.lora_config())
-    {
-        esp_restart();
-    }
+    Power.get_wakeup_reason();
+    Power.wakeup_gpio_init();
+    Power.wake_button_detection();
+    Power.deep_sleep();
 }
 
 void loop()
 {
 
 }
+
+
+// void setup()
+// {
+//     // 获取唤醒原因
+//     Power.get_wakeup_reason();
+//     // 初始化唤醒引脚为输入模式
+//     Power.wakeup_gpio_init();
+//     // 初始化lora串口和CE控制引脚
+//     Lora.init();
+//     // 进行lora无线唤醒模式配置
+//     Lora.lora_config();
+//     // lora模块配置为睡眠模式
+//     Lora.lora_sleep_mode();
+//     // ESP32进入睡眠模式
+//     Power.deep_sleep();
+// }
+
+// void loop()
+// {
+
+// }
 
 
 

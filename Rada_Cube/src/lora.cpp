@@ -23,6 +23,29 @@ const char* lora_init_cmd[] =
 // lora模块的配置命令数量
 const int lora_init_cmd_len = sizeof(lora_init_cmd) / sizeof(lora_init_cmd[0]);
 
+#ifdef INSIDE
+// lora模块睡眠模命令
+const char* lora_sleep_cmd[] = 
+{
+    "AT+MODE=0",
+    "AT+MAMP=0",        // 关闭无线唤醒模式
+    "AT+LPWR=1",        // 设置为睡眠模式
+    "AT+MODE=1"
+};
+const int lora_sleep_cmd_len = sizeof(lora_sleep_cmd) / sizeof(lora_sleep_cmd[0]);
+
+// lora模块唤醒命令
+const char* lora_wakeup_cmd[] = 
+{
+    "AT+MODE=0",
+    "AT+MAMP=2",
+    "AT+LPWR=0",
+    "AT+MODE=1"
+};
+const int lora_wakeup_cmd_len = sizeof(lora_wakeup_cmd) / sizeof(lora_wakeup_cmd[0]);
+
+#endif
+
 // 配置lora串口和CE控制引脚
 void LoraManager::init()
 {
@@ -91,22 +114,25 @@ bool LoraManager::lora_config()
     bool flag = prefe.isKey("lora_flag");
     prefe.end();
     
-    // ==================================== 理论上，待测试 ====================================
     // 如果是，配置lora为无线通信模式
     if(!flag)
     {
         printf("[Info] First config lora module, start config lora module ...... \r\n");
         // 拉低lora模组的CE引脚
-        digitalWrite(LORA_CE_PIN, LOW);
+        digitalWrite(LORA_CE_PIN, GPIO_CE_INACTIVE_LEVEL);
         // 发送命令
         for(int i = 0; i < lora_init_cmd_len; i++)
         {
             if(!at_send_wait_reponse(lora_init_cmd[i], LORA_AT_TIMEOUT, LORA_AT_RETRY))
             {
+                // AT指令配置失败
                 printf("[Error] AT cmd error, %s \r\n", lora_init_cmd[i]);
+                digitalWrite(LORA_CE_PIN, GPIO_CE_ACTIVE_LEVEL);
                 return false;
             }
         }
+        // 配置完拉高电平进入到无线唤醒模式
+        digitalWrite(LORA_CE_PIN, GPIO_CE_ACTIVE_LEVEL);
         // 配置完成，写入配置标志位
         prefe.begin("lora", false);
         prefe.putBool("lora_flag", true);
@@ -116,8 +142,12 @@ bool LoraManager::lora_config()
     else
     {
         printf("[Info] LORA module has been configured, no need to configure again \r\n");
+        #ifdef INSIDE
+        // 唤醒lora模块，并配置为无线唤醒模式
+        lora_wakeup();
+        #endif
 
-        // 测试用，烧录完就自动配置好了，日志里看不到
+        // 测试用，不然烧录完后第一次就自动配置好了，后面日志里看不到
         // prefe.begin("lora", false);
         // prefe.remove("lora_flag");
         // prefe.end();
@@ -125,6 +155,48 @@ bool LoraManager::lora_config()
     return true;
 }
 
+// 关闭睡眠模式，配置为无线唤醒模式
+bool LoraManager::lora_wakeup()
+{
+    // 先拉低CE引脚，唤醒lora模块
+    digitalWrite(LORA_CE_PIN, GPIO_CE_INACTIVE_LEVEL);
+    // 关闭睡眠模式，配置为无线唤醒模式
+    for(int i = 0; i < lora_wakeup_cmd_len; i++)
+    {
+        if(!at_send_wait_reponse(lora_wakeup_cmd[i], LORA_AT_TIMEOUT, LORA_AT_RETRY))
+        {
+            // AT指令配置失败
+            printf("[Error] AT cmd error, %s \r\n", lora_init_cmd[i]);
+            digitalWrite(LORA_CE_PIN, GPIO_CE_ACTIVE_LEVEL);
+            return false;
+        }
+    }
+    digitalWrite(LORA_CE_PIN, GPIO_CE_ACTIVE_LEVEL);
+    printf("[Info] Lora module wakeup success \r\n");
+    return true;
+}
+
+// ESP32C3深度睡眠前，先关闭lora的无线唤醒模式，配置为睡眠模式
+bool LoraManager::lora_sleep_mode()
+{
+    // 拉低CE引脚，进入配置模式
+    digitalWrite(LORA_CE_PIN, GPIO_CE_INACTIVE_LEVEL);
+    // 发送命令
+    for(int i = 0; i < lora_sleep_cmd_len; i++)
+    {
+        if(!at_send_wait_reponse(lora_sleep_cmd[i], LORA_AT_TIMEOUT, LORA_AT_RETRY))
+        {
+            // AT指令配置失败
+            printf("[Error] AT cmd error, %s \r\n", lora_init_cmd[i]);
+            digitalWrite(LORA_CE_PIN, GPIO_CE_ACTIVE_LEVEL);
+            return false;
+        }
+    }
+    // 睡眠模式配置成功，进入睡眠模式
+    digitalWrite(LORA_CE_PIN, GPIO_CE_ACTIVE_LEVEL);
+    printf("[Info] Lora module sleep mode success \r\n");
+    return true;
+}
 
 
 

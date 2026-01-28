@@ -58,9 +58,11 @@ class PowerManager
 public:
     void init();
     esp_err_t deep_sleep();
+    void wakeup_gpio_init();
     void wait_wakeup_button_intend();
     void get_wakeup_reason();
     uint8_t get_battery_value();
+    void wake_button_detection();
 };
 
 #endif
