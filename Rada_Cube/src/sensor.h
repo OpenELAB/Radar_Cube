@@ -2,6 +2,7 @@
 #define __SENSOR_H__
 
 #include "config.h"
+#include "pins.h"
 
 // LED频闪周期
 enum LED_PERIOD
@@ -78,8 +79,8 @@ public:
 
 
 private:
-    bool user_button_level = GPIO_ACTIVE_LEVEL;
-    bool dev_button_level = GPIO_ACTIVE_LEVEL;
+    bool user_button_level = GPIO_INACTIVE_LEVEL;
+    bool dev_button_level = GPIO_INACTIVE_LEVEL;
 };
 
 #endif

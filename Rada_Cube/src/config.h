@@ -21,8 +21,10 @@
 #define LORA_AT_RETRY               3
 
 // 定义唤醒GPIO引脚的高低电平
-#define GPIO_ACTIVE_LEVEL       1   // High
-#define GPIO_INACTIVE_LEVEL     0   // Low
+
+
+
+
 
 #define GPIO_CE_ACTIVE_LEVEL       1   // High
 #define GPIO_CE_INACTIVE_LEVEL     0   // Low

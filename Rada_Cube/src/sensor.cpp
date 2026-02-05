@@ -150,21 +150,11 @@ void PowerManager::get_wakeup_reason()
 // 等待唤醒按键电平复位
 void PowerManager::wait_wakeup_button_intend()
 {
-// 车内模块，按键是接入上拉电阻
-#ifdef INSIDE
-    while(gpio_get_level(USER_BUTTON_PIN) == GPIO_INACTIVE_LEVEL  || gpio_get_level(DEV_BUTTON_PIN) == GPIO_INACTIVE_LEVEL)
-    {
-        vTaskDelay(pdMS_TO_TICKS(10));
-    }
-#endif
 
-// 车外模块，按键是接入下拉电阻
-#ifdef OUTSIDE
     while(gpio_get_level(USER_BUTTON_PIN) == GPIO_ACTIVE_LEVEL || gpio_get_level(DEV_BUTTON_PIN) == GPIO_ACTIVE_LEVEL)
     {
         vTaskDelay(pdMS_TO_TICKS(10));
     }
-#endif
 
 }
 
