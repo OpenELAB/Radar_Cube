@@ -28,5 +28,11 @@
 #define GPIO_CE_INACTIVE_LEVEL     0   // Low
 
 
+// 日志输出标签
+#define POWER_TAG         "POWER"
+#define LORA_TAG          "LORA"
+
+
+
 
 #endif
