@@ -1,6 +1,8 @@
 #ifndef __SENSOR_H__
 #define __SENSOR_H__
 
+#include "config.h"
+
 // LED频闪周期
 enum LED_PERIOD
 {
@@ -38,7 +40,7 @@ enum BATTERY_STAT
 class LEDControler
 {
 public:
-    void init();
+    void led_init();
     void blink(LED_PERIOD period);
     void breath(LED_SPEED speed);
 };
@@ -47,7 +49,7 @@ public:
 class BeeperControler
 {
 public:
-    void init();
+    void beeper_init();
     void beep(BEEP type);
     void beep_stop();
 };
@@ -56,13 +58,28 @@ public:
 class PowerManager
 {
 public:
-    void init();
-    esp_err_t deep_sleep();
+    // 初始化电池电压采集引脚
+    void power_init();
+    // 等待唤醒引脚电平复位，进入睡眠模式
+    void deep_sleep();
+    // 唤醒引脚初始化
     void wakeup_gpio_init();
+    // 等待唤醒引脚电平复位
     void wait_wakeup_button_intend();
+    // 获取唤醒原因
     void get_wakeup_reason();
+    // 获取电池电压值
     uint8_t get_battery_value();
+    // 用于按键扫描
     void wake_button_detection();
+
+    // ================================== 第一版LORA功率开关控制引脚需要持续拉高 ==================================
+    void lora_power_keep_high();
+
+
+private:
+    bool user_button_level = GPIO_ACTIVE_LEVEL;
+    bool dev_button_level = GPIO_ACTIVE_LEVEL;
 };
 
 #endif

@@ -6,6 +6,8 @@
 #include "config.h"
 #include "lora.h"
 
+const char* LORA_FLAG = "lora_flag";
+
 // lora硬件串口
 HardwareSerial loraSerial(1);
 
@@ -43,22 +45,42 @@ const char* lora_wakeup_cmd[] =
     "AT+MODE=1"
 };
 const int lora_wakeup_cmd_len = sizeof(lora_wakeup_cmd) / sizeof(lora_wakeup_cmd[0]);
-
 #endif
 
+// LoraManager的构造函数，用于创建NVS的key值
+LoraManager::LoraManager()
+{
+    prefe.begin("lora", false);
+    bool flag = prefe.isKey(LORA_FLAG);
+    if(!flag)
+    {
+        ESP_LOGI(LORA_TAG, "lora module not config ....... \r\n");
+        // printf("[Info] lora module not config ......\r\n ");
+        prefe.putBool(LORA_FLAG, false);
+    }
+    else
+    {
+        ESP_LOGI(LORA_TAG, "lora module has configed .......\r\n");
+        // printf("[Info] lora module has configed .......\r\n");
+    }
+    prefe.end();
+}
+
 // 配置lora串口和CE控制引脚
-void LoraManager::init()
+void LoraManager::lora_init()
 {
     loraSerial.begin(9600, SERIAL_8N1, LORA_RX_PIN, LORA_TX_PIN);
     pinMode(LORA_CE_PIN, OUTPUT);
 }
 
+// 发送AT指令，并等待返回指令
 bool LoraManager::at_send_wait_reponse(const char* cmd, int timeout, uint8_t maxretry)
 {
     // 检测AT指令是否为空
     if(!cmd)
     {
-        printf("[Error] cmd is null, %s\r\n", cmd);
+        ESP_LOGE(LORA_TAG, "cmd is null, %s\r\n", cmd);
+        // printf("[Error] cmd is null, %s\r\n", cmd);
         return false;
     }
     for(uint8_t retry = 0; retry < maxretry; retry++)
@@ -85,13 +107,15 @@ bool LoraManager::at_send_wait_reponse(const char* cmd, int timeout, uint8_t max
                     // 返回OK
                     if(response.equals("OK"))
                     {
-                        printf("[OK] %s\r\n", cmd);
+                        ESP_LOGE(LORA_TAG, "[OK] %s\r\n", cmd);
+                        // printf("[OK] %s\r\n", cmd);
                         return true;
                     }
                     // 返回ERROR
                     if(response.equals("ERROR"))
                     {
-                        printf("[ERROR] %s\r\n", cmd);
+                        ESP_LOGE(LORA_TAG, "[ERROR] %s\r\n", cmd);
+                        // printf("[ERROR] %s\r\n", cmd);
                         break;
                     }
                 }
@@ -100,7 +124,8 @@ bool LoraManager::at_send_wait_reponse(const char* cmd, int timeout, uint8_t max
         // 超时
         if(millis() - t_start >= timeout)
         {
-            printf("[Timeout] %s\r\n", cmd);
+            ESP_LOGE(LORA_TAG, "[Timeout] %s\r\n", cmd);
+            // printf("[Timeout] %s\r\n", cmd);
         }
     }
     return false;
@@ -109,15 +134,15 @@ bool LoraManager::at_send_wait_reponse(const char* cmd, int timeout, uint8_t max
 // 配置lora无线通信模块
 bool LoraManager::lora_config()
 {
+
     // 判断是否是第一次配置
-    prefe.begin("lora", false);
-    bool flag = prefe.isKey("lora_flag");
-    prefe.end();
+    bool first_config = get_lora_flag();
     
     // 如果是，配置lora为无线通信模式
-    if(!flag)
+    if(!first_config)
     {
-        printf("[Info] First config lora module, start config lora module ...... \r\n");
+        ESP_LOGI(LORA_TAG, "First config lora module, start config lora module ...... \r\n");
+        // printf("[Info] First config lora module, start config lora module ...... \r\n");
         // 拉低lora模组的CE引脚
         digitalWrite(LORA_CE_PIN, GPIO_CE_INACTIVE_LEVEL);
         // 发送命令
@@ -126,7 +151,8 @@ bool LoraManager::lora_config()
             if(!at_send_wait_reponse(lora_init_cmd[i], LORA_AT_TIMEOUT, LORA_AT_RETRY))
             {
                 // AT指令配置失败
-                printf("[Error] AT cmd error, %s \r\n", lora_init_cmd[i]);
+                ESP_LOGE(LORA_TAG, "[Error] AT cmd error, %s \r\n", lora_init_cmd[i]);
+                // printf("[Error] AT cmd error, %s \r\n", lora_init_cmd[i]);
                 digitalWrite(LORA_CE_PIN, GPIO_CE_ACTIVE_LEVEL);
                 return false;
             }
@@ -141,7 +167,8 @@ bool LoraManager::lora_config()
     // 已经配置过了，不需要再进行配置
     else
     {
-        printf("[Info] LORA module has been configured, no need to configure again \r\n");
+        ESP_LOGI(LORA_TAG, "Lora module has been configured, no need to configure again \r\n");
+        // printf("[Info] LORA module has been configured, no need to configure again \r\n");
         #ifdef INSIDE
         // 唤醒lora模块，并配置为无线唤醒模式
         lora_wakeup();
@@ -155,6 +182,7 @@ bool LoraManager::lora_config()
     return true;
 }
 
+#ifdef INSIDE
 // 关闭睡眠模式，配置为无线唤醒模式
 bool LoraManager::lora_wakeup()
 {
@@ -166,15 +194,18 @@ bool LoraManager::lora_wakeup()
         if(!at_send_wait_reponse(lora_wakeup_cmd[i], LORA_AT_TIMEOUT, LORA_AT_RETRY))
         {
             // AT指令配置失败
-            printf("[Error] AT cmd error, %s \r\n", lora_init_cmd[i]);
+            ESP_LOGE(LORA_TAG, "[Error] AT cmd error, %s \r\n", lora_init_cmd[i]);
+            // printf("[Error] AT cmd error, %s \r\n", lora_init_cmd[i]);
             digitalWrite(LORA_CE_PIN, GPIO_CE_ACTIVE_LEVEL);
             return false;
         }
     }
     digitalWrite(LORA_CE_PIN, GPIO_CE_ACTIVE_LEVEL);
-    printf("[Info] Lora module wakeup success \r\n");
+    ESP_LOGI(LORA_TAG, "[Info] Lora module wakeup success \r\n");
+    // printf("[Info] Lora module wakeup success \r\n");
     return true;
 }
+
 
 // ESP32C3深度睡眠前，先关闭lora的无线唤醒模式，配置为睡眠模式
 bool LoraManager::lora_sleep_mode()
@@ -187,29 +218,51 @@ bool LoraManager::lora_sleep_mode()
         if(!at_send_wait_reponse(lora_sleep_cmd[i], LORA_AT_TIMEOUT, LORA_AT_RETRY))
         {
             // AT指令配置失败
-            printf("[Error] AT cmd error, %s \r\n", lora_init_cmd[i]);
+            ESP_LOGE(LORA_TAG, "[Error] AT cmd error, %s \r\n", lora_init_cmd[i]);
+            // printf("[Error] AT cmd error, %s \r\n", lora_init_cmd[i]);
             digitalWrite(LORA_CE_PIN, GPIO_CE_ACTIVE_LEVEL);
             return false;
         }
     }
     // 睡眠模式配置成功，进入睡眠模式
     digitalWrite(LORA_CE_PIN, GPIO_CE_ACTIVE_LEVEL);
-    printf("[Info] Lora module sleep mode success \r\n");
+    ESP_LOGI(LORA_TAG, "[Info] Lora module sleep mode success \r\n");
+    // printf("[Info] Lora module sleep mode success \r\n");
     return true;
+}
+#endif
+
+// 获取lora配置的标志位
+bool LoraManager::get_lora_flag()
+{
+    prefe.begin("lora", false);
+    bool flag = prefe.getBool(LORA_FLAG, false);
+    prefe.end();
+    return flag;
+}
+
+// 写入lora配置的标志位
+void LoraManager::write_lora_flag(bool flag)
+{
+    prefe.begin("lora", false);
+    prefe.putBool(LORA_FLAG, flag);
+    prefe.end();
+}
+
+// 清除lora配置的KEY
+bool LoraManager::clear_lora_key()
+{
+    prefe.begin("lora", false);
+    bool result = prefe.remove(LORA_FLAG);
+    prefe.end();
+    return result;
 }
 
 
-
-
-
-
-
-
-
-
-
-
-
-
+void LoraManager::lora_end()
+{
+    // 取消Lora功率开关控制引脚保持高电平状态
+    
+}
 
 
