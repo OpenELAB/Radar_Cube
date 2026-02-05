@@ -4,6 +4,9 @@
 
 // 定义LED的频率
 #define LED_FREQ       1000
+// LED的引脚电平
+#define LED_ACTIVE_LEVEL        1   // High
+#define LED_INACTIVE_LEVEL      0   // Low
 
 // 定义蜂鸣器的频率和占空比
 #define BEEPER_FREQ    1800
@@ -16,6 +19,22 @@
 // 定义loraAT指令的超时时间和重试次数
 #define LORA_AT_TIMEOUT             2000
 #define LORA_AT_RETRY               3
+
+// 定义唤醒GPIO引脚的高低电平
+
+
+
+
+
+#define GPIO_CE_ACTIVE_LEVEL       1   // High
+#define GPIO_CE_INACTIVE_LEVEL     0   // Low
+
+
+// 日志输出标签
+#define POWER_TAG         "POWER"
+#define LORA_TAG          "LORA"
+
+
 
 
 #endif

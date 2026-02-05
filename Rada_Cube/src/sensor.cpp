@@ -1,13 +1,14 @@
 // 定义LED、蜂鸣器的类
 #include <Arduino.h>
-#include "esp_check.h"
+#include <esp_log.h>
 #include "freertos/FreeRTOS.h"
 #include "sensor.h"
 #include "pins.h"
 #include "config.h"
+#include "driver/rtc_io.h"
 
 // 初始化LED引脚
-void LEDControler::init()
+void LEDControler::led_init()
 {
     pinMode(LED_PIN, OUTPUT);
 }
@@ -16,9 +17,9 @@ void LEDControler::init()
 void LEDControler::blink(LED_PERIOD period)
 {
     const uint32_t led_period = period / 2;
-    digitalWrite(LED_PIN, HIGH);
+    digitalWrite(LED_PIN, LED_ACTIVE_LEVEL);
     vTaskDelay(pdMS_TO_TICKS(led_period));
-    digitalWrite(LED_PIN, LOW);
+    digitalWrite(LED_PIN, LED_INACTIVE_LEVEL);
     vTaskDelay(pdMS_TO_TICKS(led_period));
 }
 
@@ -38,8 +39,9 @@ void LEDControler::breath(LED_SPEED speed)
     }
 }
 
+#ifdef INSIDE
 // 初始化蜂鸣器引脚
-void BeeperControler::init()
+void BeeperControler::beeper_init()
 {
     pinMode(BEEPER_PIN, OUTPUT);
     ledcAttach(BEEPER_PIN, BEEPER_FREQ, LEDC_TIMER_8_BIT);
@@ -63,16 +65,13 @@ void BeeperControler::beep_stop()
 {
     ledcWrite(BEEPER_PIN, 0);
 }
-
+#endif
 
 // 电池电量采样初始化
-void PowerManager::init()
+void PowerManager::power_init()
 {
     // 配置电池电量采样引脚
     pinMode(BATTERY_PIN, INPUT);
-    // 配置按键唤醒引脚
-    pinMode(WAKE_BUTTON_PIN, INPUT);
-    pinMode(DEV_BUTTON_PIN, INPUT);
 }
 
 // 读取电池电量值
@@ -91,15 +90,15 @@ uint8_t PowerManager::get_battery_value()
     {
         Vbattf = BATTERY_LOW_THRESHOLD;
     }
-    if(Vbatt > BATTERY_HIGH_THRESHOLD)
+    if(Vbattf > BATTERY_HIGH_THRESHOLD)
     {
         Vbattf = BATTERY_HIGH_THRESHOLD;
     }
     // 输出电压值
-    printf("battery voltage: %.3f\n", Vbattf);
+    ESP_LOGI(POWER_TAG, "battery voltage: %.3f\n", Vbattf);
     // 计算电池电量百分比
     uint8_t bat_perc = (Vbattf - BATTERY_LOW_THRESHOLD) * 100.0f / (BATTERY_HIGH_THRESHOLD - BATTERY_LOW_THRESHOLD) + 0.5f;
-    printf("battery percentage: %d%%\n", bat_perc);
+    ESP_LOGI(POWER_TAG, "battery percentage: %d%%\n", bat_perc);
     return bat_perc;
 }
 
@@ -110,13 +109,40 @@ void PowerManager::get_wakeup_reason()
     wakeup_reason = esp_sleep_get_wakeup_cause();
     switch (wakeup_reason)
     {
+// 车内模块只有一种唤醒，唤醒原因7
+#ifdef INSIDE
         case ESP_SLEEP_WAKEUP_GPIO:
         {
-            printf("Wakeup cause by RTC GPIO\r\n");
+            ESP_LOGI(POWER_TAG, "Wakeup cause by RTC GPIO\r\n");
             break;
         }
+#endif
+
+// 车外模块有两种唤醒原因，唤醒原因3和7
+#ifdef OUTSIDE
+        case ESP_SLEEP_WAKEUP_EXT1:
+        {
+            // 按键唤醒，排查唤醒按键
+            uint64_t button_wakeup_pin_mask = esp_sleep_get_ext1_wakeup_status();
+            if(button_wakeup_pin_mask & (1ULL << USER_BUTTON_PIN))
+            {
+                ESP_LOGI(POWER_TAG, "USER BUTTON was pressed\r\n");
+            }
+            if(button_wakeup_pin_mask & (1ULL << DEV_BUTTON_PIN))
+            {
+                ESP_LOGI(POWER_TAG, "DEV BUTTON was pressed\r\n");
+            }
+            break;
+        }
+        case ESP_SLEEP_WAKEUP_GPIO:
+        {
+            ESP_LOGI(POWER_TAG, "wakeup cause by Lora\r\n");
+            break;
+        }
+#endif
+
         default:
-            printf("Wakeup cause by other: %d\r\n", wakeup_reason);
+            ESP_LOGI(POWER_TAG, "Wakeup cause by other: %d\r\n", wakeup_reason);
             break;
     }
 }
@@ -124,30 +150,76 @@ void PowerManager::get_wakeup_reason()
 // 等待唤醒按键电平复位
 void PowerManager::wait_wakeup_button_intend()
 {
-   printf("Waiting wakeup button intend ......\r\n");
-   while(gpio_get_level(WAKE_BUTTON_PIN) == HIGH  || gpio_get_level(DEV_BUTTON_PIN) == HIGH)
-   {
+
+    while(gpio_get_level(USER_BUTTON_PIN) == GPIO_ACTIVE_LEVEL || gpio_get_level(DEV_BUTTON_PIN) == GPIO_ACTIVE_LEVEL)
+    {
         vTaskDelay(pdMS_TO_TICKS(10));
-   }
-   printf("GPIO is now high ...\r\n");
+    }
+
 }
 
 // 进入睡眠模式
-esp_err_t PowerManager::deep_sleep()
+void PowerManager::deep_sleep()
 {
     // 等待唤醒引脚电平复位
     wait_wakeup_button_intend();
     // 配置按键唤醒引脚
-    esp_deep_sleep_enable_gpio_wakeup(BIT(WAKE_BUTTON_PIN) | BIT(DEV_BUTTON_PIN), ESP_GPIO_WAKEUP_GPIO_LOW);
+// 车内模块的唤醒引脚配置
+#ifdef INSIDE
+    esp_deep_sleep_enable_gpio_wakeup(BIT(USER_BUTTON_PIN) | BIT(DEV_BUTTON_PIN), ESP_GPIO_WAKEUP_GPIO_LOW);
+#endif
+
+#ifdef OUTSIDE
+    //  配置按键唤醒源
+    esp_sleep_enable_ext1_wakeup(BUTTON_WAKEUP_BITMASK, ESP_EXT1_WAKEUP_ANY_HIGH);
+    // 配置Lora唤醒源
+    esp_deep_sleep_enable_gpio_wakeup(BIT(LORA_WAKE_PIN), ESP_GPIO_WAKEUP_GPIO_LOW);
+    
+#endif
     // 进入睡眠
-    printf("Going to sleep\r\n");
+    ESP_LOGI(POWER_TAG, "Going to sleep now");
     esp_deep_sleep_start();
     // 不会执行到这里
-    return ESP_OK;
 }
 
-// 按键扫描
+// 按键唤醒引脚初始化为输入模式
+void PowerManager::wakeup_gpio_init()
+{
+// 配置按键唤醒引脚
+#ifdef INSIDE
+    pinMode(USER_BUTTON_PIN, INPUT);
+#endif
 
+#ifdef OUTSIDE
+    pinMode(USER_BUTTON_PIN, INPUT);
+    pinMode(LORA_WAKE_PIN, INPUT);
+#endif
+
+    pinMode(DEV_BUTTON_PIN, INPUT);
+}
+
+
+// 按键扫描
+void PowerManager::wake_button_detection()
+{
+// 车内模块的按键扫描，用于判断是哪个按键唤醒睡眠模式
+#ifdef INSIDE
+    vTaskDelay(pdMS_TO_TICKS(20));
+    user_button_level = digitalRead(USER_BUTTON_PIN);
+    dev_button_level = digitalRead(DEV_BUTTON_PIN);
+    ESP_LOGI(POWER_TAG, "user_button_level: %d, dev_button_level: %d\n", user_button_level, dev_button_level);
+#endif
+}
+
+
+void PowerManager::lora_power_keep_high()
+{
+    // 配置Lora模块功率开关
+    rtc_gpio_init(LORA_POWER_PIN);
+    rtc_gpio_set_direction(LORA_POWER_PIN, RTC_GPIO_MODE_OUTPUT_ONLY);
+    rtc_gpio_set_level(LORA_POWER_PIN, 1);
+    rtc_gpio_hold_en(LORA_POWER_PIN);
+}
 
 
 
