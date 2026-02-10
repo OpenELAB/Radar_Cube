@@ -2,8 +2,8 @@
 #ifndef __PINS_H__
 #define __PINS_H__
 
-// #define INSIDE
-#define OUTSIDE
+#define INSIDE
+// #define OUTSIDE
 
 // Lora模块和雷达模块的串口
 extern HardwareSerial& LoraSerial;

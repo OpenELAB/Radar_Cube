@@ -7,7 +7,7 @@
 class LoraManager
 {
 public:
-    LoraManager();
+    void flag_ifconfig();
     void lora_init();
     bool lora_config();
     bool get_lora_flag();
@@ -26,7 +26,7 @@ public:
 #endif
 
 private:
-    Preferences prefe;
+    Preferences lora_prefe;
 };
 
 
