@@ -5,11 +5,12 @@
 #include "pins.h"
 #include "config.h"
 #include "lora.h"
+#include "protocol.h"
 
 const char* LORA_FLAG = "lora_flag";
 
 // lora硬件串口
-HardwareSerial loraSerial(1);
+// HardwareSerial loraSerial(1);
 
 // lora模块的配置命令
 const char* lora_init_cmd[] = 
@@ -47,6 +48,7 @@ const char* lora_wakeup_cmd[] =
 const int lora_wakeup_cmd_len = sizeof(lora_wakeup_cmd) / sizeof(lora_wakeup_cmd[0]);
 #endif
 
+// 判断NVS里面是否有关于Lora的key，没有新建默认为false、没有设置过lora无线唤醒模式
 void LoraManager::flag_ifconfig()
 {
     lora_prefe.begin("lora", false);
@@ -58,15 +60,13 @@ LoraManager::LoraManager()
     bool flag = prefe.isKey(LORA_FLAG);
     if(!flag)
     {
-        ESP_LOGI(LORA_TAG, "lora module not config ....... \r\n");
-        // printf("[Info] lora module not config ......\r\n ");
+        ESP_LOGI(LORA_TAG, "lora module not config ....... ");
         lora_prefe.putBool(LORA_FLAG, false);
         prefe.putBool(LORA_FLAG, false);
     }
     else
     {
-        ESP_LOGI(LORA_TAG, "lora module has configed .......\r\n");
-        // printf("[Info] lora module has configed .......\r\n");
+        ESP_LOGI(LORA_TAG, "lora module has configed .......");
     }
     lora_prefe.end();
     prefe.end();
@@ -75,8 +75,14 @@ LoraManager::LoraManager()
 // 配置lora串口和CE控制引脚
 void LoraManager::lora_init()
 {
-    loraSerial.begin(9600, SERIAL_8N1, LORA_RX_PIN, LORA_TX_PIN);
+    LoraSerial.begin(9600, SERIAL_8N1, LORA_RX_PIN, LORA_TX_PIN);
     pinMode(LORA_CE_PIN, OUTPUT);
+
+#ifdef INSIDE
+    // 车内模块需要打开lora模块的电源，车外模块Lora模组是一直打开的
+    pinMode(LORA_POWER_PIN, OUTPUT);
+    digitalWrite(LORA_POWER_PIN, LORA_POWER_ON);
+#endif
 }
 
 // 发送AT指令，并等待返回指令
@@ -86,25 +92,24 @@ bool LoraManager::at_send_wait_reponse(const char* cmd, int timeout, uint8_t max
     if(!cmd)
     {
         ESP_LOGE(LORA_TAG, "cmd is null, %s\r\n", cmd);
-        // printf("[Error] cmd is null, %s\r\n", cmd);
         return false;
     }
     for(uint8_t retry = 0; retry < maxretry; retry++)
     {
         // 清空串口缓存区
-        while(loraSerial.available()) loraSerial.read();
+        while(LoraSerial.available()) LoraSerial.read();
 
         // 发送AT指令
-        loraSerial.println(cmd);
+        LoraSerial.println(cmd);
 
         // 等待响应
         uint32_t t_start = millis();
         String response = "";
         while(millis() - t_start < timeout)
         {
-            if(loraSerial.available())
+            if(LoraSerial.available())
             {
-                char c = loraSerial.read();
+                char c = LoraSerial.read();
                 response += c;
                 if (c == '\n')
                 {
@@ -113,15 +118,13 @@ bool LoraManager::at_send_wait_reponse(const char* cmd, int timeout, uint8_t max
                     // 返回OK
                     if(response.equals("OK"))
                     {
-                        ESP_LOGE(LORA_TAG, "[OK] %s\r\n", cmd);
-                        // printf("[OK] %s\r\n", cmd);
+                        ESP_LOGI(LORA_TAG, "[OK] %s", cmd);
                         return true;
                     }
                     // 返回ERROR
                     if(response.equals("ERROR"))
                     {
-                        ESP_LOGE(LORA_TAG, "[ERROR] %s\r\n", cmd);
-                        // printf("[ERROR] %s\r\n", cmd);
+                        ESP_LOGE(LORA_TAG, "[ERROR] %s", cmd);
                         break;
                     }
                 }
@@ -131,14 +134,13 @@ bool LoraManager::at_send_wait_reponse(const char* cmd, int timeout, uint8_t max
         if(millis() - t_start >= timeout)
         {
             ESP_LOGE(LORA_TAG, "[Timeout] %s\r\n", cmd);
-            // printf("[Timeout] %s\r\n", cmd);
         }
     }
     return false;
 }
 
 // 配置lora无线通信模块
-bool LoraManager::lora_config()
+bool LoraManager::lora_setting()
 {
 
     // 判断是否是第一次配置
@@ -147,8 +149,7 @@ bool LoraManager::lora_config()
     // 如果是，配置lora为无线通信模式
     if(!first_config)
     {
-        ESP_LOGI(LORA_TAG, "First config lora module, start config lora module ...... \r\n");
-        // printf("[Info] First config lora module, start config lora module ...... \r\n");
+        ESP_LOGI(LORA_TAG, "First config lora module, start config lora module ...... ");
         // 拉低lora模组的CE引脚
         digitalWrite(LORA_CE_PIN, GPIO_CE_INACTIVE_LEVEL);
         // 发送命令
@@ -158,7 +159,6 @@ bool LoraManager::lora_config()
             {
                 // AT指令配置失败
                 ESP_LOGE(LORA_TAG, "[Error] AT cmd error, %s \r\n", lora_init_cmd[i]);
-                // printf("[Error] AT cmd error, %s \r\n", lora_init_cmd[i]);
                 digitalWrite(LORA_CE_PIN, GPIO_CE_ACTIVE_LEVEL);
                 return false;
             }
@@ -173,12 +173,7 @@ bool LoraManager::lora_config()
     // 已经配置过了，不需要再进行配置
     else
     {
-        ESP_LOGI(LORA_TAG, "Lora module has been configured, no need to configure again \r\n");
-        // printf("[Info] LORA module has been configured, no need to configure again \r\n");
-        #ifdef INSIDE
-        // 唤醒lora模块，并配置为无线唤醒模式
-        lora_wakeup();
-        #endif
+        ESP_LOGI(LORA_TAG, "Lora module has been configured, no need to configure again ");
 
         // 测试用，不然烧录完后第一次就自动配置好了，后面日志里看不到
         // prefe.begin("lora", false);
@@ -187,56 +182,6 @@ bool LoraManager::lora_config()
     }
     return true;
 }
-
-#ifdef INSIDE
-// 关闭睡眠模式，配置为无线唤醒模式
-bool LoraManager::lora_wakeup()
-{
-    // 先拉低CE引脚，唤醒lora模块
-    digitalWrite(LORA_CE_PIN, GPIO_CE_INACTIVE_LEVEL);
-    // 关闭睡眠模式，配置为无线唤醒模式
-    for(int i = 0; i < lora_wakeup_cmd_len; i++)
-    {
-        if(!at_send_wait_reponse(lora_wakeup_cmd[i], LORA_AT_TIMEOUT, LORA_AT_RETRY))
-        {
-            // AT指令配置失败
-            ESP_LOGE(LORA_TAG, "[Error] AT cmd error, %s \r\n", lora_init_cmd[i]);
-            // printf("[Error] AT cmd error, %s \r\n", lora_init_cmd[i]);
-            digitalWrite(LORA_CE_PIN, GPIO_CE_ACTIVE_LEVEL);
-            return false;
-        }
-    }
-    digitalWrite(LORA_CE_PIN, GPIO_CE_ACTIVE_LEVEL);
-    ESP_LOGI(LORA_TAG, "[Info] Lora module wakeup success \r\n");
-    // printf("[Info] Lora module wakeup success \r\n");
-    return true;
-}
-
-
-// ESP32C3深度睡眠前，先关闭lora的无线唤醒模式，配置为睡眠模式
-bool LoraManager::lora_sleep_mode()
-{
-    // 拉低CE引脚，进入配置模式
-    digitalWrite(LORA_CE_PIN, GPIO_CE_INACTIVE_LEVEL);
-    // 发送命令
-    for(int i = 0; i < lora_sleep_cmd_len; i++)
-    {
-        if(!at_send_wait_reponse(lora_sleep_cmd[i], LORA_AT_TIMEOUT, LORA_AT_RETRY))
-        {
-            // AT指令配置失败
-            ESP_LOGE(LORA_TAG, "[Error] AT cmd error, %s \r\n", lora_init_cmd[i]);
-            // printf("[Error] AT cmd error, %s \r\n", lora_init_cmd[i]);
-            digitalWrite(LORA_CE_PIN, GPIO_CE_ACTIVE_LEVEL);
-            return false;
-        }
-    }
-    // 睡眠模式配置成功，进入睡眠模式
-    digitalWrite(LORA_CE_PIN, GPIO_CE_ACTIVE_LEVEL);
-    ESP_LOGI(LORA_TAG, "[Info] Lora module sleep mode success \r\n");
-    // printf("[Info] Lora module sleep mode success \r\n");
-    return true;
-}
-#endif
 
 // 获取lora配置的标志位
 bool LoraManager::get_lora_flag()
@@ -276,8 +221,37 @@ bool LoraManager::clear_lora_key()
 
 void LoraManager::lora_end()
 {
-    // 取消Lora功率开关控制引脚保持高电平状态
-    
+    digitalWrite(LORA_POWER_PIN, LORA_POWER_OFF);
+    LoraSerial.end();
 }
 
+
+void LoraManager::wireless_wake_up()
+{
+    // 主机Lora无线唤醒通信协议帧
+    protocol_frame_t master_wireless_wake_frame;
+    master_wireless_wake_frame.head = MASTER_FRAME_HEAD;
+    master_wireless_wake_frame.type = MASTER_WIRELESS_WAKE_FRAME;
+    master_wireless_wake_frame.len  = FRAME_DATA_LEN;
+    // mac地址匹配帧的数据部分全为0
+    master_wireless_wake_frame.dist = WIRELESS_WAKE_DATA;
+    master_wireless_wake_frame.angle = WIRELESS_WAKE_DATA;
+    master_wireless_wake_frame.reserve = RESERVE_DATA;
+    // CRC校验值
+    master_wireless_wake_frame.crc = crc_set(&master_wireless_wake_frame);
+
+    // 发送唤醒帧
+    // 拉低lora模组的CE引脚
+    digitalWrite(LORA_CE_PIN, GPIO_CE_INACTIVE_LEVEL);
+    LoraSerial.write((uint8_t*)&master_wireless_wake_frame, sizeof(protocol_frame_t));
+    // 拉高电平
+    digitalWrite(LORA_CE_PIN, GPIO_CE_ACTIVE_LEVEL);
+}
+
+
+void LoraManager::lora_config()
+{
+    lora_init();
+    lora_setting();
+}
 

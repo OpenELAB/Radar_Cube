@@ -13,9 +13,22 @@ void LEDControler::led_init()
     pinMode(LED_PIN, OUTPUT);
 }
 
+void LEDControler::led_on()
+{
+    digitalWrite(LED_PIN, LED_ACTIVE_LEVEL);
+}
+void LEDControler::led_off()
+{
+    digitalWrite(LED_PIN, LED_INACTIVE_LEVEL);
+}
+
+
 // period 传入延时时间，单位毫秒
 void LEDControler::blink(LED_PERIOD period)
 {
+    // 解绑LEDC通道，重新设置为输出模式
+    pinMode(LED_PIN, OUTPUT);
+
     const uint32_t led_period = period / 2;
     digitalWrite(LED_PIN, LED_ACTIVE_LEVEL);
     vTaskDelay(pdMS_TO_TICKS(led_period));
@@ -37,6 +50,7 @@ void LEDControler::breath(LED_SPEED speed)
         ledcWrite(LED_PIN, duty);
         vTaskDelay(pdMS_TO_TICKS(speed));
     }
+    ledcDetach(LED_PIN);
 }
 
 #ifdef INSIDE
@@ -95,15 +109,15 @@ uint8_t PowerManager::get_battery_value()
         Vbattf = BATTERY_HIGH_THRESHOLD;
     }
     // 输出电压值
-    ESP_LOGI(POWER_TAG, "battery voltage: %.3f\n", Vbattf);
+    ESP_LOGI(POWER_TAG, "battery voltage: %.3f", Vbattf);
     // 计算电池电量百分比
     uint8_t bat_perc = (Vbattf - BATTERY_LOW_THRESHOLD) * 100.0f / (BATTERY_HIGH_THRESHOLD - BATTERY_LOW_THRESHOLD) + 0.5f;
-    ESP_LOGI(POWER_TAG, "battery percentage: %d%%\n", bat_perc);
+    ESP_LOGI(POWER_TAG, "battery percentage: %d%%", bat_perc);
     return bat_perc;
 }
 
 // 获取醒来原因
-void PowerManager::get_wakeup_reason()
+esp_sleep_wakeup_cause_t PowerManager::get_wakeup_reason()
 {
     esp_sleep_wakeup_cause_t wakeup_reason;
     wakeup_reason = esp_sleep_get_wakeup_cause();
@@ -113,7 +127,8 @@ void PowerManager::get_wakeup_reason()
 #ifdef INSIDE
         case ESP_SLEEP_WAKEUP_GPIO:
         {
-            ESP_LOGI(POWER_TAG, "Wakeup cause by RTC GPIO\r\n");
+            ESP_LOGI(POWER_TAG, "Wakeup cause by RTC GPIO");
+            wake_button_detection();
             break;
         }
 #endif
@@ -126,32 +141,34 @@ void PowerManager::get_wakeup_reason()
             uint64_t button_wakeup_pin_mask = esp_sleep_get_ext1_wakeup_status();
             if(button_wakeup_pin_mask & (1ULL << USER_BUTTON_PIN))
             {
-                ESP_LOGI(POWER_TAG, "USER BUTTON was pressed\r\n");
+                ESP_LOGI(POWER_TAG, "USER BUTTON was pressed");
             }
             if(button_wakeup_pin_mask & (1ULL << DEV_BUTTON_PIN))
             {
-                ESP_LOGI(POWER_TAG, "DEV BUTTON was pressed\r\n");
+                ESP_LOGI(POWER_TAG, "DEV BUTTON was pressed");
             }
             break;
         }
         case ESP_SLEEP_WAKEUP_GPIO:
         {
-            ESP_LOGI(POWER_TAG, "wakeup cause by Lora\r\n");
+            ESP_LOGI(POWER_TAG, "wakeup cause by Lora");
+            lora_wakeup = true;
             break;
         }
 #endif
 
         default:
-            ESP_LOGI(POWER_TAG, "Wakeup cause by other: %d\r\n", wakeup_reason);
+            ESP_LOGI(POWER_TAG, "Wakeup cause by other: %d", wakeup_reason);
             break;
     }
+    return wakeup_reason;
 }
 
 // 等待唤醒按键电平复位
 void PowerManager::wait_wakeup_button_intend()
 {
 
-    while(gpio_get_level(USER_BUTTON_PIN) == GPIO_ACTIVE_LEVEL || gpio_get_level(DEV_BUTTON_PIN) == GPIO_ACTIVE_LEVEL)
+    while(gpio_get_level(USER_BUTTON_PIN) == USER_BUTTON_ACTIVE_LEVEL || gpio_get_level(DEV_BUTTON_PIN) == DEV_BUTTON_ACTIVE_LEVEL)
     {
         vTaskDelay(pdMS_TO_TICKS(10));
     }
@@ -166,7 +183,7 @@ void PowerManager::deep_sleep()
     // 配置按键唤醒引脚
 // 车内模块的唤醒引脚配置
 #ifdef INSIDE
-    esp_deep_sleep_enable_gpio_wakeup(BIT(USER_BUTTON_PIN) | BIT(DEV_BUTTON_PIN), ESP_GPIO_WAKEUP_GPIO_LOW);
+    esp_deep_sleep_enable_gpio_wakeup(BIT(USER_BUTTON_PIN) | BIT(DEV_BUTTON_PIN), ESP_GPIO_WAKEUP_GPIO_HIGH);
 #endif
 
 #ifdef OUTSIDE
@@ -174,7 +191,6 @@ void PowerManager::deep_sleep()
     esp_sleep_enable_ext1_wakeup(BUTTON_WAKEUP_BITMASK, ESP_EXT1_WAKEUP_ANY_HIGH);
     // 配置Lora唤醒源
     esp_deep_sleep_enable_gpio_wakeup(BIT(LORA_WAKE_PIN), ESP_GPIO_WAKEUP_GPIO_LOW);
-    
 #endif
     // 进入睡眠
     ESP_LOGI(POWER_TAG, "Going to sleep now");
@@ -186,15 +202,11 @@ void PowerManager::deep_sleep()
 void PowerManager::wakeup_gpio_init()
 {
 // 配置按键唤醒引脚
-#ifdef INSIDE
-    pinMode(USER_BUTTON_PIN, INPUT);
-#endif
 
 #ifdef OUTSIDE
-    pinMode(USER_BUTTON_PIN, INPUT);
     pinMode(LORA_WAKE_PIN, INPUT);
 #endif
-
+    pinMode(USER_BUTTON_PIN, INPUT);
     pinMode(DEV_BUTTON_PIN, INPUT);
 }
 
@@ -207,21 +219,10 @@ void PowerManager::wake_button_detection()
     vTaskDelay(pdMS_TO_TICKS(20));
     user_button_level = digitalRead(USER_BUTTON_PIN);
     dev_button_level = digitalRead(DEV_BUTTON_PIN);
-    ESP_LOGI(POWER_TAG, "user_button_level: %d, dev_button_level: %d\n", user_button_level, dev_button_level);
+    ESP_LOGI(POWER_TAG, "user_button_level: %d, dev_button_level: %d", user_button_level, dev_button_level);
 #endif
 }
 
-
-void PowerManager::lora_power_keep_high()
-{
-#ifdef OUTSIDE
-    // 配置Lora模块功率开关
-    rtc_gpio_init(LORA_POWER_PIN);
-    rtc_gpio_set_direction(LORA_POWER_PIN, RTC_GPIO_MODE_OUTPUT_ONLY);
-    rtc_gpio_set_level(LORA_POWER_PIN, 1);
-    rtc_gpio_hold_en(LORA_POWER_PIN);
-#endif
-}
 
 
 

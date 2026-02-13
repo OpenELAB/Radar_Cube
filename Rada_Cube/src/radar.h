@@ -3,6 +3,7 @@
 
 
 #ifdef OUTSIDE
+
 // 雷达数据帧的长度
 #define RADAR_FRAME_LEN     14
 // 雷达数据的长度
@@ -16,7 +17,7 @@ typedef struct
     uint16_t cmd;       //  命令 
     uint16_t len;       //  数据长度
     uint16_t dist;      //  距离
-    uint16_t angle;     //  角度
+    int16_t angle;     //  角度
     uint16_t reserve;   //  预留字节
     uint16_t crc;       //  CRC校验码
 }RadarFrame_t;
@@ -33,10 +34,6 @@ class RadarModule
 public:
     static constexpr size_t FIFO_SIZE = 512;
 
-    // 串口对应的函数
-    void Radar_init();
-    void Radar_end();
-
     // 状态机
     enum State : uint8_t {HUNT_AA, HUNT_55, PAYLOAD};
     // 入队函数
@@ -47,8 +44,16 @@ public:
     bool verifyChecksum(const uint8_t* raw, size_t len = 12);
     //  数据帧解析函数
     bool parseRadarFrame(const uint8_t* raw, RadarFrame_t* f);
+
+    // 串口对应的函数
+    void Radar_init();
+    void Radar_end();
+    
     //  Radar串口接收回调函数
+    static void Radar_onReceiveStatic();
     void Radar_onReveive();
+
+    void radar_loop();
     
     
 private:
@@ -61,6 +66,9 @@ private:
     uint8_t fifoBuf[FIFO_SIZE];
     volatile uint8_t fifo_head =0;
     volatile uint8_t fifo_tail = 0;
+
+    // 单例指针
+    static RadarModule* instance;
 
 };
 

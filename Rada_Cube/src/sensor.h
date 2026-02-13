@@ -25,7 +25,7 @@ enum BEEP
 {
     BEEPER_PERIOD_1 = 1000, // 蜂鸣周期1s
     BEEPER_PERIOD_2 = 500,  // 蜂鸣周期0.5s
-    BEEPER_PERIOD_4 = 250,  // 蜂鸣周期0.25s
+    BEEPER_PERIOD_3 = 250,  // 蜂鸣周期0.25s
     BEEPER_PERIOD_LONG = 0  // 长鸣
 };
 
@@ -42,6 +42,8 @@ class LEDControler
 {
 public:
     void led_init();
+    void led_on();
+    void led_off();
     void blink(LED_PERIOD period);
     void breath(LED_SPEED speed);
 };
@@ -68,19 +70,21 @@ public:
     // 等待唤醒引脚电平复位
     void wait_wakeup_button_intend();
     // 获取唤醒原因
-    void get_wakeup_reason();
+    esp_sleep_wakeup_cause_t get_wakeup_reason();
     // 获取电池电压值
     uint8_t get_battery_value();
     // 用于按键扫描
     void wake_button_detection();
 
-    // ================================== 第一版LORA功率开关控制引脚需要持续拉高 ==================================
-    void lora_power_keep_high();
-
 
 private:
-    bool user_button_level = GPIO_INACTIVE_LEVEL;
-    bool dev_button_level = GPIO_INACTIVE_LEVEL;
+    bool user_button_level = USER_BUTTON_INACTIVE_LEVEL;
+    bool dev_button_level = DEV_BUTTON_INACTIVE_LEVEL;
+
+#ifdef OUTSIDE
+    // Lora唤醒，用于工作状态
+    bool lora_wakeup = false;
+#endif
 };
 
 #endif
