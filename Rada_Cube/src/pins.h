@@ -28,17 +28,6 @@ extern HardwareSerial& LoraSerial;
 extern HardwareSerial& RadarSerial;
 
 
-// 车内模块
-#ifdef  INSIDE
-    #define GPIO_ACTIVE_LEVEL       1   // High
-    #define GPIO_INACTIVE_LEVEL     0   // Low
-#endif
-
-// 车外模块
-#ifdef  OUTSIDE
-    #define GPIO_ACTIVE_LEVEL       0   // Low
-    #define GPIO_INACTIVE_LEVEL     1   // High
-#endif
 
 
 // 定义车内模块的引脚
@@ -56,6 +45,7 @@ extern HardwareSerial& RadarSerial;
     #define LORA_RX_PIN             GPIO_NUM_6
     #define LORA_TX_PIN             GPIO_NUM_7
     #define LORA_CE_PIN             GPIO_NUM_0
+    #define LORA_POWER_PIN          GPIO_NUM_18
 #endif
 
 
@@ -81,5 +71,47 @@ extern HardwareSerial& RadarSerial;
     #define USER_BUTTON_PIN         GPIO_NUM_2
     #define BUTTON_WAKEUP_BITMASK         ((1ULL << USER_BUTTON_PIN) | (1ULL << DEV_BUTTON_PIN))
 #endif
+
+
+
+
+// Lora相关
+// Lora开关
+#define LORA_POWER_OFF             LOW
+#define LORA_POWER_ON              HIGH
+// Lora的CE控制引脚
+#define GPIO_CE_ACTIVE_LEVEL       HIGH   
+#define GPIO_CE_INACTIVE_LEVEL     LOW   
+
+
+// 按键相关
+// 按键的状态
+#define USER_BUTTON_PRESSED             HIGH
+#define DEV_BUTTON_PRESSED              HIGH
+#define USER_BUTTON_RELEASED            LOW
+#define DEV_BUTTON_RELEASED             LOW
+
+
+// 按键的电平
+#define USER_BUTTON_ACTIVE_LEVEL        HIGH
+#define DEV_BUTTON_ACTIVE_LEVEL         HIGH
+#define USER_BUTTON_INACTIVE_LEVEL      LOW
+#define DEV_BUTTON_INACTIVE_LEVEL       LOW
+
+
+// 雷达相关
+#define RADAR_POWER_OFF                 LOW
+#define RADAR_POWER_ON                  HIGH
+
+
+// MAC地址相关
+#define MASTER_MAC_ADDR_EXIST           true
+#define SLAVE_MAC_ADDR_EXIST            true
+#define MASTER_MAC_ADDR_NOT_EXIST       false
+#define SLAVE_MAC_ADDR_NOT_EXIST        false
+
+
+
+
 
 #endif

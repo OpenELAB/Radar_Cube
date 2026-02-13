@@ -1,34 +1,34 @@
-#include <Arduino.h>
-#include "pins.h"
-#include "sensor.h"
-#include "lora.h"
-#include "config.h"
-#include "radar.h"
-#include "mac_match.h"
+// #include <Arduino.h>
+// #include "pins.h"
+// #include "sensor.h"
+// #include "lora.h"
+// #include "config.h"
+// #include "radar.h"
+// #include "mac_match.h"
 
-MacMatch mac;
+// MacMatch mac;
 
-PowerManager power;
-RadarModule Radar;
-LoraManager Lora;
+// PowerManager power;
+// RadarModule Radar;
+// LoraManager Lora;
 
-// Lora模块和雷达模块的串口
-HardwareSerial& LoraSerial = Serial1;
-#ifdef OUTSIDE
-    HardwareSerial& RadarSerial = Serial1;
-#endif
+// // Lora模块和雷达模块的串口
+// HardwareSerial& LoraSerial = Serial1;
+// #ifdef OUTSIDE
+//     HardwareSerial& RadarSerial = Serial1;
+// #endif
 
-void setup()
-{
-    mac.mac_match();
+// void setup()
+// {
+//     mac.mac_match();
     
 
-}
+// }
 
-void loop()
-{
+// void loop()
+// {
 
-}
+// }
 
 
 

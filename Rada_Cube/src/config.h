@@ -37,16 +37,12 @@
 
 
 
-
-
-#define GPIO_CE_ACTIVE_LEVEL       1   // High
-#define GPIO_CE_INACTIVE_LEVEL     0   // Low
-
-
 // 日志输出标签
-#define POWER_TAG         "POWER"
-#define LORA_TAG          "LORA"
+#define POWER_TAG          "POWER"
+#define LORA_TAG           "LORA"
 #define MAC_TAG            "MAC"
+#define RADAR_TAG          "RADAR"
+#define MAIN_TAG           "MAIN"
 
 
 

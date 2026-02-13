@@ -56,14 +56,14 @@ void setup()
 {
     Serial0.begin(115200);
     LoraSerial.begin(9600, SERIAL_8N1, LORA_RX_PIN, LORA_TX_PIN);
-    pinMode(LORA_CE_PIN, OUTPUT);
+    // pinMode(LORA_CE_PIN, OUTPUT);
 
-    digitalWrite(LORA_CE_PIN, LOW);
-    for(int i = 0; i < wireless_wake_len; i++)
-    {
-        send_at_wait_response(wireless_wake_cmd[i]);
-    }
-    digitalWrite(LORA_CE_PIN, HIGH);
+    // digitalWrite(LORA_CE_PIN, LOW);
+    // for(int i = 0; i < wireless_wake_len; i++)
+    // {
+    //     send_at_wait_response(wireless_wake_cmd[i]);
+    // }
+    // digitalWrite(LORA_CE_PIN, HIGH);
 
     // ESP-NOW 初始化
     WiFi.mode(WIFI_STA);
@@ -91,7 +91,7 @@ void setup()
     bootCount++;
 
     // 配置唤醒引脚
-    esp_deep_sleep_enable_gpio_wakeup(BIT(LORA_WAKE_PIN), ESP_GPIO_WAKEUP_GPIO_HIGH);
+    esp_deep_sleep_enable_gpio_wakeup(BIT(LORA_WAKE_PIN), ESP_GPIO_WAKEUP_GPIO_LOW);
 
     // 进入深度睡眠
     Serial0.println("Entering deep sleep...");
