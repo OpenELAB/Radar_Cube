@@ -4,6 +4,9 @@
 #include "lora.h"
 #include "config.h"
 #include "radar.h"
+#include "mac_match.h"
+
+MacMatch mac;
 
 PowerManager power;
 RadarModule Radar;
@@ -17,6 +20,7 @@ HardwareSerial& LoraSerial = Serial1;
 
 void setup()
 {
+    mac.mac_match();
     
 
 }
@@ -25,6 +29,7 @@ void loop()
 {
 
 }
+
 
 
 

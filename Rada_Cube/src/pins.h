@@ -23,6 +23,24 @@ extern HardwareSerial& RadarSerial;
 #endif
 
 
+// Lora模块和雷达模块的串口
+extern HardwareSerial& LoraSerial;
+extern HardwareSerial& RadarSerial;
+
+
+// 车内模块
+#ifdef  INSIDE
+    #define GPIO_ACTIVE_LEVEL       1   // High
+    #define GPIO_INACTIVE_LEVEL     0   // Low
+#endif
+
+// 车外模块
+#ifdef  OUTSIDE
+    #define GPIO_ACTIVE_LEVEL       0   // Low
+    #define GPIO_INACTIVE_LEVEL     1   // High
+#endif
+
+
 // 定义车内模块的引脚
 #ifdef INSIDE
     // LED引脚
