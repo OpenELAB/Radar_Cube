@@ -2,52 +2,55 @@
 #define __LORA_H__
 
 #include <Preferences.h>
+#include "pins.h"
+#include "config.h"
 
-
+/**
+ * Lora 无线模块管理
+ *
+ * 使用示例：
+ *
+ *   LoraManager Lora;
+ *
+ *   // 初始化 + AT 配置（已配过则自动跳过）
+ *   Lora.setup();
+ *
+ *   // 发送唤醒帧
+ *   Lora.sendWakeFrame();
+ *
+ *   // 关闭模块
+ *   Lora.shutdown();
+ */
 class LoraManager
 {
 public:
-    // NVS 管理
-    // 判断NVS里关于Lora标志位的KEY
-    void flag_ifconfig();
-    // 获取Lora配置的标志位
-    bool get_lora_flag();
-    // 写入Lora配置的标志位
-    void write_lora_flag(bool flag);
-    // 清除Lora标志位的KEY
-    bool clear_lora_key();
+    // 初始化串口 + CE引脚 + 电源
+    void init();
 
-    // 初始化Lora模块，串口及打开Lora模块的功率开关
-    void lora_init();
-    // Lora模块的配置逻辑
-    bool lora_setting();
-    // AT指令发送及等待返回值
-    bool at_send_wait_reponse(const char* cmd, int timeout, uint8_t maxretry = 3);
+    // 首次配置 AT 参数（已配置过则跳过），返回是否成功
+    bool configure();
 
-    // 唤醒从机
-    void wireless_wake_up();
+    // init() + configure() 的组合，给 main 调用
+    void setup();
 
-    // ================================ ESP睡眠后变为高阻态，功率开关有下拉电阻，理论上硬件就可以控制，软件上是否需要在加上？ ==============================================
-    // 关闭串口
-    void lora_end();
+    // 发送 AT 指令并等待 OK / ERROR，支持重试
+    bool sendAT(const char* cmd, int timeout_ms = LORA_AT_TIMEOUT, uint8_t max_retry = LORA_AT_RETRY);
 
-    // Lora配置的总逻辑
-    void lora_config();
+    // 通过 Lora 发送无线唤醒帧
+    void sendWakeFrame();
 
+    // 关闭 Lora 模块（拉低电源 + 关串口）
+    void shutdown();
 
-#ifdef OUTSIDE
-
-#endif
+    // 清除 NVS 中的已配置标志（调试/重置用）
+    void clearConfigFlag();
 
 private:
-    Preferences lora_prefe;
+    Preferences _prefs;
 
-#endif
-
-private:
-    Preferences prefe;
+    // NVS 相关
+    bool isConfigured();
+    void setConfigured(bool flag);
 };
-
-
 
 #endif
