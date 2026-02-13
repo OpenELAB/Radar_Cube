@@ -51,11 +51,17 @@ void LoraManager::flag_ifconfig()
 {
     lora_prefe.begin("lora", false);
     bool flag = lora_prefe.isKey(LORA_FLAG);
+// LoraManager的构造函数，用于创建NVS的key值
+LoraManager::LoraManager()
+{
+    prefe.begin("lora", false);
+    bool flag = prefe.isKey(LORA_FLAG);
     if(!flag)
     {
         ESP_LOGI(LORA_TAG, "lora module not config ....... \r\n");
         // printf("[Info] lora module not config ......\r\n ");
         lora_prefe.putBool(LORA_FLAG, false);
+        prefe.putBool(LORA_FLAG, false);
     }
     else
     {
@@ -63,6 +69,7 @@ void LoraManager::flag_ifconfig()
         // printf("[Info] lora module has configed .......\r\n");
     }
     lora_prefe.end();
+    prefe.end();
 }
 
 // 配置lora串口和CE控制引脚
@@ -237,6 +244,9 @@ bool LoraManager::get_lora_flag()
     lora_prefe.begin("lora", false);
     bool flag = lora_prefe.getBool(LORA_FLAG, false);
     lora_prefe.end();
+    prefe.begin("lora", false);
+    bool flag = prefe.getBool(LORA_FLAG, false);
+    prefe.end();
     return flag;
 }
 
@@ -246,6 +256,9 @@ void LoraManager::write_lora_flag(bool flag)
     lora_prefe.begin("lora", false);
     lora_prefe.putBool(LORA_FLAG, flag);
     lora_prefe.end();
+    prefe.begin("lora", false);
+    prefe.putBool(LORA_FLAG, flag);
+    prefe.end();
 }
 
 // 清除lora配置的KEY
@@ -254,6 +267,9 @@ bool LoraManager::clear_lora_key()
     lora_prefe.begin("lora", false);
     bool result = lora_prefe.remove(LORA_FLAG);
     lora_prefe.end();
+    prefe.begin("lora", false);
+    bool result = prefe.remove(LORA_FLAG);
+    prefe.end();
     return result;
 }
 

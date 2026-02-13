@@ -8,9 +8,21 @@
 
 MacMatch mac;
 
+PowerManager power;
+RadarModule Radar;
+LoraManager Lora;
+
+// Lora模块和雷达模块的串口
+HardwareSerial& LoraSerial = Serial1;
+#ifdef OUTSIDE
+    HardwareSerial& RadarSerial = Serial1;
+#endif
+
 void setup()
 {
     mac.mac_match();
+    
+
 }
 
 void loop()

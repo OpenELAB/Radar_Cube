@@ -2,8 +2,26 @@
 #ifndef __PINS_H__
 #define __PINS_H__
 
-#define INSIDE
-// #define OUTSIDE
+// #define INSIDE
+#define OUTSIDE
+
+// Lora模块和雷达模块的串口
+extern HardwareSerial& LoraSerial;
+extern HardwareSerial& RadarSerial;
+
+
+// 车内模块
+#ifdef  INSIDE
+    #define GPIO_ACTIVE_LEVEL       1   // High
+    #define GPIO_INACTIVE_LEVEL     0   // Low
+#endif
+
+// 车外模块
+#ifdef  OUTSIDE
+    #define GPIO_ACTIVE_LEVEL       0   // Low
+    #define GPIO_INACTIVE_LEVEL     1   // High
+#endif
+
 
 // Lora模块和雷达模块的串口
 extern HardwareSerial& LoraSerial;

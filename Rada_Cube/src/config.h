@@ -20,6 +20,22 @@
 #define LORA_AT_TIMEOUT             2000
 #define LORA_AT_RETRY               3
 
+// 定义唤醒GPIO引脚的高低电平
+
+
+
+
+
+#define GPIO_CE_ACTIVE_LEVEL       1   // High
+#define GPIO_CE_INACTIVE_LEVEL     0   // Low
+
+
+// 日志输出标签
+#define POWER_TAG         "POWER"
+#define LORA_TAG          "LORA"
+
+
+
 
 
 
