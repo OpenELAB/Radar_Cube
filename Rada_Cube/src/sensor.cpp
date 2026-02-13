@@ -214,11 +214,13 @@ void PowerManager::wake_button_detection()
 
 void PowerManager::lora_power_keep_high()
 {
+#ifdef OUTSIDE
     // 配置Lora模块功率开关
     rtc_gpio_init(LORA_POWER_PIN);
     rtc_gpio_set_direction(LORA_POWER_PIN, RTC_GPIO_MODE_OUTPUT_ONLY);
     rtc_gpio_set_level(LORA_POWER_PIN, 1);
     rtc_gpio_hold_en(LORA_POWER_PIN);
+#endif
 }
 
 

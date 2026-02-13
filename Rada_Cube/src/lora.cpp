@@ -47,6 +47,10 @@ const char* lora_wakeup_cmd[] =
 const int lora_wakeup_cmd_len = sizeof(lora_wakeup_cmd) / sizeof(lora_wakeup_cmd[0]);
 #endif
 
+void LoraManager::flag_ifconfig()
+{
+    lora_prefe.begin("lora", false);
+    bool flag = lora_prefe.isKey(LORA_FLAG);
 // LoraManager的构造函数，用于创建NVS的key值
 LoraManager::LoraManager()
 {
@@ -56,6 +60,7 @@ LoraManager::LoraManager()
     {
         ESP_LOGI(LORA_TAG, "lora module not config ....... \r\n");
         // printf("[Info] lora module not config ......\r\n ");
+        lora_prefe.putBool(LORA_FLAG, false);
         prefe.putBool(LORA_FLAG, false);
     }
     else
@@ -63,6 +68,7 @@ LoraManager::LoraManager()
         ESP_LOGI(LORA_TAG, "lora module has configed .......\r\n");
         // printf("[Info] lora module has configed .......\r\n");
     }
+    lora_prefe.end();
     prefe.end();
 }
 
@@ -160,9 +166,9 @@ bool LoraManager::lora_config()
         // 配置完拉高电平进入到无线唤醒模式
         digitalWrite(LORA_CE_PIN, GPIO_CE_ACTIVE_LEVEL);
         // 配置完成，写入配置标志位
-        prefe.begin("lora", false);
-        prefe.putBool("lora_flag", true);
-        prefe.end();
+        lora_prefe.begin("lora", false);
+        lora_prefe.putBool("lora_flag", true);
+        lora_prefe.end();
     }
     // 已经配置过了，不需要再进行配置
     else
@@ -235,6 +241,9 @@ bool LoraManager::lora_sleep_mode()
 // 获取lora配置的标志位
 bool LoraManager::get_lora_flag()
 {
+    lora_prefe.begin("lora", false);
+    bool flag = lora_prefe.getBool(LORA_FLAG, false);
+    lora_prefe.end();
     prefe.begin("lora", false);
     bool flag = prefe.getBool(LORA_FLAG, false);
     prefe.end();
@@ -244,6 +253,9 @@ bool LoraManager::get_lora_flag()
 // 写入lora配置的标志位
 void LoraManager::write_lora_flag(bool flag)
 {
+    lora_prefe.begin("lora", false);
+    lora_prefe.putBool(LORA_FLAG, flag);
+    lora_prefe.end();
     prefe.begin("lora", false);
     prefe.putBool(LORA_FLAG, flag);
     prefe.end();
@@ -252,6 +264,9 @@ void LoraManager::write_lora_flag(bool flag)
 // 清除lora配置的KEY
 bool LoraManager::clear_lora_key()
 {
+    lora_prefe.begin("lora", false);
+    bool result = lora_prefe.remove(LORA_FLAG);
+    lora_prefe.end();
     prefe.begin("lora", false);
     bool result = prefe.remove(LORA_FLAG);
     prefe.end();
