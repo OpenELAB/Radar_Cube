@@ -2,100 +2,57 @@
 #define __MAC_MATCH_H__
 
 #include <Preferences.h>
-#include <esp_now.h>
-#include "pins.h"
+#include "espnow.h"
 #include "protocol.h"
 
+// ======================== 配对参数 ========================
+#define PAIR_MAX_RETRY          20      // 配对最大重试次数
+#define PAIR_POLL_INTERVAL_MS   100     // 配对轮询间隔 (ms)
+#define PAIR_ROUND_CHECKS       10      // 每轮发送后检查次数（PAIR_ROUND_CHECKS * PAIR_POLL_INTERVAL_MS = 1轮总等待时间）
 
-
-// 单例模式
-
+/**
+ * MAC 地址配对模块
+ *
+ * 责任：通过 ESP-NOW 完成主从配对，并把对方 MAC 地址持久化到 NVS
+ *
+ * 使用示例：
+ *
+ *   EspNowManager Espnow;
+ *   MacMatch matcher(Espnow);
+ *
+ *   // 检查是否已配对
+ *   if (matcher.hasPeerMac()) {
+ *       uint8_t mac[6];
+ *       matcher.loadPeerMac(mac);
+ *   }
+ *
+ *   // 执行配对（阻塞，最多等 PAIR_MAX_RETRY 轮）
+ *   if (!matcher.pair()) {
+ *       // 配对失败处理
+ *   }
+ *
+ *   // 清除已保存的配对信息
+ *   matcher.clearPeerMac();
+ */
 class MacMatch
 {
 public:
-    // 获取单例实例
-    static MacMatch& getInstance()
-    {
-        static MacMatch instance;
-        return instance;
-    }
+    // 构造时传入 EspNowManager 引用
+    MacMatch(EspNowManager& espnow) : _espnow(espnow) {}
 
-    // 删除拷贝构造函数和赋值
-    MacMatch(const MacMatch&) = delete;
-    MacMatch& operator=(const MacMatch&) = delete;
+    // 执行配对流程（阻塞，超时返回 false）
+    bool pair(uint8_t max_retry = PAIR_MAX_RETRY);
 
-    // 初始化esp-now
-    void mac_init();
-    // 获取mac地址
-    void get_mac_addr();
-
-    // 对NVS空间的处理
-    // MAC地址存在标志位KEY
-    bool key_exist_flag();
-    bool get_mac_exist_flag();
-    void write_mac_exist_flag(bool flag);
-    bool clear_mac_exist_flag();
-    // MAC地址
-    void write_mac_addr(const uint8_t* mac_addr);
-    bool read_mac_addr(uint8_t* mac_buf, size_t buf_len);
-    void clear_mac_addr();
-
-    // 车内模块广播模式
-    void broadcast_init();
-    void broadcast_send();
-
-    // 判断是否存在
-    bool mac_exist();
-
-    // 总处理逻辑
-    bool mac_match();
+    // NVS 操作
+    bool hasPeerMac();
+    bool loadPeerMac(uint8_t mac_out[6]);
+    void savePeerMac(const uint8_t mac[6]);
+    void clearPeerMac();
 
 private:
-
-    // 构造函数私有化
-    MacMatch() = default;
-    ~MacMatch() = default;
-
-    Preferences mac_prefe;
-    uint8_t mac[6]{};       // 用于存储NVS里读取的mac地址
-    uint8_t _self_mac[6]{}; // 本机mac地址
-
-#ifdef INSIDE
-    uint8_t _slave_mac[6]{};
-#endif
-
-#ifdef OUTSIDE
-    uint8_t _master_mac[6]{};
-#endif
-    // 记录从机地址的标志位
-    bool slave_mac_flag = false;
-    // 记录主机地址的标志位
-    bool master_mac_flag = false;
-
-    // ======================== 静态回调函数 ========================
-    static void broadcast_onsent(const esp_now_send_info_t* info, esp_now_send_status_t status);
-    static void broadcast_onrece(const esp_now_recv_info_t* info, const uint8_t* data, int len);
-    // 车外模块设置为接收模式，接收处理数据帧并保存主机地址到NVS里
-    static void slave_onsent(const esp_now_send_info_t* info, esp_now_send_status_t status);
-    static void slave_onrece(const esp_now_recv_info_t* info, const uint8_t* data, int len);
-
-    // ======================== 实例方法 ========================
-    void onBroadcastSent(const esp_now_send_info_t* info, esp_now_send_status_t status);
-    void onBroadcastRece(const esp_now_recv_info_t* info, const uint8_t* data, int len);
-
-
-    void onSlaveSent(const esp_now_send_info_t* info, esp_now_send_status_t status);
-    void onSlaveRece(const esp_now_recv_info_t* info, const uint8_t* data, int len);
+    EspNowManager& _espnow;
+    Preferences    _prefs;
+    uint8_t        _peer_mac[6]{};
 };
-
-
-
-
-
-
-
-
-
-
 
 #endif

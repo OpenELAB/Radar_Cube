@@ -3,55 +3,57 @@
 
 #include <Arduino.h>
 
-//通信协议帧
-// 帧头
-#define MASTER_FRAME_HEAD              0xA5A5
-#define SLAVE_FRAME_HEAD               0x5A5A
+// ======================== 帧头（1 字节即可区分主从） ========================
+#define MASTER_FRAME_HEAD       0xA5
+#define SLAVE_FRAME_HEAD        0x5A
 
+// ======================== 帧类型 ========================
+enum frame_type_t : uint8_t {
+    FRAME_MASTER_MATCH  = 0x01,     // 主机配对请求
+    FRAME_SLAVE_MATCH   = 0x02,     // 从机配对应答
+    FRAME_WAKE          = 0x03,     // 主机无线唤醒
+    FRAME_WAKE_ACK      = 0x04,     // 从机唤醒应答
+    FRAME_RADAR_DATA    = 0x05,     // 雷达数据帧
+    FRAME_END           = 0x06,     // 结束帧
+};
 
-// 帧类型
-typedef enum
-{
-    MASTER_MATCH_FRAME          = 0x01,
-    SLAVE_MATCH_FRAME           = 0x02,
-    MASTER_WIRELESS_WAKE_FRAME  = 0x03,
-    SLAVE_WAKE_ACK_FRAME        = 0x04,
-    RADAR_DATA_FRAME            = 0x05,
-    END_FRAME                   = 0x06
-}frame_type_t;
+// ======================== 协议帧（8 字节，4 字节对齐）========================
+//  [head 1B][type 1B][dist 2B][angle 2B][reserve 1B][checksum 1B] = 8B
+typedef struct __attribute__((packed)) {
+    uint8_t      head;          // 帧头 0xA5 / 0x5A
+    frame_type_t type;          // 帧类型
+    uint16_t     dist;          // 距离 (mm)
+    int16_t      angle;         // 角度 (×0.01°)
+    uint8_t      reserve;       // 预留
+    uint8_t      checksum;      // 校验 = 前 7 字节之和 & 0xFF
+} protocol_frame_t;
 
-// 数据长度 6
-#define FRAME_DATA_LEN                  6
+static_assert(sizeof(protocol_frame_t) == 8, "protocol_frame_t must be 8 bytes");
 
-// mac匹配时帧的数据
-#define MAC_MATCH_DATA                  0
-#define WIRELESS_WAKE_DATA              0
-// 预留值也是0
-#define RESERVE_DATA                    0
+// ======================== 工具函数 ========================
+//
+// 使用示例：
+//
+//   // 构建帧
+//   protocol_frame_t frame;
+//   frame_build(&frame, MASTER_FRAME_HEAD, FRAME_WAKE);
+//   frame_build(&frame, SLAVE_FRAME_HEAD, FRAME_RADAR_DATA, dist_mm, angle);
+//
+//   // 校验帧
+//   if (frame_validate(data, len, SLAVE_FRAME_HEAD, FRAME_WAKE_ACK)) {
+//       // 帧合法
+//   }
+//
 
-// CRC校验的长度，为前12字节之和的低八位
-#define CRC_CALC_LEN                    12
+// 计算帧校验值
+uint8_t frame_calc_checksum(const protocol_frame_t* frame);
 
+// 构建帧（自动填充 reserve + checksum）
+void frame_build(protocol_frame_t* frame, uint8_t head, frame_type_t type,
+                 uint16_t dist = 0, int16_t angle = 0);
 
-// 协议帧结构体
-typedef struct __attribute__((packed))
-{
-    uint16_t head;      // 帧头
-    uint16_t type;  // 帧类型
-    uint16_t len;       // 数据长度
-    uint16_t dist;      // 距离
-    int16_t angle;      // 角度
-    uint16_t reserve;   // 预留值
-    uint16_t crc;       // CRC校验
-}protocol_frame_t;
-
-
-
-// CRC校验函数
-uint16_t crc_set(protocol_frame_t* frame);
-
-
-
-
+// 校验帧合法性
+bool frame_validate(const uint8_t* data, int len,
+                    uint8_t expect_head, frame_type_t expect_type);
 
 #endif

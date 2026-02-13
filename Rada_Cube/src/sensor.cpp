@@ -116,59 +116,81 @@ uint8_t PowerManager::get_battery_value()
     return bat_perc;
 }
 
-// 获取醒来原因
-esp_sleep_wakeup_cause_t PowerManager::get_wakeup_reason()
+// 检测唤醒源：ESP-IDF API + 读按钮电平
+void PowerManager::detectWakeupSource()
 {
-    esp_sleep_wakeup_cause_t wakeup_reason;
-    wakeup_reason = esp_sleep_get_wakeup_cause();
-    switch (wakeup_reason)
+    esp_sleep_wakeup_cause_t reason = esp_sleep_get_wakeup_cause();
+
+    // 等一小段时间让 GPIO 电平稳定后再读
+    vTaskDelay(pdMS_TO_TICKS(20));
+    bool user_pressed = (digitalRead(USER_BUTTON_PIN) == BUTTON_PRESSED);
+    bool dev_pressed  = (digitalRead(DEV_BUTTON_PIN)  == BUTTON_PRESSED);
+
+    switch (reason)
     {
-// 车内模块只有一种唤醒，唤醒原因7
 #ifdef INSIDE
-        case ESP_SLEEP_WAKEUP_GPIO:
-        {
-            ESP_LOGI(POWER_TAG, "Wakeup cause by RTC GPIO");
-            wake_button_detection();
-            break;
+    // C3 的 GPIO 唤醒无法区分哪个引脚，靠读电平判断
+    case ESP_SLEEP_WAKEUP_GPIO:
+        if (user_pressed && dev_pressed) {
+            _wakeup_src = WAKEUP_BOTH_BUTTONS;
+            ESP_LOGI(POWER_TAG, "Wakeup: BOTH buttons pressed");
+        } else if (user_pressed) {
+            _wakeup_src = WAKEUP_USER_BUTTON;
+            ESP_LOGI(POWER_TAG, "Wakeup: USER button");
+        } else if (dev_pressed) {
+            _wakeup_src = WAKEUP_DEV_BUTTON;
+            ESP_LOGI(POWER_TAG, "Wakeup: DEV button");
+        } else {
+            // 按键已松开，无法确定是哪个，默认 USER
+            _wakeup_src = WAKEUP_USER_BUTTON;
+            ESP_LOGW(POWER_TAG, "Wakeup: GPIO but no button held, default USER");
         }
+        break;
 #endif
 
-// 车外模块有两种唤醒原因，唤醒原因3和7
 #ifdef OUTSIDE
-        case ESP_SLEEP_WAKEUP_EXT1:
-        {
-            // 按键唤醒，排查唤醒按键
-            uint64_t button_wakeup_pin_mask = esp_sleep_get_ext1_wakeup_status();
-            if(button_wakeup_pin_mask & (1ULL << USER_BUTTON_PIN))
-            {
-                ESP_LOGI(POWER_TAG, "USER BUTTON was pressed");
-            }
-            if(button_wakeup_pin_mask & (1ULL << DEV_BUTTON_PIN))
-            {
-                ESP_LOGI(POWER_TAG, "DEV BUTTON was pressed");
-            }
-            break;
+    // C6 的 EXT1 唤醒可以通过 bitmask 判断具体引脚
+    case ESP_SLEEP_WAKEUP_EXT1:
+    {
+        uint64_t mask = esp_sleep_get_ext1_wakeup_status();
+        bool user_ext = (mask & (1ULL << USER_BUTTON_PIN));
+        bool dev_ext  = (mask & (1ULL << DEV_BUTTON_PIN));
+
+        if (user_ext && dev_ext) {
+            _wakeup_src = WAKEUP_BOTH_BUTTONS;
+            ESP_LOGI(POWER_TAG, "Wakeup: BOTH buttons (EXT1)");
+        } else if (user_ext) {
+            _wakeup_src = WAKEUP_USER_BUTTON;
+            ESP_LOGI(POWER_TAG, "Wakeup: USER button (EXT1)");
+        } else if (dev_ext) {
+            _wakeup_src = WAKEUP_DEV_BUTTON;
+            ESP_LOGI(POWER_TAG, "Wakeup: DEV button (EXT1)");
+        } else {
+            _wakeup_src = WAKEUP_USER_BUTTON;
+            ESP_LOGW(POWER_TAG, "Wakeup: EXT1 but unknown pin, default USER");
         }
-        case ESP_SLEEP_WAKEUP_GPIO:
-        {
-            ESP_LOGI(POWER_TAG, "wakeup cause by Lora");
-            lora_wakeup = true;
-            break;
-        }
+        break;
+    }
+
+    // C6 的 GPIO 唤醒 = Lora 唤醒
+    case ESP_SLEEP_WAKEUP_GPIO:
+        _wakeup_src = WAKEUP_LORA;
+        ESP_LOGI(POWER_TAG, "Wakeup: Lora");
+        break;
 #endif
 
-        default:
-            ESP_LOGI(POWER_TAG, "Wakeup cause by other: %d", wakeup_reason);
-            break;
+    default:
+        _wakeup_src = WAKEUP_POWER_ON;
+        ESP_LOGI(POWER_TAG, "Wakeup: power on / reset (reason=%d)", reason);
+        break;
     }
-    return wakeup_reason;
 }
 
 // 等待唤醒按键电平复位
 void PowerManager::wait_wakeup_button_intend()
 {
 
-    while(gpio_get_level(USER_BUTTON_PIN) == USER_BUTTON_ACTIVE_LEVEL || gpio_get_level(DEV_BUTTON_PIN) == DEV_BUTTON_ACTIVE_LEVEL)
+    while(gpio_get_level(USER_BUTTON_PIN) == BUTTON_PRESSED || gpio_get_level(DEV_BUTTON_PIN) == BUTTON_PRESSED)
     {
         vTaskDelay(pdMS_TO_TICKS(10));
     }
@@ -183,14 +205,18 @@ void PowerManager::deep_sleep()
     // 配置按键唤醒引脚
 // 车内模块的唤醒引脚配置
 #ifdef INSIDE
-    esp_deep_sleep_enable_gpio_wakeup(BIT(USER_BUTTON_PIN) | BIT(DEV_BUTTON_PIN), ESP_GPIO_WAKEUP_GPIO_HIGH);
+    esp_deep_sleep_enable_gpio_wakeup(
+        BIT(USER_BUTTON_PIN) | BIT(DEV_BUTTON_PIN),
+        BUTTON_PRESSED ? ESP_GPIO_WAKEUP_GPIO_HIGH : ESP_GPIO_WAKEUP_GPIO_LOW);
 #endif
 
 #ifdef OUTSIDE
     //  配置按键唤醒源
     esp_sleep_enable_ext1_wakeup(BUTTON_WAKEUP_BITMASK, ESP_EXT1_WAKEUP_ANY_HIGH);
     // 配置Lora唤醒源
-    esp_deep_sleep_enable_gpio_wakeup(BIT(LORA_WAKE_PIN), ESP_GPIO_WAKEUP_GPIO_LOW);
+    esp_deep_sleep_enable_gpio_wakeup(
+        BIT(LORA_WAKE_PIN),
+        LORA_WAKE_ACTIVE ? ESP_GPIO_WAKEUP_GPIO_HIGH : ESP_GPIO_WAKEUP_GPIO_LOW);
 #endif
     // 进入睡眠
     ESP_LOGI(POWER_TAG, "Going to sleep now");
@@ -211,17 +237,7 @@ void PowerManager::wakeup_gpio_init()
 }
 
 
-// 按键扫描
-void PowerManager::wake_button_detection()
-{
-// 车内模块的按键扫描，用于判断是哪个按键唤醒睡眠模式
-#ifdef INSIDE
-    vTaskDelay(pdMS_TO_TICKS(20));
-    user_button_level = digitalRead(USER_BUTTON_PIN);
-    dev_button_level = digitalRead(DEV_BUTTON_PIN);
-    ESP_LOGI(POWER_TAG, "user_button_level: %d, dev_button_level: %d", user_button_level, dev_button_level);
-#endif
-}
+
 
 
 

@@ -1,20 +1,14 @@
 #include <Arduino.h>
 #include <HardwareSerial.h>
-#include <Preferences.h>
-#include "esp_check.h"
-#include "pins.h"
-#include "config.h"
 #include "lora.h"
 #include "protocol.h"
 
-const char* LORA_FLAG = "lora_flag";
+// NVS 键名
+static const char* NVS_NAMESPACE = "lora";
+static const char* NVS_KEY_FLAG  = "configured";
 
-// lora硬件串口
-// HardwareSerial loraSerial(1);
-
-// lora模块的配置命令
-const char* lora_init_cmd[] = 
-{  
+// Lora 模块初始化 AT 命令序列
+static const char* LORA_INIT_CMDS[] = {
     "AT+MODE=0",
     "AT+RFCH=18",
     "AT+PID=255",
@@ -23,235 +17,169 @@ const char* lora_init_cmd[] =
     "AT+MID=17",
     "AT+MODE=1"
 };
-// lora模块的配置命令数量
-const int lora_init_cmd_len = sizeof(lora_init_cmd) / sizeof(lora_init_cmd[0]);
+static const int LORA_INIT_CMD_COUNT = sizeof(LORA_INIT_CMDS) / sizeof(LORA_INIT_CMDS[0]);
 
 #ifdef INSIDE
-// lora模块睡眠模命令
-const char* lora_sleep_cmd[] = 
-{
+// 车内模块 Lora 睡眠命令
+static const char* LORA_SLEEP_CMDS[] = {
     "AT+MODE=0",
-    "AT+MAMP=0",        // 关闭无线唤醒模式
-    "AT+LPWR=1",        // 设置为睡眠模式
+    "AT+MAMP=0",
+    "AT+LPWR=1",
     "AT+MODE=1"
 };
-const int lora_sleep_cmd_len = sizeof(lora_sleep_cmd) / sizeof(lora_sleep_cmd[0]);
+static const int LORA_SLEEP_CMD_COUNT = sizeof(LORA_SLEEP_CMDS) / sizeof(LORA_SLEEP_CMDS[0]);
 
-// lora模块唤醒命令
-const char* lora_wakeup_cmd[] = 
-{
+// 车内模块 Lora 唤醒命令
+static const char* LORA_WAKEUP_CMDS[] = {
     "AT+MODE=0",
     "AT+MAMP=2",
     "AT+LPWR=0",
     "AT+MODE=1"
 };
-const int lora_wakeup_cmd_len = sizeof(lora_wakeup_cmd) / sizeof(lora_wakeup_cmd[0]);
+static const int LORA_WAKEUP_CMD_COUNT = sizeof(LORA_WAKEUP_CMDS) / sizeof(LORA_WAKEUP_CMDS[0]);
 #endif
 
-// 判断NVS里面是否有关于Lora的key，没有新建默认为false、没有设置过lora无线唤醒模式
-void LoraManager::flag_ifconfig()
+// ======================== NVS 操作 ========================
+
+bool LoraManager::isConfigured()
 {
-    lora_prefe.begin("lora", false);
-    bool flag = lora_prefe.isKey(LORA_FLAG);
-// LoraManager的构造函数，用于创建NVS的key值
-LoraManager::LoraManager()
-{
-    prefe.begin("lora", false);
-    bool flag = prefe.isKey(LORA_FLAG);
-    if(!flag)
-    {
-        ESP_LOGI(LORA_TAG, "lora module not config ....... ");
-        lora_prefe.putBool(LORA_FLAG, false);
-        prefe.putBool(LORA_FLAG, false);
-    }
-    else
-    {
-        ESP_LOGI(LORA_TAG, "lora module has configed .......");
-    }
-    lora_prefe.end();
-    prefe.end();
+    _prefs.begin(NVS_NAMESPACE, true);          // 只读
+    bool flag = _prefs.getBool(NVS_KEY_FLAG, false);
+    _prefs.end();
+    return flag;
 }
 
-// 配置lora串口和CE控制引脚
-void LoraManager::lora_init()
+void LoraManager::setConfigured(bool flag)
+{
+    _prefs.begin(NVS_NAMESPACE, false);         // 读写
+    _prefs.putBool(NVS_KEY_FLAG, flag);
+    _prefs.end();
+}
+
+void LoraManager::clearConfigFlag()
+{
+    _prefs.begin(NVS_NAMESPACE, false);
+    _prefs.remove(NVS_KEY_FLAG);
+    _prefs.end();
+}
+
+// ======================== 硬件初始化 ========================
+
+void LoraManager::init()
 {
     LoraSerial.begin(9600, SERIAL_8N1, LORA_RX_PIN, LORA_TX_PIN);
     pinMode(LORA_CE_PIN, OUTPUT);
+    pinMode(LORA_POWER_PIN, OUTPUT);
+    digitalWrite(LORA_CE_PIN, LORA_CE_ACTIVE);
 
 #ifdef INSIDE
-    // 车内模块需要打开lora模块的电源，车外模块Lora模组是一直打开的
-    pinMode(LORA_POWER_PIN, OUTPUT);
+    // 车内模块需要手动开 Lora 电源，车外模块 Lora 是常开的
     digitalWrite(LORA_POWER_PIN, LORA_POWER_ON);
 #endif
 }
 
-// 发送AT指令，并等待返回指令
-bool LoraManager::at_send_wait_reponse(const char* cmd, int timeout, uint8_t maxretry)
+// ======================== AT 指令 ========================
+
+bool LoraManager::sendAT(const char* cmd, int timeout_ms, uint8_t max_retry)
 {
-    // 检测AT指令是否为空
-    if(!cmd)
-    {
-        ESP_LOGE(LORA_TAG, "cmd is null, %s\r\n", cmd);
+    if (!cmd) {
+        ESP_LOGE(LORA_TAG, "AT cmd is NULL");
         return false;
     }
-    for(uint8_t retry = 0; retry < maxretry; retry++)
-    {
-        // 清空串口缓存区
-        while(LoraSerial.available()) LoraSerial.read();
 
-        // 发送AT指令
+    for (uint8_t retry = 0; retry < max_retry; retry++)
+    {
+        // 清空接收缓冲区
+        while (LoraSerial.available()) LoraSerial.read();
+
         LoraSerial.println(cmd);
 
         // 等待响应
         uint32_t t_start = millis();
         String response = "";
-        while(millis() - t_start < timeout)
+        while (millis() - t_start < (uint32_t)timeout_ms)
         {
-            if(LoraSerial.available())
+            if (LoraSerial.available())
             {
                 char c = LoraSerial.read();
                 response += c;
                 if (c == '\n')
                 {
-                    // 去除换行符
                     response.trim();
-                    // 返回OK
-                    if(response.equals("OK"))
-                    {
+                    if (response == "OK") {
                         ESP_LOGI(LORA_TAG, "[OK] %s", cmd);
                         return true;
                     }
-                    // 返回ERROR
-                    if(response.equals("ERROR"))
-                    {
+                    if (response == "ERROR") {
                         ESP_LOGE(LORA_TAG, "[ERROR] %s", cmd);
-                        break;
+                        break;      // 跳出内层 while, 进入重试
                     }
+                    response = "";  // 清空，继续读下一行
                 }
             }
         }
-        // 超时
-        if(millis() - t_start >= timeout)
-        {
-            ESP_LOGE(LORA_TAG, "[Timeout] %s\r\n", cmd);
-        }
+        ESP_LOGE(LORA_TAG, "[Timeout/Retry %d] %s", retry + 1, cmd);
     }
     return false;
 }
 
-// 配置lora无线通信模块
-bool LoraManager::lora_setting()
+// ======================== 首次配置 ========================
+
+bool LoraManager::configure()
 {
+    if (isConfigured()) {
+        ESP_LOGI(LORA_TAG, "Lora already configured, skip");
+        return true;
+    }
 
-    // 判断是否是第一次配置
-    bool first_config = get_lora_flag();
-    
-    // 如果是，配置lora为无线通信模式
-    if(!first_config)
+    ESP_LOGI(LORA_TAG, "First time config...");
+
+    // CE 拉低进入配置模式
+    digitalWrite(LORA_CE_PIN, LORA_CE_INACTIVE);
+
+    for (int i = 0; i < LORA_INIT_CMD_COUNT; i++)
     {
-        ESP_LOGI(LORA_TAG, "First config lora module, start config lora module ...... ");
-        // 拉低lora模组的CE引脚
-        digitalWrite(LORA_CE_PIN, GPIO_CE_INACTIVE_LEVEL);
-        // 发送命令
-        for(int i = 0; i < lora_init_cmd_len; i++)
-        {
-            if(!at_send_wait_reponse(lora_init_cmd[i], LORA_AT_TIMEOUT, LORA_AT_RETRY))
-            {
-                // AT指令配置失败
-                ESP_LOGE(LORA_TAG, "[Error] AT cmd error, %s \r\n", lora_init_cmd[i]);
-                digitalWrite(LORA_CE_PIN, GPIO_CE_ACTIVE_LEVEL);
-                return false;
-            }
+        if (!sendAT(LORA_INIT_CMDS[i])) {
+            ESP_LOGE(LORA_TAG, "Config failed at: %s", LORA_INIT_CMDS[i]);
+            digitalWrite(LORA_CE_PIN, LORA_CE_ACTIVE);
+            return false;
         }
-        // 配置完拉高电平进入到无线唤醒模式
-        digitalWrite(LORA_CE_PIN, GPIO_CE_ACTIVE_LEVEL);
-        // 配置完成，写入配置标志位
-        lora_prefe.begin("lora", false);
-        lora_prefe.putBool("lora_flag", true);
-        lora_prefe.end();
     }
-    // 已经配置过了，不需要再进行配置
-    else
-    {
-        ESP_LOGI(LORA_TAG, "Lora module has been configured, no need to configure again ");
 
-        // 测试用，不然烧录完后第一次就自动配置好了，后面日志里看不到
-        // prefe.begin("lora", false);
-        // prefe.remove("lora_flag");
-        // prefe.end();
-    }
+    // CE 拉高回到正常工作模式
+    digitalWrite(LORA_CE_PIN, LORA_CE_ACTIVE);
+    // 记录已配置
+    setConfigured(true);
+    ESP_LOGI(LORA_TAG, "Config done");
     return true;
 }
 
-// 获取lora配置的标志位
-bool LoraManager::get_lora_flag()
+// ======================== 组合接口 ========================
+
+void LoraManager::setup()
 {
-    lora_prefe.begin("lora", false);
-    bool flag = lora_prefe.getBool(LORA_FLAG, false);
-    lora_prefe.end();
-    prefe.begin("lora", false);
-    bool flag = prefe.getBool(LORA_FLAG, false);
-    prefe.end();
-    return flag;
+    init();
+    configure();
 }
 
-// 写入lora配置的标志位
-void LoraManager::write_lora_flag(bool flag)
+// ======================== 发送唤醒帧 ========================
+
+void LoraManager::sendWakeFrame()
 {
-    lora_prefe.begin("lora", false);
-    lora_prefe.putBool(LORA_FLAG, flag);
-    lora_prefe.end();
-    prefe.begin("lora", false);
-    prefe.putBool(LORA_FLAG, flag);
-    prefe.end();
+    protocol_frame_t frame;
+    frame_build(&frame, MASTER_FRAME_HEAD, FRAME_WAKE);
+
+    digitalWrite(LORA_CE_PIN, LORA_CE_INACTIVE);
+    vTaskDelay(pdMS_TO_TICKS(10));  // TODO: 确保进入配置模式,记得是2ms,这里加10ms以防万一？
+    LoraSerial.write((uint8_t*)&frame, sizeof(frame));
+    digitalWrite(LORA_CE_PIN, LORA_CE_ACTIVE);
 }
 
-// 清除lora配置的KEY
-bool LoraManager::clear_lora_key()
-{
-    lora_prefe.begin("lora", false);
-    bool result = lora_prefe.remove(LORA_FLAG);
-    lora_prefe.end();
-    prefe.begin("lora", false);
-    bool result = prefe.remove(LORA_FLAG);
-    prefe.end();
-    return result;
-}
+// ======================== 关闭 ========================
 
-
-void LoraManager::lora_end()
+void LoraManager::shutdown()
 {
     digitalWrite(LORA_POWER_PIN, LORA_POWER_OFF);
     LoraSerial.end();
-}
-
-
-void LoraManager::wireless_wake_up()
-{
-    // 主机Lora无线唤醒通信协议帧
-    protocol_frame_t master_wireless_wake_frame;
-    master_wireless_wake_frame.head = MASTER_FRAME_HEAD;
-    master_wireless_wake_frame.type = MASTER_WIRELESS_WAKE_FRAME;
-    master_wireless_wake_frame.len  = FRAME_DATA_LEN;
-    // mac地址匹配帧的数据部分全为0
-    master_wireless_wake_frame.dist = WIRELESS_WAKE_DATA;
-    master_wireless_wake_frame.angle = WIRELESS_WAKE_DATA;
-    master_wireless_wake_frame.reserve = RESERVE_DATA;
-    // CRC校验值
-    master_wireless_wake_frame.crc = crc_set(&master_wireless_wake_frame);
-
-    // 发送唤醒帧
-    // 拉低lora模组的CE引脚
-    digitalWrite(LORA_CE_PIN, GPIO_CE_INACTIVE_LEVEL);
-    LoraSerial.write((uint8_t*)&master_wireless_wake_frame, sizeof(protocol_frame_t));
-    // 拉高电平
-    digitalWrite(LORA_CE_PIN, GPIO_CE_ACTIVE_LEVEL);
-}
-
-
-void LoraManager::lora_config()
-{
-    lora_init();
-    lora_setting();
 }
 
