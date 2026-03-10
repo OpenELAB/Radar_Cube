@@ -71,7 +71,8 @@ void LoraManager::init()
     pinMode(LORA_CE_PIN, OUTPUT);
     pinMode(LORA_POWER_PIN, OUTPUT);
     digitalWrite(LORA_CE_PIN, LORA_CE_ACTIVE);
-
+    // 问题：这里还得把Lora模块的电源打开，不然Lora配置会失败，具体不知道什么原因
+    digitalWrite(LORA_POWER_PIN, LORA_POWER_ON);
 #ifdef INSIDE
     // 车内模块需要手动开 Lora 电源，车外模块 Lora 是常开的
     digitalWrite(LORA_POWER_PIN, LORA_POWER_ON);
@@ -169,10 +170,11 @@ void LoraManager::sendWakeFrame()
     protocol_frame_t frame;
     frame_build(&frame, MASTER_FRAME_HEAD, FRAME_WAKE);
 
-    digitalWrite(LORA_CE_PIN, LORA_CE_INACTIVE);
-    vTaskDelay(pdMS_TO_TICKS(10));  // TODO: 确保进入配置模式,记得是2ms,这里加10ms以防万一？
+    // 问题: 这里切换电平会导致第一次发送失败和导致校验位数据错误
+    // digitalWrite(LORA_CE_PIN, LORA_CE_INACTIVE);
+    // vTaskDelay(pdMS_TO_TICKS(100));  // TODO: 确保进入配置模式,记得是2ms,这里加10ms以防万一？
     LoraSerial.write((uint8_t*)&frame, sizeof(frame));
-    digitalWrite(LORA_CE_PIN, LORA_CE_ACTIVE);
+    // digitalWrite(LORA_CE_PIN, LORA_CE_ACTIVE);
 }
 
 // ======================== 关闭 ========================
