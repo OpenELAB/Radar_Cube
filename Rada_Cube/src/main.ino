@@ -174,14 +174,14 @@ static void inside_work_mode(uint8_t* peer_mac)
                 // 之前的逻辑：远距离-》近距离蜂鸣器鸣叫周期更快,近距离-》远距离蜂鸣器鸣叫还是按照近距离的来
                 // 现在的逻辑：根据距离来选择鸣叫的周期，距离越近，蜂鸣越急促，距离变远恢复到慢速或者不鸣叫
                 // 距离越近，蜂鸣越急促
-                if      (f->dist < DIST_CLOSE_MM){
+                if      (f->dist < DIST_CLOSE_CM){
                     Beeper.beep(BEEPER_PERIOD_LONG);
                 }
-                else if (f->dist < DIST_MID_MM){
+                else if (f->dist < DIST_MID_CM){
                     Beeper.beep_stop();
                     Beeper.beep(BEEPER_PERIOD_3);
                 }
-                else if (f->dist < DIST_FAR_MM){
+                else if (f->dist < DIST_FAR_CM){
                     Beeper.beep_stop();
                     Beeper.beep(BEEPER_PERIOD_1);
                 }
@@ -427,6 +427,10 @@ void setup()
 
     Led.led_init();
     Power.power_init();
+
+    // 加上打开Lora电源，第一次上电发现不加上打开电源，功率开关的使能引脚会卡在加上上拉电阻后也是0.7V左右不是3.3V导致Lora无法工作
+    pinMode(LORA_POWER_PIN, OUTPUT);
+    digitalWrite(LORA_POWER_PIN, LORA_POWER_ON);
 
     // 电池电量检测
     uint8_t bat = Power.get_battery_value();

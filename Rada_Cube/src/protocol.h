@@ -22,7 +22,7 @@ enum frame_type_t : uint8_t {
 typedef struct __attribute__((packed)) {
     uint8_t      head;          // 帧头 0xA5 / 0x5A
     frame_type_t type;          // 帧类型
-    uint16_t     dist;          // 距离 (mm)
+    uint16_t     dist;          // 距离 (cm)
     int16_t      angle;         // 角度 (×0.01°)
     uint8_t      reserve;       // 预留
     uint8_t      checksum;      // 校验 = 前 7 字节之和 & 0xFF
