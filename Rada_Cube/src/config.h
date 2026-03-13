@@ -33,9 +33,9 @@
 #define BUTTON_LONG_PRESS_MS    3000    // 长按阈值 (ms)，>3s 判定为长按
 
 // 距离报警阈值 (mm)
-#define DIST_CLOSE_MM           500     // < 0.5m  急促报警
-#define DIST_MID_MM             1500    // < 1.5m  中速报警
-#define DIST_FAR_MM             3000    // < 3.0m  慢速报警
+#define DIST_CLOSE_CM           50     // < 0.5m  急促报警
+#define DIST_MID_CM             100    // < 1.5m  中速报警
+#define DIST_FAR_CM             150    // < 3.0m  慢速报警
 
 // ======================== 日志标签 ========================
 // 每个模块一个标签，用于 ESP_LOGI / ESP_LOGE 的 tag 参数

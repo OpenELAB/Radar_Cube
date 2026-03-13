@@ -115,6 +115,9 @@ static void inside_work_mode(uint8_t* peer_mac)
     bool woke = false;
     espnow_msg_t msg;
 
+    // ================ 把循环里的电平切换放到外面来，加上100ms延时，之前的10ms延时不够会导致帧发送不完全 =================
+    digitalWrite(LORA_CE_PIN, LORA_CE_INACTIVE);
+    vTaskDelay(pdMS_TO_TICKS(100));
     for (int retry = 0; retry < WAKE_MAX_RETRY && !woke; retry++) {
         Lora.sendWakeFrame();
         ESP_LOGI(MAIN_TAG, "Wake attempt %d/%d", retry + 1, WAKE_MAX_RETRY);
@@ -128,6 +131,7 @@ static void inside_work_mode(uint8_t* peer_mac)
             }
         }
     }
+    digitalWrite(LORA_CE_PIN, LORA_CE_ACTIVE);
 
     if (!woke) {
         ESP_LOGE(MAIN_TAG, "Failed to wake slave after %d retries", WAKE_MAX_RETRY);
@@ -165,12 +169,25 @@ static void inside_work_mode(uint8_t* peer_mac)
                 const protocol_frame_t* f = (const protocol_frame_t*)msg.data;
                 ESP_LOGI(MAIN_TAG, "Radar: dist=%d mm, angle=%.2f deg",
                          f->dist, f->angle * 0.01f);
-
+                
+                // 这里改了逻辑
+                // 之前的逻辑：远距离-》近距离蜂鸣器鸣叫周期更快,近距离-》远距离蜂鸣器鸣叫还是按照近距离的来
+                // 现在的逻辑：根据距离来选择鸣叫的周期，距离越近，蜂鸣越急促，距离变远恢复到慢速或者不鸣叫
                 // 距离越近，蜂鸣越急促
-                if      (f->dist < DIST_CLOSE_MM)  Beeper.beep(BEEPER_PERIOD_3);
-                else if (f->dist < DIST_MID_MM)    Beeper.beep(BEEPER_PERIOD_2);
-                else if (f->dist < DIST_FAR_MM)    Beeper.beep(BEEPER_PERIOD_1);
-                else                               Beeper.beep_stop();
+                if      (f->dist < DIST_CLOSE_CM){
+                    Beeper.beep(BEEPER_PERIOD_LONG);
+                }
+                else if (f->dist < DIST_MID_CM){
+                    Beeper.beep_stop();
+                    Beeper.beep(BEEPER_PERIOD_3);
+                }
+                else if (f->dist < DIST_FAR_CM){
+                    Beeper.beep_stop();
+                    Beeper.beep(BEEPER_PERIOD_1);
+                }
+                else{
+                    Beeper.beep_stop();
+                }
             }
             else if (frame_validate(msg.data, msg.len, SLAVE_FRAME_HEAD, FRAME_END)) {
                 ESP_LOGI(MAIN_TAG, "Received END frame from slave");
@@ -367,6 +384,7 @@ static void handleMode(SysMode mode, uint8_t* peer_mac)
         // 4) 清理
         Espnow.recvStop();
         Espnow.deinit();
+        // 问题：前面的inside_work_mode里面已经调用了Lora.shutdown()，这里再调用一次会不会有问题？
         Lora.shutdown();
 #endif
 
@@ -387,6 +405,7 @@ static void handleMode(SysMode mode, uint8_t* peer_mac)
         // 4) 清理
         Espnow.recvStop();
         Espnow.deinit();
+        // 问题：这个函数是不是放错地方了，应该放在lora唤醒之后
         Lora.shutdown();
 #endif
 
@@ -408,6 +427,10 @@ void setup()
 
     Led.led_init();
     Power.power_init();
+
+    // 加上打开Lora电源，第一次上电发现不加上打开电源，功率开关的使能引脚会卡在加上上拉电阻后也是0.7V左右不是3.3V导致Lora无法工作
+    pinMode(LORA_POWER_PIN, OUTPUT);
+    digitalWrite(LORA_POWER_PIN, LORA_POWER_ON);
 
     // 电池电量检测
     uint8_t bat = Power.get_battery_value();
