@@ -58,26 +58,59 @@ void LEDControler::breath(LED_SPEED speed)
 void BeeperControler::beeper_init()
 {
     pinMode(BEEPER_PIN, OUTPUT);
-    ledcAttach(BEEPER_PIN, BEEPER_FREQ, LEDC_TIMER_8_BIT);
+    // ESP32 Arduino v3.0+ 推荐使用 ledcAttach 来初始化固定频率，但是它的参数并不是第三个作为占空比位宽
+    // 如果用 ledcWriteTone，它底层会自动配置通道
+    ledcAttach(BEEPER_PIN, BEEPER_FREQ, 8); // 设置为 8-bit 分辨率
 }
 
 // 蜂鸣器控制
 void BeeperControler::beep(BEEP period)
 {
+    // 这里如果用原来的 ledcWrite(BEEPER_PIN, BEEPER_DUTY);
+    // 可能会因为经历了 ledcWriteTone 后硬件占空比计算方式改变导致声音极大变小。
+    // 为了最大化响度 (50% 占空比)，8-bit 分辨率下 50% = 127。
+    // 如果想要更响的声音，我们应该给 127。原代码中 BEEPER_DUTY = 4，这是一个极小的占空比，会导致声音很轻。
+    
+    // 直接使用更稳定的 ledcWriteTone 来产生恒定频率，最大化响度
     if(period == BEEPER_PERIOD_LONG)
     {
-        ledcWrite(BEEPER_PIN, BEEPER_DUTY);
+        ledcWriteTone(BEEPER_PIN, BEEPER_FREQ);
         return;
     }
+    
     const uint32_t beep_period = period / 2;
-    ledcWrite(BEEPER_PIN, BEEPER_DUTY);
+    ledcWriteTone(BEEPER_PIN, BEEPER_FREQ);
     vTaskDelay(pdMS_TO_TICKS(beep_period));
-    ledcWrite(BEEPER_PIN, 0);
+    ledcWriteTone(BEEPER_PIN, 0);
     vTaskDelay(pdMS_TO_TICKS(beep_period));
 }
 void BeeperControler::beep_stop()
 {
-    ledcWrite(BEEPER_PIN, 0);
+    ledcWriteTone(BEEPER_PIN, 0);
+}
+
+// 播放上升调的成功提示音
+void BeeperControler::play_success_tone()
+{
+    uint32_t tones[] = {1046, 1318, 1568};
+    for(int i = 0; i < 3; i++) {
+        ledcWriteTone(BEEPER_PIN, tones[i]);
+        vTaskDelay(pdMS_TO_TICKS(100));
+        ledcWriteTone(BEEPER_PIN, 0); // 停音
+        vTaskDelay(pdMS_TO_TICKS(50));
+    }
+}
+
+// 播放下降调的失败提示音
+void BeeperControler::play_fail_tone()
+{
+    uint32_t tones[] = {1568, 1318, 1046, 784};
+    for(int i = 0; i < 4; i++) {
+        ledcWriteTone(BEEPER_PIN, tones[i]);
+        vTaskDelay(pdMS_TO_TICKS(150)); 
+    }
+    
+    ledcWriteTone(BEEPER_PIN, 0); 
 }
 #endif
 

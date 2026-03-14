@@ -81,6 +81,8 @@ public:
     void beeper_init();
     void beep(BEEP type);
     void beep_stop();
+    void play_success_tone(); // 添加成功提示音方法
+    void play_fail_tone();    // 添加失败提示音方法
 };
 
 /**
