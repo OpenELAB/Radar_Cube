@@ -133,17 +133,27 @@ static void inside_work_mode(uint8_t* peer_mac)
     }
     digitalWrite(LORA_CE_PIN, LORA_CE_ACTIVE);
 
+    // 唤醒失败处理
     if (!woke) {
         ESP_LOGE(MAIN_TAG, "Failed to wake slave after %d retries", WAKE_MAX_RETRY);
+        
+        // 建议：唤醒失败时，播放下降音调，告诉用户“车外模块失联了，不要倒车！”
+        Beeper.beeper_init();
+        Beeper.play_fail_tone();
+        
         return;
     }
     ESP_LOGI(MAIN_TAG, "Slave woke up");
+
+    // 唤醒成功处理：给用户明确的成功反馈
+    // 播放一段上升音调，向用户发出 "Active Positive" 信号，代表雷达已启动
+    Beeper.beeper_init();
+    Beeper.play_success_tone();
 
     // 唤醒成功后可以关 Lora 省电
     Lora.shutdown();
 
     // 2) 工作循环：读最新雷达数据 → 蜂鸣器提示
-    Beeper.beeper_init();
     uint32_t work_start = millis();
 
     while (true) {
@@ -154,6 +164,7 @@ static void inside_work_mode(uint8_t* peer_mac)
         }
 
         // 退出条件2：按键按下
+        // TODO：改成中断处理而不是轮询检测？现在这样是为了在工作循环里顺便处理按键事件，感觉也还好，暂时先这样
         if (digitalRead(USER_BUTTON_PIN) == BUTTON_PRESSED ||
             digitalRead(DEV_BUTTON_PIN)  == BUTTON_PRESSED) {
             ESP_LOGI(MAIN_TAG, "Button pressed, exiting work mode");
@@ -174,7 +185,13 @@ static void inside_work_mode(uint8_t* peer_mac)
                 // 之前的逻辑：远距离-》近距离蜂鸣器鸣叫周期更快,近距离-》远距离蜂鸣器鸣叫还是按照近距离的来
                 // 现在的逻辑：根据距离来选择鸣叫的周期，距离越近，蜂鸣越急促，距离变远恢复到慢速或者不鸣叫
                 // 距离越近，蜂鸣越急促
-                if      (f->dist < DIST_CLOSE_CM){
+                if (f->dist == 0) {
+                    // Workaround：雷达偶尔会读到0，实际应该是读数失败了，这时不应该急促报警而是直接不鸣叫
+                    // 或者是离得太远了，超出雷达的测距范围了，这时也是读数失败了，应该不鸣叫
+                    // TODO：后续优化，只有监测到物体出现之后，距离0才考虑是真的0
+                    Beeper.beep_stop();
+                }
+                else if (f->dist < DIST_CLOSE_CM){
                     Beeper.beep(BEEPER_PERIOD_LONG);
                 }
                 else if (f->dist < DIST_MID_CM){
