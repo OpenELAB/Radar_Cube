@@ -6,7 +6,7 @@
 #include "protocol.h"
 
 // ======================== 配对参数 ========================
-#define PAIR_MAX_RETRY          20      // 配对最大重试次数
+#define PAIR_MAX_RETRY          60      // 配对最大重试次数
 #define PAIR_POLL_INTERVAL_MS   100     // 配对轮询间隔 (ms)
 #define PAIR_ROUND_CHECKS       10      // 每轮发送后检查次数（PAIR_ROUND_CHECKS * PAIR_POLL_INTERVAL_MS = 1轮总等待时间）
 
@@ -44,15 +44,38 @@ public:
     bool pair(uint8_t max_retry = PAIR_MAX_RETRY);
 
     // NVS 操作
-    bool hasPeerMac();
-    bool loadPeerMac(uint8_t mac_out[6]);
-    void savePeerMac(const uint8_t mac[6]);
-    void clearPeerMac();
+    // 从机NVS操作
+#ifdef OUTSIDE
+    bool has_master_mac();
+    bool load_master_mac(uint8_t mac_out[6]);
+    void save_master_mac(const uint8_t mac[6]);
+    void clear_master_mac();
+#endif
+
+    // 主机用来保存从机MAC操作
+#ifdef INSIDE
+    bool has_slave_a_mac();
+    bool has_slave_b_mac();
+    bool load_slave_mac(uint8_t mac_out[6], uint8_t slave_id);
+    void save_slave_mac(const uint8_t mac[6], uint8_t slave_id);
+    void clear_slave_mac();
+#endif
+
+
+
 
 private:
     EspNowManager& _espnow;
     Preferences    _prefs;
+
+#ifdef INSIDE
+    uint8_t       _slave_a_mac[6]{};
+    uint8_t       _slave_b_mac[6]{};
+#endif
+
+#ifdef OUTSIDE
     uint8_t        _peer_mac[6]{};
+#endif
 };
 
 #endif
