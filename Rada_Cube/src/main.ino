@@ -197,6 +197,9 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
         // 退出条件3：收到结束帧
         // (OUTSIDE 主动退出时会发 END 帧)
 
+        // 查看一下队列里的数据深度
+        // ESP_LOGI(MAIN_TAG, "Queue depth: %d", Espnow.getQueueCount());
+
         // 读取雷达数据
         if (Espnow.read(&msg)) {
             if (frame_validate(msg.data, msg.len, SLAVE_FRAME_HEAD, FRAME_RADAR_DATA)) {
@@ -205,48 +208,49 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
                     memcpy(&slave_a_data, msg.data, sizeof(protocol_frame_t));
                     ESP_LOGI(SLAVE_A_TAG, "slave_A: dist=%d mm, angle=%.2f deg"
                              , slave_a_data.dist, slave_a_data.angle * 0.01f);
-                    slave_a_data_valid = true;
+                    // slave_a_data_valid = true;
                 }
                 else if(memcmp(msg.src_mac, b_mac, 6) == 0) {
                     memcpy(&slave_b_data, msg.data, sizeof(protocol_frame_t));
                     ESP_LOGI(SLAVE_B_TAG, "slave_B: dist=%d mm, angle=%.2f deg"
                              , slave_b_data.dist, slave_b_data.angle * 0.01f);
-                    slave_b_data_valid = true;
+                    // slave_b_data_valid = true;
                 }
 
-                // 比较两个从机的距离值取最小值进行判断控制蜂鸣器
-                if (slave_a_data_valid && slave_b_data_valid) {
-                    dist_min = slave_a_data.dist < slave_b_data.dist ? slave_a_data.dist : slave_b_data.dist;
-                }
-                else if (slave_a_data_valid) {
-                    dist_min = slave_a_data.dist;
-                }
-                else if (slave_b_data_valid) {
-                    dist_min = slave_b_data.dist;
-                }
+                // // 比较两个从机的距离值取最小值进行判断控制蜂鸣器
+                // if (slave_a_data_valid && slave_b_data_valid) {
+                //     dist_min = slave_a_data.dist < slave_b_data.dist ? slave_a_data.dist : slave_b_data.dist;
+                // }
+                // else if (slave_a_data_valid) {
+                //     dist_min = slave_a_data.dist;
+                // }
+                // else if (slave_b_data_valid) {
+                //     dist_min = slave_b_data.dist;
+                // }
 
 
-                // 蜂鸣器处理
-                if (dist_min == 0) {
-                    // Workaround：雷达偶尔会读到0，实际应该是读数失败了，这时不应该急促报警而是直接不鸣叫
-                    // 或者是离得太远了，超出雷达的测距范围了，这时也是读数失败了，应该不鸣叫
-                    // TODO：后续优化，只有监测到物体出现之后，距离0才考虑是真的0
-                    Beeper.beep_stop();
-                }
-                else if (dist_min < DIST_CLOSE_CM){
-                    Beeper.beep(BEEPER_PERIOD_LONG);
-                }
-                else if (dist_min < DIST_MID_CM){
-                    Beeper.beep_stop();
-                    Beeper.beep(BEEPER_PERIOD_3);
-                }
-                else if (dist_min < DIST_FAR_CM){
-                    Beeper.beep_stop();
-                    Beeper.beep(BEEPER_PERIOD_1);
-                }
-                else{
-                    Beeper.beep_stop();
-                }
+                // // 蜂鸣器处理
+                // if (dist_min == 0) {
+                //     // Workaround：雷达偶尔会读到0，实际应该是读数失败了，这时不应该急促报警而是直接不鸣叫
+                //     // 或者是离得太远了，超出雷达的测距范围了，这时也是读数失败了，应该不鸣叫
+                //     // TODO：后续优化，只有监测到物体出现之后，距离0才考虑是真的0
+                //     // Beeper.beep_stop();
+                //     continue;
+                // }
+                // else if (dist_min < DIST_CLOSE_CM){
+                //     Beeper.beep(BEEPER_PERIOD_LONG);
+                // }
+                // else if (dist_min < DIST_MID_CM){
+                //     Beeper.beep_stop();
+                //     Beeper.beep(BEEPER_PERIOD_3);
+                // }
+                // else if (dist_min < DIST_FAR_CM){
+                //     Beeper.beep_stop();
+                //     Beeper.beep(BEEPER_PERIOD_1);
+                // }
+                // else{
+                //     Beeper.beep_stop();
+                // }
             }
             else if (frame_validate(msg.data, msg.len, SLAVE_FRAME_HEAD, FRAME_END)) {
                 ESP_LOGI(MAIN_TAG, "Received END frame from slave");
@@ -315,10 +319,6 @@ static void outside_work_mode(uint8_t* peer_mac)
             protocol_frame_t frame;
             frame_build(&frame, SLAVE_FRAME_HEAD, FRAME_RADAR_DATA,
                         rd.dist_mm, (int16_t)(rd.angle_deg * 100));
-            // 发送的时候随机加个延时，避免长期占线
-            // uint8_t delay_ms = random(0, 4);
-            // vTaskDelay(pdMS_TO_TICKS(delay_ms));
-            vTaskDelay(pdMS_TO_TICKS(10));
             Espnow.send(peer_mac, (uint8_t*)&frame, sizeof(frame));
         }
 
