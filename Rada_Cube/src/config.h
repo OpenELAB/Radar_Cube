@@ -36,6 +36,9 @@
 #define DIST_CLOSE_CM           50     // < 0.5m  急促报警
 #define DIST_MID_CM             100    // < 1.5m  中速报警
 #define DIST_FAR_CM             150    // < 3.0m  慢速报警
+// 雷达测距的阈值
+#define DIST_MIN_CM             20
+#define DIST_MAX_CM             250
 
 // ======================== 日志标签 ========================
 // 每个模块一个标签，用于 ESP_LOGI / ESP_LOGE 的 tag 参数
@@ -44,5 +47,11 @@
 #define LORA_TAG                "LORA"
 #define MAC_TAG                 "MAC"
 #define RADAR_TAG               "RADAR"
+#define SLAVE_A_TAG             "SLAVE_A"
+#define SLAVE_B_TAG              "SLAVE_B"
+
+// ======================== 从机id ========================
+#define SLAVE_A_ID              0
+#define SLAVE_B_ID              1
 
 #endif

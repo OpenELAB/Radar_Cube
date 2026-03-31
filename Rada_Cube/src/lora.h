@@ -45,6 +45,10 @@ public:
     // 清除 NVS 中的已配置标志（调试/重置用）
     void clearConfigFlag();
 
+    // CE控制引脚，使能CE引脚用来发送，禁止用来接收
+    void enable_ce();
+    void disable_ce();
+
 private:
     Preferences _prefs;
 

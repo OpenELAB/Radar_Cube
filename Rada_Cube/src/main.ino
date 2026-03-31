@@ -84,6 +84,8 @@ static uint32_t waitButtonRelease()
     return hold_time;
 }
 
+// 两键同时按下从机实现比较困难，我把config_mode和factor_reset_mode对换了
+
 // 按键 → 模式判断（USER 和 DEV 分开处理）
 //   USER button: 短按 → WORK_MODE,  长按(3s) → PAIRED_MODE
 //   DEV  button: 短按 → TEST_MODE,  长按(3s) → CONFIG_MODE
@@ -93,7 +95,7 @@ static SysMode detectButtonMode(WakeupSource wakeup)
     uint32_t hold = waitButtonRelease();
 
     if (wakeup == WAKEUP_BOTH_BUTTONS) {
-        return FACTORY_RESET_MODE;
+        return CONFIG_MODE;
     }
 
     if (wakeup == WAKEUP_USER_BUTTON) {
@@ -101,7 +103,7 @@ static SysMode detectButtonMode(WakeupSource wakeup)
     }
 
     if (wakeup == WAKEUP_DEV_BUTTON) {
-        return (hold > BUTTON_LONG_PRESS_MS) ? CONFIG_MODE : TEST_MODE;
+        return (hold > BUTTON_LONG_PRESS_MS) ?  FACTORY_RESET_MODE: TEST_MODE;
     }
 
     return UNPAIRED_MODE;
@@ -109,14 +111,16 @@ static SysMode detectButtonMode(WakeupSource wakeup)
 
 // ======================== INSIDE 工作模式 ========================
 #ifdef INSIDE
-static void inside_work_mode(uint8_t* peer_mac)
+static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
 {
     // 1) Lora 发送唤醒帧，等从机 ESP-NOW 回复 WAKE_ACK
+    bool slave_a_woke = false;
+    bool slave_b_wake = false;
     bool woke = false;
     espnow_msg_t msg;
 
     // ================ 把循环里的电平切换放到外面来，加上100ms延时，之前的10ms延时不够会导致帧发送不完全 =================
-    digitalWrite(LORA_CE_PIN, LORA_CE_INACTIVE);
+    Lora.enable_ce();
     vTaskDelay(pdMS_TO_TICKS(100));
     for (int retry = 0; retry < WAKE_MAX_RETRY && !woke; retry++) {
         Lora.sendWakeFrame();
@@ -126,12 +130,23 @@ static void inside_work_mode(uint8_t* peer_mac)
             vTaskDelay(pdMS_TO_TICKS(WAKE_POLL_INTERVAL_MS));
             if (Espnow.read(&msg)) {
                 if (frame_validate(msg.data, msg.len, SLAVE_FRAME_HEAD, FRAME_WAKE_ACK)) {
-                    woke = true;
+                    // 这里判断一下是哪个从机返回的消息
+                    if(memcmp(msg.src_mac, a_mac, 6) == 0) {
+                        slave_a_woke = true;
+                        ESP_LOGI(MAIN_TAG, "Slave A woke up");
+                    }
+                    else if(memcmp(msg.src_mac, b_mac, 6) == 0) {
+                        slave_b_wake = true;
+                        ESP_LOGI(MAIN_TAG, "Slave B woke up");
+                    }
+                    if (slave_a_woke && slave_b_wake) {
+                        woke = true;
+                    }
                 }
             }
         }
     }
-    digitalWrite(LORA_CE_PIN, LORA_CE_ACTIVE);
+    Lora.disable_ce();
 
     // 唤醒失败处理
     if (!woke) {
@@ -145,6 +160,8 @@ static void inside_work_mode(uint8_t* peer_mac)
     }
     ESP_LOGI(MAIN_TAG, "Slave woke up");
 
+    
+
     // 唤醒成功处理：给用户明确的成功反馈
     // 播放一段上升音调，向用户发出 "Active Positive" 信号，代表雷达已启动
     Beeper.beeper_init();
@@ -155,6 +172,12 @@ static void inside_work_mode(uint8_t* peer_mac)
 
     // 2) 工作循环：读最新雷达数据 → 蜂鸣器提示
     uint32_t work_start = millis();
+
+    protocol_frame_t slave_a_data = {0};
+    protocol_frame_t slave_b_data  = {0};
+    uint16_t dist_min = 0;
+    bool slave_a_data_valid = false;
+    bool slave_b_data_valid = false;
 
     while (true) {
         // 退出条件1：超时
@@ -177,28 +200,47 @@ static void inside_work_mode(uint8_t* peer_mac)
         // 读取雷达数据
         if (Espnow.read(&msg)) {
             if (frame_validate(msg.data, msg.len, SLAVE_FRAME_HEAD, FRAME_RADAR_DATA)) {
-                const protocol_frame_t* f = (const protocol_frame_t*)msg.data;
-                ESP_LOGI(MAIN_TAG, "Radar: dist=%d mm, angle=%.2f deg",
-                         f->dist, f->angle * 0.01f);
-                
-                // 这里改了逻辑
-                // 之前的逻辑：远距离-》近距离蜂鸣器鸣叫周期更快,近距离-》远距离蜂鸣器鸣叫还是按照近距离的来
-                // 现在的逻辑：根据距离来选择鸣叫的周期，距离越近，蜂鸣越急促，距离变远恢复到慢速或者不鸣叫
-                // 距离越近，蜂鸣越急促
-                if (f->dist == 0) {
+                // 判断哪一个从机返回的数据信息
+                if(memcmp(msg.src_mac, a_mac, 6) == 0) {
+                    memcpy(&slave_a_data, msg.data, sizeof(protocol_frame_t));
+                    ESP_LOGI(SLAVE_A_TAG, "slave_A: dist=%d mm, angle=%.2f deg"
+                             , slave_a_data.dist, slave_a_data.angle * 0.01f);
+                    slave_a_data_valid = true;
+                }
+                else if(memcmp(msg.src_mac, b_mac, 6) == 0) {
+                    memcpy(&slave_b_data, msg.data, sizeof(protocol_frame_t));
+                    ESP_LOGI(SLAVE_B_TAG, "slave_B: dist=%d mm, angle=%.2f deg"
+                             , slave_b_data.dist, slave_b_data.angle * 0.01f);
+                    slave_b_data_valid = true;
+                }
+
+                // 比较两个从机的距离值取最小值进行判断控制蜂鸣器
+                if (slave_a_data_valid && slave_b_data_valid) {
+                    dist_min = slave_a_data.dist < slave_b_data.dist ? slave_a_data.dist : slave_b_data.dist;
+                }
+                else if (slave_a_data_valid) {
+                    dist_min = slave_a_data.dist;
+                }
+                else if (slave_b_data_valid) {
+                    dist_min = slave_b_data.dist;
+                }
+
+
+                // 蜂鸣器处理
+                if (dist_min == 0) {
                     // Workaround：雷达偶尔会读到0，实际应该是读数失败了，这时不应该急促报警而是直接不鸣叫
                     // 或者是离得太远了，超出雷达的测距范围了，这时也是读数失败了，应该不鸣叫
                     // TODO：后续优化，只有监测到物体出现之后，距离0才考虑是真的0
                     Beeper.beep_stop();
                 }
-                else if (f->dist < DIST_CLOSE_CM){
+                else if (dist_min < DIST_CLOSE_CM){
                     Beeper.beep(BEEPER_PERIOD_LONG);
                 }
-                else if (f->dist < DIST_MID_CM){
+                else if (dist_min < DIST_MID_CM){
                     Beeper.beep_stop();
                     Beeper.beep(BEEPER_PERIOD_3);
                 }
-                else if (f->dist < DIST_FAR_CM){
+                else if (dist_min < DIST_FAR_CM){
                     Beeper.beep_stop();
                     Beeper.beep(BEEPER_PERIOD_1);
                 }
@@ -217,7 +259,8 @@ static void inside_work_mode(uint8_t* peer_mac)
 
     // 3) 退出：停蜂鸣 + 通知从机结束
     Beeper.beep_stop();
-    sendEndFrame(peer_mac, MASTER_FRAME_HEAD);
+    sendEndFrame(a_mac, MASTER_FRAME_HEAD);
+    sendEndFrame(b_mac, MASTER_FRAME_HEAD);
     ESP_LOGI(MAIN_TAG, "Work mode finished");
 }
 #endif
@@ -272,6 +315,10 @@ static void outside_work_mode(uint8_t* peer_mac)
             protocol_frame_t frame;
             frame_build(&frame, SLAVE_FRAME_HEAD, FRAME_RADAR_DATA,
                         rd.dist_mm, (int16_t)(rd.angle_deg * 100));
+            // 发送的时候随机加个延时，避免长期占线
+            // uint8_t delay_ms = random(0, 4);
+            // vTaskDelay(pdMS_TO_TICKS(delay_ms));
+            vTaskDelay(pdMS_TO_TICKS(10));
             Espnow.send(peer_mac, (uint8_t*)&frame, sizeof(frame));
         }
 
@@ -338,14 +385,21 @@ static SysMode determineMode(WakeupSource wakeup, bool has_peer)
 
 // ======================== 模式处理 ========================
 
-static void handleMode(SysMode mode, uint8_t* peer_mac)
+static void handleMode(SysMode mode)
 {
     switch (mode)
     {
     case FACTORY_RESET_MODE:
         ESP_LOGI(MAIN_TAG, "Mode: FACTORY_RESET");
         for (int i = 0; i < 3; i++) Led.blink(LED_PERIOD_3);
-        Matcher.clearPeerMac();
+        // 清除
+#ifdef INSIDE
+        Matcher.clear_slave_mac();
+#endif
+
+#ifdef OUTSIDE
+        Matcher.clear_master_mac();
+#endif
         Lora.setup();               // 需要先初始化 Lora 才能清配置
         Lora.clearConfigFlag();
         Lora.shutdown();
@@ -359,6 +413,7 @@ static void handleMode(SysMode mode, uint8_t* peer_mac)
 
     case PAIRED_MODE:
         ESP_LOGI(MAIN_TAG, "Mode: PAIRED");
+        // TODO：这里需不要要用灯来指示配对过程，比如处于配对时用呼吸灯？
         Led.blink(LED_PERIOD_1);
         if (!Matcher.pair()) {
             ESP_LOGE(MAIN_TAG, "Pair failed, going to sleep");
@@ -391,17 +446,20 @@ static void handleMode(SysMode mode, uint8_t* peer_mac)
 
         // 2) ESP-NOW 初始化
         Espnow.init();
-        Matcher.loadPeerMac(peer_mac);
-        Espnow.addPeer(peer_mac);
+        uint8_t a_mac[6]{};
+        Matcher.load_slave_mac(a_mac, SLAVE_A_ID);
+        uint8_t b_mac[6]{};
+        Matcher.load_slave_mac(b_mac, SLAVE_B_ID);
+        Espnow.addPeer(a_mac);
+        Espnow.addPeer(b_mac);
         Espnow.recvStart();
 
         // 3) 唤醒从机 → 工作循环
-        inside_work_mode(peer_mac);
+        inside_work_mode(a_mac, b_mac);
 
         // 4) 清理
         Espnow.recvStop();
         Espnow.deinit();
-        // 问题：前面的inside_work_mode里面已经调用了Lora.shutdown()，这里再调用一次会不会有问题？
         Lora.shutdown();
 #endif
 
@@ -412,17 +470,17 @@ static void handleMode(SysMode mode, uint8_t* peer_mac)
 
         // 2) ESP-NOW 初始化
         Espnow.init();
-        Matcher.loadPeerMac(peer_mac);
-        Espnow.addPeer(peer_mac);
+        uint8_t master_mac[6]{};
+        Matcher.load_master_mac(master_mac);
+        Espnow.addPeer(master_mac);
         Espnow.recvStart();
 
         // 3) 回复 ACK → 雷达采集循环
-        outside_work_mode(peer_mac);
+        outside_work_mode(master_mac);
 
         // 4) 清理
         Espnow.recvStop();
         Espnow.deinit();
-        // 问题：这个函数是不是放错地方了，应该放在lora唤醒之后
         Lora.shutdown();
 #endif
 
@@ -459,16 +517,20 @@ void setup()
     }
 
     // 读取已配对 MAC（如果有）
-    uint8_t peer_mac[6]{};
-    bool has_peer = Matcher.hasPeerMac();
-    if (has_peer) {
-        Matcher.loadPeerMac(peer_mac);
-    }
+#ifdef INSIDE
+    bool has_peer = Matcher.has_slave_a_mac() && Matcher.has_slave_b_mac();
+#endif
+
+#ifdef OUTSIDE
+    bool has_peer = Matcher.has_master_mac();
+#endif
+
+
     // TODO：这里是不是加个else直接进入unpair模式？
 
     // 判断模式 → 执行 → 睡眠
     SysMode mode = determineMode(wakeup, has_peer);
-    handleMode(mode, peer_mac);
+    handleMode(mode);
     Power.deep_sleep();
 }
 
