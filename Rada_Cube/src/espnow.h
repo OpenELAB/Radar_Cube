@@ -3,6 +3,8 @@
 
 #include <esp_now.h>
 #include <WiFi.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/queue.h>
 
 // ======================== 常量 ========================
 extern const uint8_t ESPNOW_BROADCAST[6];

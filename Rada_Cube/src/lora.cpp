@@ -71,7 +71,7 @@ void LoraManager::init()
     pinMode(LORA_CE_PIN, OUTPUT);
     pinMode(LORA_POWER_PIN, OUTPUT);
     digitalWrite(LORA_CE_PIN, LORA_CE_ACTIVE);
-    // 问题：这里还得把Lora模块的电源打开，不然Lora配置会失败，具体不知道什么原因
+    // TODO：这里还得把Lora模块的电源打开，不然Lora配置会失败，具体不知道什么原因
     digitalWrite(LORA_POWER_PIN, LORA_POWER_ON);
 }
 
@@ -181,3 +181,14 @@ void LoraManager::shutdown()
     LoraSerial.end();
 }
 
+// Lora使能ce引脚，CE低电平，进入发送数据和配置模式
+void LoraManager::enable_ce()
+{
+    digitalWrite(LORA_CE_PIN, LORA_CE_INACTIVE);
+}
+
+// Lora禁用ce引脚，CE高电平，进入接收数据模式
+void LoraManager::disable_ce()
+{
+    digitalWrite(LORA_CE_PIN, LORA_CE_ACTIVE);
+}
