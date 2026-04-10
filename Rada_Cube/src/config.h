@@ -36,6 +36,9 @@
 #define DIST_CLOSE_CM           50     // < 0.5m  急促报警
 #define DIST_MID_CM             100    // < 1.5m  中速报警
 #define DIST_FAR_CM             150    // < 3.0m  慢速报警
+// 迟滞区间大小
+#define DIST_HYSTERESIS_CM      10
+
 // 雷达测距的阈值
 #define DIST_MIN_CM             20
 #define DIST_MAX_CM             250

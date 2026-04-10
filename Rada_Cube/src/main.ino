@@ -18,6 +18,16 @@ enum SysMode {
     FACTORY_RESET_MODE  // 恢复出厂设置
 };
 
+enum BuzzerMode{
+    SILENT_MODE,        // 静音模式
+    CONTINUOUS_MODE,    // 连续鸣叫
+    FAST_MODE,          // 快速鸣叫，周期0.25s
+    MED_MODE,           // 中速鸣叫，周期0.5s
+    SLOW_MODE,          // 慢速鸣叫，周期1s
+    TASK_END            // 任务结束
+};
+
+
 // ======================== 全局实例 ========================
 
 // 串口实例（pins.h 里 extern 声明，这里定义）
@@ -35,6 +45,83 @@ PowerManager Power;
 LoraManager Lora;
 EspNowManager Espnow;
 MacMatch Matcher(Espnow);
+
+// ======================== RTOS全局变量 ========================
+static volatile BuzzerMode buzzer_mode = SILENT_MODE;
+static SemaphoreHandle_t buzzer_mutex = NULL;
+
+// ======================== RTOS任务 ========================
+void buzzer_task(void* pvParameters)
+{
+    BuzzerMode current_mode = SILENT_MODE;
+    TickType_t last_toggle = 0;
+    bool is_on = false;
+
+    while(1)
+    {
+        xSemaphoreTake(buzzer_mutex, portMAX_DELAY);
+        BuzzerMode target = buzzer_mode;
+        xSemaphoreGive(buzzer_mutex);
+
+        // 任务结束
+        if(target == TASK_END)
+        {
+            Beeper.beep_stop();
+            ESP_LOGI(MAIN_TAG, "Buzzer task stopped");
+            vTaskDelete(NULL);
+        }
+
+        // 如果模式改变了，立即停止当前蜂鸣并准备切换
+        if(target != current_mode)
+        {
+            is_on = false;
+            Beeper.beep_stop();
+            last_toggle = xTaskGetTickCount();
+            current_mode = target;
+        }
+
+        // 状态机
+         TickType_t now = xTaskGetTickCount();
+         uint16_t period = Beeper.get_period(current_mode);
+
+         switch(current_mode)
+         {
+            case SILENT_MODE:
+                //  静音,保持上面静音状态不变
+                break;
+            case CONTINUOUS_MODE:
+                // 连续鸣叫
+                if(!is_on)
+                {
+                    Beeper.beep();
+                    is_on = true;
+                }
+                break;
+            case FAST_MODE:
+            case MED_MODE:
+            case SLOW_MODE:
+            // 非阻塞式周期鸣叫
+                if(now - last_toggle >= pdMS_TO_TICKS(period / 2))
+                {
+                    if(is_on)
+                    {
+                        Beeper.beep_stop();
+                        is_on = false;
+                    }
+                    else
+                    {
+                        Beeper.beep();
+                        is_on = true;
+                    }
+                    last_toggle = now;
+                }
+                break;
+         }
+
+         vTaskDelay(pdMS_TO_TICKS(10));
+    }
+
+}
 
 // ======================== 辅助函数 ========================
 
@@ -128,7 +215,7 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
 
         for (int t = 0; t < WAKE_POLL_ROUNDS && !woke; t++) {
             vTaskDelay(pdMS_TO_TICKS(WAKE_POLL_INTERVAL_MS));
-            if (Espnow.read(&msg)) {
+            while (Espnow.read(&msg)) {
                 if (frame_validate(msg.data, msg.len, SLAVE_FRAME_HEAD, FRAME_WAKE_ACK)) {
                     // 这里判断一下是哪个从机返回的消息
                     if(memcmp(msg.src_mac, a_mac, 6) == 0) {
@@ -141,6 +228,7 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
                     }
                     if (slave_a_woke && slave_b_wake) {
                         woke = true;
+                        break;
                     }
                 }
             }
@@ -149,12 +237,17 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
     Lora.disable_ce();
 
     // 唤醒失败处理
+    // TODO：唤醒失败，可能是两个从机中其中一个醒来另一个出问题，还是要发送一下工作结束帧让醒来的从机停止工作
     if (!woke) {
         ESP_LOGE(MAIN_TAG, "Failed to wake slave after %d retries", WAKE_MAX_RETRY);
         
         // 建议：唤醒失败时，播放下降音调，告诉用户“车外模块失联了，不要倒车！”
         Beeper.beeper_init();
         Beeper.play_fail_tone();
+
+        // 唤醒失败发送停止工作帧，确保从机全部关闭
+        sendEndFrame(a_mac, MASTER_FRAME_HEAD);
+        sendEndFrame(b_mac, MASTER_FRAME_HEAD);
         
         return;
     }
@@ -170,14 +263,26 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
     // 唤醒成功后可以关 Lora 省电
     Lora.shutdown();
 
-    // 2) 工作循环：读最新雷达数据 → 蜂鸣器提示
+    // 2) 创建蜂鸣器任务
+    // 初始化互斥锁
+    if(buzzer_mutex == NULL)
+    {
+        buzzer_mutex = xSemaphoreCreateMutex();
+    }
+    // 创建蜂鸣器任务
+    TaskHandle_t beeper_handle = NULL;
+    xTaskCreate(buzzer_task, "beeper", 2048, NULL, 2, &beeper_handle);
+
+    // 3) 工作循环：读最新雷达数据 → 蜂鸣器提示
     uint32_t work_start = millis();
 
     protocol_frame_t slave_a_data = {0};
     protocol_frame_t slave_b_data  = {0};
     uint16_t dist_min = 0;
-    bool slave_a_data_valid = false;
-    bool slave_b_data_valid = false;
+    bool exit_flag = false;
+
+    // 迟滞区间，用来记录上一次是什么模式，防止频繁切换
+    BuzzerMode current_mode = SILENT_MODE;
 
     while (true) {
         // 退出条件1：超时
@@ -200,68 +305,182 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
         // 查看一下队列里的数据深度
         // ESP_LOGI(MAIN_TAG, "Queue depth: %d", Espnow.getQueueCount());
 
-        // 读取雷达数据
-        if (Espnow.read(&msg)) {
-            if (frame_validate(msg.data, msg.len, SLAVE_FRAME_HEAD, FRAME_RADAR_DATA)) {
-                // 判断哪一个从机返回的数据信息
-                if(memcmp(msg.src_mac, a_mac, 6) == 0) {
+        // TODO：队列里读取雷达数据, 如果队列里一直有数据，会不会出现卡死的情况?
+        while(Espnow.read(&msg))
+        {
+            if(frame_validate(msg.data, msg.len, SLAVE_FRAME_HEAD, FRAME_RADAR_DATA))
+            {
+                // 判断哪个从机返回的数据
+                if(memcmp(msg.src_mac, a_mac, 6) == 0)
+                {
                     memcpy(&slave_a_data, msg.data, sizeof(protocol_frame_t));
                     ESP_LOGI(SLAVE_A_TAG, "slave_A: dist=%d mm, angle=%.2f deg"
                              , slave_a_data.dist, slave_a_data.angle * 0.01f);
-                    // slave_a_data_valid = true;
                 }
-                else if(memcmp(msg.src_mac, b_mac, 6) == 0) {
+                else if(memcmp(msg.src_mac, b_mac, 6) == 0)
+                {
                     memcpy(&slave_b_data, msg.data, sizeof(protocol_frame_t));
                     ESP_LOGI(SLAVE_B_TAG, "slave_B: dist=%d mm, angle=%.2f deg"
                              , slave_b_data.dist, slave_b_data.angle * 0.01f);
-                    // slave_b_data_valid = true;
                 }
-
-                // // 比较两个从机的距离值取最小值进行判断控制蜂鸣器
-                // if (slave_a_data_valid && slave_b_data_valid) {
-                //     dist_min = slave_a_data.dist < slave_b_data.dist ? slave_a_data.dist : slave_b_data.dist;
-                // }
-                // else if (slave_a_data_valid) {
-                //     dist_min = slave_a_data.dist;
-                // }
-                // else if (slave_b_data_valid) {
-                //     dist_min = slave_b_data.dist;
-                // }
-
-
-                // // 蜂鸣器处理
-                // if (dist_min == 0) {
-                //     // Workaround：雷达偶尔会读到0，实际应该是读数失败了，这时不应该急促报警而是直接不鸣叫
-                //     // 或者是离得太远了，超出雷达的测距范围了，这时也是读数失败了，应该不鸣叫
-                //     // TODO：后续优化，只有监测到物体出现之后，距离0才考虑是真的0
-                //     // Beeper.beep_stop();
-                //     continue;
-                // }
-                // else if (dist_min < DIST_CLOSE_CM){
-                //     Beeper.beep(BEEPER_PERIOD_LONG);
-                // }
-                // else if (dist_min < DIST_MID_CM){
-                //     Beeper.beep_stop();
-                //     Beeper.beep(BEEPER_PERIOD_3);
-                // }
-                // else if (dist_min < DIST_FAR_CM){
-                //     Beeper.beep_stop();
-                //     Beeper.beep(BEEPER_PERIOD_1);
-                // }
-                // else{
-                //     Beeper.beep_stop();
-                // }
             }
-            else if (frame_validate(msg.data, msg.len, SLAVE_FRAME_HEAD, FRAME_END)) {
+            else if(frame_validate(msg.data, msg.len, SLAVE_FRAME_HEAD, FRAME_END))
+            {
                 ESP_LOGI(MAIN_TAG, "Received END frame from slave");
+                exit_flag = true;
                 break;
             }
         }
 
+        // 收到退出帧后，跳出循环
+        if(exit_flag)
+        {
+            break;
+        }
+
+        // 模式判断
+        // TODO：如果从机数据很久没有更新了，是不是也应该认为它失联了？
+        uint16_t dist_a = slave_a_data.dist;
+        uint16_t dist_b = slave_b_data.dist;
+
+        // 判断数据是否有效
+        // TODO：需不需要加上最大值限制？
+        bool valid_a = (dist_a > 0);
+        bool valid_b = (dist_b > 0);
+
+        // 取判断值
+        uint16_t min_dist = UINT16_MAX;
+        BuzzerMode new_mode;
+
+        if(valid_a && valid_b)
+        {
+            // 如果两个都有效，取更近的那个
+            min_dist = (dist_a < dist_b) ? dist_a : dist_b;
+        }
+        else if(valid_a)
+        {
+            // 如果只有 A 有效，取 A
+            min_dist = dist_a;
+        }
+        else if(valid_b)
+        {
+            // 如果只有 B 有效，取 B
+            min_dist = dist_b;
+        }
+        else
+        {
+            // 如果两个都无效，保持初始值
+        }
+
+        // 加上迟滞区间，防止蜂鸣器模式频繁切换
+        // TODO：看一下需不需换成滤波还是在加上一层滤波
+        if(min_dist == UINT16_MAX)
+        {
+            // 没有有效数据，保持静音
+            new_mode = SILENT_MODE;
+            current_mode = SILENT_MODE;
+        }
+        else
+        {
+            // 基于当前模式去做迟滞判断（±10cm的缓冲带）
+            switch(current_mode)
+            {
+                case SILENT_MODE:
+                {
+                    // 当前是静音模式，进入到慢速模式需要小于140cm
+                    if(min_dist < DIST_FAR_CM - DIST_HYSTERESIS_CM)
+                    {
+                        new_mode = SLOW_MODE;
+                        current_mode = SLOW_MODE;
+                    }
+                    else
+                    {
+                        new_mode = SILENT_MODE;
+                    }
+                    break;
+                }
+                case SLOW_MODE:
+                {
+                    // 当前是慢速模式，进入中速报警模式需要小于90cm，回退到静音需要大于160cm
+                    if(min_dist < DIST_MID_CM - DIST_HYSTERESIS_CM)
+                    {
+                        // < 90cm 进入中速报警
+                        new_mode = MED_MODE;
+                        current_mode = MED_MODE;
+                    }
+                    else if(min_dist > DIST_FAR_CM + DIST_HYSTERESIS_CM)
+                    {
+                        // > 160cm 回退到静音
+                        new_mode = SILENT_MODE;
+                        current_mode = SILENT_MODE;
+                    }
+                    else
+                    {
+                        // 90~160cm 维持在慢速报警
+                        new_mode = SLOW_MODE;
+                    }
+                    break;
+                }
+                case MED_MODE:
+                {
+                    // 当前是中速报警模式，进入到急促报警模式需要小于40cm，回退到慢速报警需要大于110cm
+                    if(min_dist < DIST_CLOSE_CM - DIST_HYSTERESIS_CM)
+                    {
+                        // < 40cm 进入急促报警
+                        new_mode = FAST_MODE;
+                        current_mode = FAST_MODE;
+                    }
+                    else if(min_dist > DIST_MID_CM + DIST_HYSTERESIS_CM)
+                    {
+                        // > 110cm 回退到慢速报警
+                        new_mode = SLOW_MODE;
+                        current_mode = SLOW_MODE;
+                    }
+                    else
+                    {
+                        // 40~110cm 维持在中速报警
+                        new_mode = MED_MODE;
+                    }
+                    break;
+                }
+                case FAST_MODE:
+                {
+                    // 当前是急促报警模式，回退到中速报警需要大于60cm
+                    if(min_dist > DIST_CLOSE_CM + DIST_HYSTERESIS_CM)
+                    {
+                        // > 60cm 回退到中速报警
+                        new_mode = MED_MODE;
+                        current_mode = MED_MODE;
+                    }
+                    else
+                    {
+                        // < 60cm 维持在急促报警
+                        new_mode = FAST_MODE;
+                    }
+                    break;
+                }
+                default:
+                {
+                    // 应该不会出现其他模式了，如果出现了就回退到静音
+                    new_mode = SILENT_MODE;
+                    current_mode = SILENT_MODE;
+                }
+            }
+        }
+        // 写入蜂鸣器任务
+        xSemaphoreTake(buzzer_mutex, portMAX_DELAY);
+        buzzer_mode = new_mode;
+        xSemaphoreGive(buzzer_mutex);
+
         vTaskDelay(pdMS_TO_TICKS(WORK_POLL_INTERVAL_MS));
     }
 
-    // 3) 退出：停蜂鸣 + 通知从机结束
+    // 任务结束前先把退出标志发给蜂鸣器任务，让它停止蜂鸣并退出
+    xSemaphoreTake(buzzer_mutex, portMAX_DELAY);
+    buzzer_mode = TASK_END;
+    xSemaphoreGive(buzzer_mutex);
+
+    // 4) 退出：停蜂鸣 + 通知从机结束
     Beeper.beep_stop();
     sendEndFrame(a_mac, MASTER_FRAME_HEAD);
     sendEndFrame(b_mac, MASTER_FRAME_HEAD);

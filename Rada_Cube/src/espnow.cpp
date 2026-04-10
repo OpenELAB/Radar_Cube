@@ -19,7 +19,7 @@ void EspNowManager::_onRecvStatic(const esp_now_recv_info_t* info, const uint8_t
 
 void EspNowManager::_onRecv(const esp_now_recv_info_t* info, const uint8_t* data, int len)
 {
-    if (len <= 0 && !_rx_queue) return;
+    if (len <= 0 || !_rx_queue) return;
     // TODO: 可以考虑加个锁来保护 buffer，但目前主循环里读得足够慢，不存在竞争问题
 
     // 整理数据
@@ -29,6 +29,7 @@ void EspNowManager::_onRecv(const esp_now_recv_info_t* info, const uint8_t* data
     memcpy(msg.data, data, msg.len);
 
     // 放入队列
+    // TODO：队列如果容易满的话，可能需要手动处理队列，不然默认机制容易把新数据丢失
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
     xQueueSendToBackFromISR(_rx_queue, &msg, &xHigherPriorityTaskWoken);
     portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
