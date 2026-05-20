@@ -556,6 +556,10 @@ static void outside_work_mode(uint8_t* peer_mac)
             protocol_frame_t frame;
             frame_build(&frame, SLAVE_FRAME_HEAD, FRAME_RADAR_DATA,
                         rd.dist_mm, (int16_t)(rd.angle_deg * 100));
+            // 发送的时候随机加个延时，避免长期占线
+            // uint8_t delay_ms = random(0, 4);
+            // vTaskDelay(pdMS_TO_TICKS(delay_ms));
+            vTaskDelay(pdMS_TO_TICKS(10));
             Espnow.send(peer_mac, (uint8_t*)&frame, sizeof(frame));
         }
 
