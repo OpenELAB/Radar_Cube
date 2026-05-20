@@ -24,7 +24,6 @@ enum BuzzerMode{
     FAST_MODE,          // 快速鸣叫，周期0.25s
     MED_MODE,           // 中速鸣叫，周期0.5s
     SLOW_MODE,          // 慢速鸣叫，周期1s
-    TASK_END            // 任务结束
 };
 
 
@@ -51,77 +50,72 @@ static volatile BuzzerMode buzzer_mode = SILENT_MODE;
 static SemaphoreHandle_t buzzer_mutex = NULL;
 
 // ======================== RTOS任务 ========================
-void buzzer_task(void* pvParameters)
-{
-    BuzzerMode current_mode = SILENT_MODE;
-    TickType_t last_toggle = 0;
-    bool is_on = false;
-
-    while(1)
+#ifdef INSIDE
+    void buzzer_task(void* pvParameters)
     {
-        xSemaphoreTake(buzzer_mutex, portMAX_DELAY);
-        BuzzerMode target = buzzer_mode;
-        xSemaphoreGive(buzzer_mutex);
+        BuzzerMode current_mode = SILENT_MODE;
+        TickType_t last_toggle = 0;
+        bool is_on = false;
 
-        // 任务结束
-        if(target == TASK_END)
+        while(1)
         {
-            Beeper.beep_stop();
-            ESP_LOGI(MAIN_TAG, "Buzzer task stopped");
-            vTaskDelete(NULL);
-        }
+            xSemaphoreTake(buzzer_mutex, portMAX_DELAY);
+            BuzzerMode target = buzzer_mode;
+            xSemaphoreGive(buzzer_mutex);
 
-        // 如果模式改变了，立即停止当前蜂鸣并准备切换
-        if(target != current_mode)
-        {
-            is_on = false;
-            Beeper.beep_stop();
-            last_toggle = xTaskGetTickCount();
-            current_mode = target;
-        }
+            // 如果模式改变了，立即停止当前蜂鸣并准备切换
+            if(target != current_mode)
+            {
+                is_on = false;
+                Beeper.beep_stop();
+                last_toggle = xTaskGetTickCount();
+                current_mode = target;
+            }
 
-        // 状态机
-         TickType_t now = xTaskGetTickCount();
-         uint16_t period = Beeper.get_period(current_mode);
+            // 状态机
+            TickType_t now = xTaskGetTickCount();
+            uint16_t period = Beeper.get_period(current_mode);
 
-         switch(current_mode)
-         {
-            case SILENT_MODE:
-                //  静音,保持上面静音状态不变
-                break;
-            case CONTINUOUS_MODE:
-                // 连续鸣叫
-                if(!is_on)
-                {
-                    Beeper.beep();
-                    is_on = true;
-                }
-                break;
-            case FAST_MODE:
-            case MED_MODE:
-            case SLOW_MODE:
-            // 非阻塞式周期鸣叫
-                if(now - last_toggle >= pdMS_TO_TICKS(period / 2))
-                {
-                    if(is_on)
-                    {
-                        Beeper.beep_stop();
-                        is_on = false;
-                    }
-                    else
+            switch(current_mode)
+            {
+                case SILENT_MODE:
+                    //  静音,保持上面静音状态不变
+                    break;
+                case CONTINUOUS_MODE:
+                    // 连续鸣叫
+                    if(!is_on)
                     {
                         Beeper.beep();
                         is_on = true;
                     }
-                    last_toggle = now;
-                }
-                break;
-         }
+                    break;
+                case FAST_MODE:
+                case MED_MODE:
+                case SLOW_MODE:
+                // 非阻塞式周期鸣叫
+                //TODO: 目前采用非阻塞式实现，有问题可以试试阻塞式实现，直接用蜂鸣器的周期来算延时
+                    if(now - last_toggle >= pdMS_TO_TICKS(period / 2))
+                    {
+                        if(is_on)
+                        {
+                            Beeper.beep_stop();
+                            is_on = false;
+                        }
+                        else
+                        {
+                            Beeper.beep();
+                            is_on = true;
+                        }
+                        last_toggle = now;
+                    }
+                    break;
+            }
 
-         vTaskDelay(pdMS_TO_TICKS(10));
+            vTaskDelay(pdMS_TO_TICKS(50));
+        }
+
     }
-
-}
+#endif
 
 // ======================== 辅助函数 ========================
 
@@ -387,7 +381,7 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
             {
                 case SILENT_MODE:
                 {
-                    // 当前是静音模式，进入到慢速模式需要小于140cm
+                    // 当前是静音模式，进入到慢速模式需要小于210cm
                     if(min_dist < DIST_FAR_CM - DIST_HYSTERESIS_CM)
                     {
                         new_mode = SLOW_MODE;
@@ -401,61 +395,83 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
                 }
                 case SLOW_MODE:
                 {
-                    // 当前是慢速模式，进入中速报警模式需要小于90cm，回退到静音需要大于160cm
+                    // 当前是慢速模式，进入中速报警模式需要小于160cm，回退到静音需要大于230cm
                     if(min_dist < DIST_MID_CM - DIST_HYSTERESIS_CM)
                     {
-                        // < 90cm 进入中速报警
+                        // < 160cm 进入中速报警
                         new_mode = MED_MODE;
                         current_mode = MED_MODE;
                     }
                     else if(min_dist > DIST_FAR_CM + DIST_HYSTERESIS_CM)
                     {
-                        // > 160cm 回退到静音
+                        // > 230cm 回退到静音
                         new_mode = SILENT_MODE;
                         current_mode = SILENT_MODE;
                     }
                     else
                     {
-                        // 90~160cm 维持在慢速报警
+                        // 170~220cm 维持在慢速报警
                         new_mode = SLOW_MODE;
                     }
                     break;
                 }
                 case MED_MODE:
                 {
-                    // 当前是中速报警模式，进入到急促报警模式需要小于40cm，回退到慢速报警需要大于110cm
+                    // 当前是中速报警模式，进入到急促报警模式需要小于110cm，回退到慢速报警需要大于180cm
                     if(min_dist < DIST_CLOSE_CM - DIST_HYSTERESIS_CM)
                     {
-                        // < 40cm 进入急促报警
+                        // < 110cm 进入急促报警
                         new_mode = FAST_MODE;
                         current_mode = FAST_MODE;
                     }
                     else if(min_dist > DIST_MID_CM + DIST_HYSTERESIS_CM)
                     {
-                        // > 110cm 回退到慢速报警
+                        // > 180cm 回退到慢速报警
                         new_mode = SLOW_MODE;
                         current_mode = SLOW_MODE;
                     }
                     else
                     {
-                        // 40~110cm 维持在中速报警
+                        // 120~170cm 维持在中速报警
                         new_mode = MED_MODE;
                     }
                     break;
                 }
                 case FAST_MODE:
                 {
-                    // 当前是急促报警模式，回退到中速报警需要大于60cm
-                    if(min_dist > DIST_CLOSE_CM + DIST_HYSTERESIS_CM)
+                    // 当前是急促报警模式，进入紧急报警模式需要小于60cm，回退到中速需要大于130cm
+                    if(min_dist < DIST_DANGER_CM - DIST_HYSTERESIS_CM)
                     {
-                        // > 60cm 回退到中速报警
+                        // 进入紧急报警
+                        new_mode = CONTINUOUS_MODE;
+                        current_mode = CONTINUOUS_MODE;
+                    }
+                    else if(min_dist > DIST_CLOSE_CM + DIST_HYSTERESIS_CM)
+                    {
+                        // 回退到中速报警
                         new_mode = MED_MODE;
                         current_mode = MED_MODE;
                     }
                     else
                     {
-                        // < 60cm 维持在急促报警
+                        // 70~120cm 维持在急促报警
                         new_mode = FAST_MODE;
+                    }
+                    break;
+                }
+                case CONTINUOUS_MODE:
+                {
+                    //当前模式是紧急报警模式，回退到急促报警模式需要大于80
+                    if(min_dist > DIST_DANGER_CM + DIST_HYSTERESIS_CM)
+                    {
+                        // 回退到急促报警
+                        new_mode = FAST_MODE;
+                        current_mode = FAST_MODE;
+                    }
+                    else
+                    {
+                        // < 70cm 维持在紧急报警
+                        new_mode = CONTINUOUS_MODE;
                     }
                     break;
                 }
@@ -474,11 +490,13 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
 
         vTaskDelay(pdMS_TO_TICKS(WORK_POLL_INTERVAL_MS));
     }
-
-    // 任务结束前先把退出标志发给蜂鸣器任务，让它停止蜂鸣并退出
-    xSemaphoreTake(buzzer_mutex, portMAX_DELAY);
-    buzzer_mode = TASK_END;
-    xSemaphoreGive(buzzer_mutex);
+    // 改为主动杀死进程
+    vTaskDelay(pdMS_TO_TICKS(200));
+    if(beeper_handle != NULL)
+    {
+        vTaskDelete(beeper_handle);
+        ESP_LOGI(MAIN_TAG, "Buzzer task deleted");
+    }
 
     // 4) 退出：停蜂鸣 + 通知从机结束
     Beeper.beep_stop();
