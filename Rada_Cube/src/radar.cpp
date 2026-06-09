@@ -1,130 +1,150 @@
 #include <Arduino.h>
-#include "pins.h"
 #include "config.h"
 #include "radar.h"
 
 #ifdef OUTSIDE
 
+RadarModule* RadarModule::_instance = nullptr;
 
-void RadarModule::Radar_init()
+// ======================== 初始化 / 关闭 ========================
+
+void RadarModule::init()
 {
-    RadarSerial.begin(115200, SERIAL_8N1, RADAR_RX_PIN,RADAR_TX_PIN);
-    // 打开雷达传感器的功率开关
+    _instance = this;
+
+    RadarSerial.begin(115200, SERIAL_8N1, RADAR_RX_PIN, RADAR_TX_PIN);
+    RadarSerial.onReceive(onSerialRxStatic);
+
     pinMode(RADAR_POWER_PIN, OUTPUT);
-    digitalWrite(RADAR_POWER_PIN, HIGH);
+    digitalWrite(RADAR_POWER_PIN, RADAR_POWER_ON);
 }
 
-void RadarModule::Radar_end()
+void RadarModule::shutdown()
 {
-    // 关闭雷达传感器的功率开关
-    digitalWrite(RADAR_POWER_PIN, LOW);
-    // 清空串口缓冲区
-    while(RadarSerial.available()) RadarSerial.read();
+    digitalWrite(RADAR_POWER_PIN, RADAR_POWER_OFF);
+    while (RadarSerial.available()) RadarSerial.read();
     RadarSerial.end();
 }
 
-// 入队
-bool RadarModule::fifoPut(uint8_t b)
+// ======================== FIFO ========================
+
+bool RadarModule::fifoPush(uint8_t b)
 {
-    size_t next = (fifo_head + 1) % FIFO_SIZE;
-    if(next == fifo_tail)
-    {
-        // 队列已经满了
-        return false;
-    }
-    fifoBuf[fifo_head] = b;
-    fifo_head = next;
+    uint16_t next = (_fifo_head + 1) % FIFO_SIZE;
+    if (next == _fifo_tail) return false;   // 满了
+    _fifo[_fifo_head] = b;
+    _fifo_head = next;
     return true;
 }
 
-// 出队
-bool RadarModule::fifoGet(uint8_t* b)
+bool RadarModule::fifoPop(uint8_t* b)
 {
-    if(fifo_head == fifo_tail)
-    {
-        // 对列是空的
-        return false;
-    }
-    *b = fifoBuf[fifo_tail];
-    fifo_tail = (fifo_tail + 1) % FIFO_SIZE;
+    if (_fifo_head == _fifo_tail) return false;   // 空的
+    *b = _fifo[_fifo_tail];
+    _fifo_tail = (_fifo_tail + 1) % FIFO_SIZE;
     return true;
 }
 
-// CRC校验
-bool RadarModule::verifyChecksum(const uint8_t* raw, size_t len)
+// ======================== 串口回调 ========================
+
+void RadarModule::onSerialRxStatic()
 {
-    uint8_t checksum = 0;
-    for(size_t i = 0; i < len -1; i++)
-    {
-        checksum += raw[i];
-    }
-    return checksum == raw[len];
+    if (_instance) _instance->onSerialRx();
 }
 
-// 数据帧解析函数，
-bool RadarModule::parseRadarFrame(const uint8_t* raw, RadarFrame_t* f)
+void RadarModule::onSerialRx()
 {
-    // 检验帧头
-    if(raw[0] != 0xAA || raw[1 != 0x55])
-    {
+    while (RadarSerial.available()) {
+        fifoPush(RadarSerial.read());
+    }
+}
+
+// ======================== 校验 & 解析 ========================
+
+// 校验：前12字节之和的低8位 == 第12字节（下标12）
+bool RadarModule::verifyChecksum(const uint8_t* raw)
+{
+    uint8_t sum = 0;
+    for (int i = 0; i < 12; i++) {
+        sum += raw[i];
+    }
+    // checksum 在帧的最后2字节（下标12-13），取低字节比较
+    return (sum == raw[12]);
+}
+
+bool RadarModule::parseFrame(const uint8_t* raw, RadarFrame_t* out)
+{
+    // 帧头检查
+    if (raw[0] != 0xAA || raw[1] != 0x55) {
+        ESP_LOGW(RADAR_TAG, "header error");
         return false;
     }
-    memcpy(f, raw, sizeof(RadarFrame_t));
 
-    // 检验数据长度
-    if(f->len != RADAR_DATA_LEN)
-    {
+    memcpy(out, raw, sizeof(RadarFrame_t));
+
+    // 数据长度检查
+    if (out->len != RADAR_DATA_LEN) {
+        ESP_LOGW(RADAR_TAG, "len error");
         return false;
     }
 
-    // 检验校验和
-    if(!verifyChecksum(raw))
-    {
+    // 校验和检查
+    if (!verifyChecksum(raw)) {
+        ESP_LOGW(RADAR_TAG, "checksum error");
         return false;
     }
 
     return true;
 }
 
-// 串口接收回调函数
-void RadarModule::Radar_onReveive()
+// ======================== 主循环解析 ========================
+
+void RadarModule::loop()
 {
-    while(RadarSerial.available())
+    uint8_t b;
+    while (fifoPop(&b))
     {
-        uint8_t c = RadarSerial.read();
-        fifoPut(c);
+        switch (_state)
+        {
+        case WAIT_AA:
+            if (b == 0xAA) {
+                _rxCnt = 0;
+                _rxBuf[_rxCnt++] = b;
+                _state = WAIT_55;
+            }
+            break;
+
+        case WAIT_55:
+            _rxBuf[_rxCnt++] = b;
+            _state = (b == 0x55) ? RECV_PAYLOAD : WAIT_AA;
+            break;
+
+        case RECV_PAYLOAD:
+            _rxBuf[_rxCnt++] = b;
+            if (_rxCnt >= RADAR_FRAME_LEN)
+            {
+                RadarFrame_t fr;
+                if (parseFrame(_rxBuf, &fr)) {
+                    _latest.dist_mm   = fr.dist;
+                    _latest.angle_deg = fr.angle * 0.01f;
+                    _data_ready = true;
+                    ESP_LOGI(RADAR_TAG, "dist: %d mm, angle: %.2f deg",
+                             _latest.dist_mm, _latest.angle_deg);
+                }
+                _state = WAIT_AA;
+            }
+            break;
+        }
     }
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+bool RadarModule::getData(RadarData* out)
+{
+    if (!_data_ready || !out) return false;
+    *out = _latest;
+    _data_ready = false;
+    return true;
+}
 
 #endif
-
-
-
-
-
-
-
 
