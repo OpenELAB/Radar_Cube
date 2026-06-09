@@ -33,9 +33,13 @@
 #define BUTTON_LONG_PRESS_MS    3000    // 长按阈值 (ms)，>3s 判定为长按
 
 // 距离报警阈值 (mm)
-#define DIST_CLOSE_CM           50     // < 0.5m  急促报警
-#define DIST_MID_CM             100    // < 1.5m  中速报警
-#define DIST_FAR_CM             150    // < 3.0m  慢速报警
+#define DIST_DANGER_CM          70      // < 0.7m  紧急报警
+#define DIST_CLOSE_CM           120     // < 0.5m  急促报警
+#define DIST_MID_CM             170    // < 1.5m  中速报警
+#define DIST_FAR_CM             220    // < 2.2m  慢速报警
+// 迟滞区间大小
+#define DIST_HYSTERESIS_CM      5
+
 // 雷达测距的阈值
 #define DIST_MIN_CM             20
 #define DIST_MAX_CM             250
@@ -48,7 +52,7 @@
 #define MAC_TAG                 "MAC"
 #define RADAR_TAG               "RADAR"
 #define SLAVE_A_TAG             "SLAVE_A"
-#define SLAVE_B_TAG              "SLAVE_B"
+#define SLAVE_B_TAG             "SLAVE_B"
 
 // ======================== 从机id ========================
 #define SLAVE_A_ID              0
