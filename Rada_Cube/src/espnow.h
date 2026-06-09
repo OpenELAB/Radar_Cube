@@ -12,6 +12,9 @@ extern const uint8_t ESPNOW_BROADCAST[6];
 // 接收消息最大负载
 #define ESPNOW_MAX_DATA     32
 
+// ======================== 队列 ========================
+#define ESPNOW_QUEUE_DEPTH        16
+
 // ======================== 接收消息结构 ========================
 typedef struct {
     uint8_t  src_mac[6];            // 发送方 MAC
@@ -52,6 +55,14 @@ typedef struct {
 class EspNowManager
 {
 public:
+
+    // 默认构造函数
+    EspNowManager() = default;
+
+    // 禁止拷贝
+    EspNowManager(const EspNowManager&) = delete;
+    EspNowManager& operator=(const EspNowManager&) = delete;
+
     // 初始化 WiFi STA + ESP-NOW（幂等，重复调用自动跳过）
     void init();
 
@@ -74,18 +85,23 @@ public:
     // 是否有新数据到达
     bool hasNewData();
 
-    // 读走最新一帧，读完后自动清除标志位
+    // 非堵塞读取
     bool read(espnow_msg_t* msg_out);
+
+    // 堵塞读取
+    bool readBlocking(espnow_msg_t* msg_out, TickType_t wait_ticks);
 
     // 停止接收（注销回调）
     void recvStop();
 
+    // 获取队列当前的积压数量
+    UBaseType_t getQueueCount();
+
 private:
     bool _inited = false;
 
-    // ---- 接收缓冲（只保留最新一帧） ----
-    espnow_msg_t     _rx_buf{};
-    volatile bool    _rx_new_data = false;
+    // ---- 队列 ----
+    QueueHandle_t    _rx_queue = nullptr;
 
     // ---- 串口回调转发 ----
     static EspNowManager* _instance;

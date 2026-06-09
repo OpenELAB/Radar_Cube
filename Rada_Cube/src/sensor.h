@@ -21,13 +21,6 @@ enum LED_SPEED
 };
 
 // 蜂鸣器鸣叫周期
-enum BEEP
-{
-    BEEPER_PERIOD_1 = 1000, // 蜂鸣周期1s
-    BEEPER_PERIOD_2 = 500,  // 蜂鸣周期0.5s
-    BEEPER_PERIOD_3 = 250,  // 蜂鸣周期0.25s
-    BEEPER_PERIOD_LONG = 0  // 长鸣
-};
 
 // 电池状态
 enum BATTERY_STAT
@@ -79,10 +72,17 @@ class BeeperControler
 {
 public:
     void beeper_init();
-    void beep(BEEP type);
+    void beep();
     void beep_stop();
     void play_success_tone(); // 添加成功提示音方法
     void play_fail_tone();    // 添加失败提示音方法
+
+    // 查蜂鸣器周期表
+    uint16_t get_period(uint8_t mode);
+
+    
+private:
+    static const uint16_t PERIODS[]; // 定义周期数组
 };
 
 /**

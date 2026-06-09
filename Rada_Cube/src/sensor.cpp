@@ -54,6 +54,25 @@ void LEDControler::breath(LED_SPEED speed)
 }
 
 #ifdef INSIDE
+// 初始化蜂鸣器周期
+const uint16_t BeeperControler::PERIODS[] = {
+    0,           // 静音
+    1,           // 长鸣
+    250,         // 蜂鸣周期250ms
+    500,         // 蜂鸣周期500ms
+    1000         // 蜂鸣周期1000ms
+};
+
+// 查蜂鸣器周期表
+uint16_t BeeperControler::get_period(uint8_t mode)
+{
+    if(mode > sizeof(PERIODS)/sizeof(PERIODS[0]))
+    {
+        return 0; // 默认静音
+    }
+    return PERIODS[mode];
+}
+
 // 初始化蜂鸣器引脚
 void BeeperControler::beeper_init()
 {
@@ -64,7 +83,7 @@ void BeeperControler::beeper_init()
 }
 
 // 蜂鸣器控制
-void BeeperControler::beep(BEEP period)
+void BeeperControler::beep()
 {
     // 这里如果用原来的 ledcWrite(BEEPER_PIN, BEEPER_DUTY);
     // 可能会因为经历了 ledcWriteTone 后硬件占空比计算方式改变导致声音极大变小。
@@ -72,17 +91,10 @@ void BeeperControler::beep(BEEP period)
     // 如果想要更响的声音，我们应该给 127。原代码中 BEEPER_DUTY = 4，这是一个极小的占空比，会导致声音很轻。
     
     // 直接使用更稳定的 ledcWriteTone 来产生恒定频率，最大化响度
-    if(period == BEEPER_PERIOD_LONG)
-    {
-        ledcWriteTone(BEEPER_PIN, BEEPER_FREQ);
-        return;
-    }
-    
-    const uint32_t beep_period = period / 2;
+
+    // 重构蜂鸣器响应,改成非阻塞式的，周期性鸣叫需要外部定时
+
     ledcWriteTone(BEEPER_PIN, BEEPER_FREQ);
-    vTaskDelay(pdMS_TO_TICKS(beep_period));
-    ledcWriteTone(BEEPER_PIN, 0);
-    vTaskDelay(pdMS_TO_TICKS(beep_period));
 }
 void BeeperControler::beep_stop()
 {
