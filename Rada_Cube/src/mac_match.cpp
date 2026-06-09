@@ -1,162 +1,274 @@
-#include <esp_now.h>
-#include <WiFi.h>
 #include "mac_match.h"
-#include "pins.h"
 #include "config.h"
 
-// NVS里的命名空间
-const char* MAC_SPACE = "mac";
-// mac是否存在的标志位
-const char* MAC_FLAG = "mac_flag";
+// NVS 键名
+static const char* NVS_NAMESPACE = "mac";
+// static const char* NVS_KEY_FLAG  = "peer_saved";
+// static const char* NVS_KEY_MAC   = "peer_mac";
 
-// 对主机来说需要两个从机的mac地址，第一板样品主机只带一个从机验证，后续修改
+// 修改键名，主机有两个从机键名，从机只有一个主机键名
 #ifdef INSIDE
-    const char* SLAVE_MAC_ADDR = "slave_mac_addr";
-    // 广播地址
-    const uint8_t BROADCAST_ADDR[6] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
-
-    // 广播模式发送的数据, 主机发送master，从机发送slave
-    const char* BROADCAST_SEND_DATA = "master";
-
+    static const char* SLAVE_A_FLAG = "slave_a_saved";
+    static const char* SLAVE_A_MAC  = "slave_a_mac";
+    static const char* SLAVE_B_FLAG = "slave_b_saved";
+    static const char* SLAVE_B_MAC  = "slave_b_mac";
+    static const char* SLAVE_NAMES[] = {"A", "B"};
 #endif
 
 #ifdef OUTSIDE
-    const char* MASTER_MAC_ADDR = "master_mac_addr";
-    const char* BROADCAST_RECV_DATA = "salve";
+    static const char* MASTER_FLAG = "master_saved";
+    static const char* MASTER_MAC  = "master_mac";
 #endif
 
+// ======================== NVS 操作 ========================
 
-
-// 判断mac空间里有没有mac存在的标志位
-bool MacMatch::key_exist_flag()
-{
-    // 打开或创建一个空间, MAC_SPACE
-    mac_prefe.begin("MAC_SPACE", false);
-    bool key_exist = mac_prefe.isKey(MAC_FLAG);
-    if(!key_exist)
+// ====================== 主机NVS操作 ======================
+#ifdef INSIDE
+    // 判断从机A是否存在
+    bool MacMatch::has_slave_a_mac()
     {
-        // MAC_FLAG key不存在，写入false默认值，表示mac地址不存在
-        ESP_LOGI(MAC_TAG, "MAC_FLAG key not exist, create and write false\r\n");
-        mac_prefe.putBool(MAC_FLAG, false);
-        mac_prefe.end();
+        _prefs.begin(NVS_NAMESPACE, true);
+        bool saved = _prefs.getBool(SLAVE_A_FLAG, false);
+        _prefs.end();
+        return saved;
+    }
+    // 判断从机B是否存在
+    bool MacMatch::has_slave_b_mac()
+    {
+        _prefs.begin(NVS_NAMESPACE, true);
+        bool saved = _prefs.getBool(SLAVE_B_FLAG, false);
+        _prefs.end();
+        return saved;
+    }
+    // 读取从机的MAC地址
+    bool MacMatch::load_slave_mac(uint8_t mac_out[6], uint8_t slave_id)
+    {
+        _prefs.begin(NVS_NAMESPACE, true);
+        bool ok = false;
+        switch (slave_id) {
+            case SLAVE_A_ID:
+                ok = (_prefs.getBytes(SLAVE_A_MAC, mac_out, 6) == 6);
+                break;
+            case SLAVE_B_ID:
+                ok = (_prefs.getBytes(SLAVE_B_MAC, mac_out, 6) == 6);
+                break;
+        }
+        _prefs.end();
+        if (!ok) {
+            ESP_LOGE(MAC_TAG, "Failed to load slave MAC from NVS");
+        }
+        return ok;
+    }
+    // 保存从机的MAC地址
+    void MacMatch::save_slave_mac(const uint8_t mac[6], uint8_t slave_id)
+    {
+        _prefs.begin(NVS_NAMESPACE, false);
+        switch (slave_id) {
+            case SLAVE_A_ID:
+                _prefs.putBytes(SLAVE_A_MAC, mac, 6);
+                _prefs.putBool(SLAVE_A_FLAG, true);
+                break;
+            case SLAVE_B_ID:
+                _prefs.putBytes(SLAVE_B_MAC, mac, 6);
+                _prefs.putBool(SLAVE_B_FLAG, true);
+                break;
+        }
+        _prefs.end();
+        ESP_LOGI(MAC_TAG, "Slave %s MAC saved: %02X:%02X:%02X:%02X:%02X:%02X", 
+             SLAVE_NAMES[slave_id], mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+    }
+    void MacMatch::clear_slave_mac()
+    {
+        _prefs.begin(NVS_NAMESPACE, false);
+        _prefs.remove(SLAVE_A_MAC);
+        _prefs.remove(SLAVE_A_FLAG);
+        _prefs.remove(SLAVE_B_MAC);
+        _prefs.remove(SLAVE_B_FLAG);
+        _prefs.end();
+        ESP_LOGI(MAC_TAG, "Slave MAC cleared");
+    }
+
+#endif
+
+// ====================== 从机NVS操作 ======================
+#ifdef OUTSIDE
+    bool MacMatch::has_master_mac()
+    {
+        _prefs.begin(NVS_NAMESPACE, true);
+        bool saved = _prefs.getBool(MASTER_FLAG, false);
+        _prefs.end();
+        return saved;
+    }
+    bool MacMatch::load_master_mac(uint8_t mac_out[6])
+    {
+        _prefs.begin(NVS_NAMESPACE, true);
+        bool ok = (_prefs.getBytes(MASTER_MAC, mac_out, 6) == 6);
+        _prefs.end();
+        if (!ok) {
+            ESP_LOGE(MAC_TAG, "Failed to load master MAC from NVS");
+        }
+        return ok;
+    }
+    void MacMatch::save_master_mac(const uint8_t mac[6])
+    {
+        _prefs.begin(NVS_NAMESPACE, false);
+        _prefs.putBytes(MASTER_MAC, mac, 6);
+        _prefs.putBool(MASTER_FLAG, true);
+        _prefs.end();
+        ESP_LOGI(MAC_TAG, "Master MAC saved: %02X:%02X:%02X:%02X:%02X:%02X"
+             , mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+    }
+    void MacMatch::clear_master_mac()
+    {
+        _prefs.begin(NVS_NAMESPACE, false);
+        _prefs.remove(MASTER_MAC);
+        _prefs.remove(MASTER_FLAG);
+        _prefs.end();
+        ESP_LOGI(MAC_TAG, "Master MAC cleared");
+    }
+#endif
+
+// ======================== 配对流程 ========================
+
+bool MacMatch::pair(uint8_t max_retry)
+{
+    // 配对的前提应该是NVS里没有保存地址才能进行下一步，所以是先判断还是直接清除配对
+    // 这里的逻辑我先改成的判断，如果NVS里有，直接跳过配对，返回false
+#ifdef INSIDE
+    bool has_slave_a = has_slave_a_mac();
+    bool has_slave_b = has_slave_b_mac();
+    if (has_slave_a && has_slave_b) {
+        ESP_LOGI(MAC_TAG, "Slave A and B MAC already saved, skipping pair");
         return false;
     }
-    return true;
-}
-// 获取mac存在的标志位
-bool MacMatch::get_mac_exist_flag()
-{
-    mac_prefe.begin("MAC_SPACE", true);
-    bool mac_exist = mac_prefe.getBool(MAC_FLAG);
-    mac_prefe.end();
-    return mac_exist;
-}
-
-// 写入mac存在的标志位
-void MacMatch::write_mac_exist_flag(bool flag)
-{
-    mac_prefe.begin("MAC_SPACE", false);
-    mac_prefe.putBool(MAC_FLAG, flag);
-    mac_prefe.end();
-}
-
-// 直接删除mac空间里的key和数据
-bool MacMatch::clear_mac_exist_flag()
-{
-    mac_prefe.begin("MAC_SPACE", false);
-    bool result = mac_prefe.remove(MAC_FLAG);
-    mac_prefe.end();
-    return result;
-}
-
-// 写入mac地址
-void MacMatch::write_mac_addr(char* mac_addr)
-{
-    mac_prefe.begin("MAC_SPACE", false);
-    mac_prefe.putString(SLAVE_MAC_ADDR, mac_addr);
-    mac_prefe.end();
-}
-
-void MacMatch::mac_match_init()
-{
-    WiFi.mode(WIFI_STA);
-    if(esp_now_init() != ESP_OK)
-    {
-        ESP_LOGI(MAC_TAG, "ESP-NOW Init Failed\r\n");
-        // 重启系统
-        ESP.restart();
-    } 
-    // 读取自己的mac地址
-    WiFi.macAddress(_self_mac);
-    ESP_LOGI(MAC_TAG, "self mac address: %02x:%02x:%02x:%02x:%02x:%02x\r\n", _self_mac[0], _self_mac[1], _self_mac[2], _self_mac[3], _self_mac[4], _self_mac[5]);
-}
-
-
-// 车内模块广播模式
-void MacMatch::broadcast_init()
-{
-    esp_now_peer_info_t peer;
-    memcpy(peer.peer_addr, BROADCAST_ADDR, 6);
-    peer.channel = 0;
-    peer.encrypt = false;
-    esp_now_add_peer(&peer);
-
-    // 注册广播模式的发送和接收信号
-    esp_now_register_send_cb(broadcast_onsent);
-    esp_now_register_recv_cb(broadcast_onrece);
-
-}
-
-// 广播模式循环发送的数据
-void MacMatch::broadcast_send()
-{
-    uint8_t broad_send_count = 0;
-    while(!slave1_mac_flag && broad_send_count < 10)
-    {
-        esp_now_send(BROADCAST_ADDR, (const uint8_t*)BROADCAST_SEND_DATA, strlen(BROADCAST_SEND_DATA) + 1);
-        broad_send_count++;
-        vTaskDelay(pdMS_TO_TICKS(1000));
+    else if(has_slave_a){
+        // 这种情况是从机A配对上了，但是从机B没有配对上，从NVS里读取处A的mac地址用于下面配对从机B
+        load_slave_mac(_slave_a_mac, SLAVE_A_ID);
+        ESP_LOGI(MAC_TAG, "Slave A MAC loaded: %02X:%02X:%02X:%02X:%02X:%02X"
+             , _slave_a_mac[0], _slave_a_mac[1], _slave_a_mac[2], _slave_a_mac[3], _slave_a_mac[4], _slave_a_mac[5]);
     }
-}
+    else if(has_slave_b){
+        // 这种情况应该可以省略，逻辑上应该不存在这种情况
+        load_slave_mac(_slave_b_mac, SLAVE_B_ID);
+        ESP_LOGI(MAC_TAG, "Slave B MAC loaded: %02X:%02X:%02X:%02X:%02X:%02X"
+             , _slave_b_mac[0], _slave_b_mac[1], _slave_b_mac[2], _slave_b_mac[3], _slave_b_mac[4], _slave_b_mac[5]);
+    }
+#endif
 
-// 广播模式发送回调函数
-void MacMatch::broadcast_onsent(const esp_now_send_info_t* info, esp_now_send_status_t status)
+#ifdef OUTSIDE
+    if(has_master_mac()){
+        ESP_LOGI(MAC_TAG, "Master MAC already saved, skipping pair");
+        return false;
+    }
 
-{
-    ESP_LOGI(MAC_TAG, "%s", (status == ESP_NOW_SEND_SUCCESS? "Send OK" : "Send Fail"));
-}
-// 广播模式接收回调函数
-void  MacMatch::broadcast_onrece(const esp_now_recv_info_t* info, const uint8_t* data, int len)
-{
+#endif
 
-}
+    _espnow.init();
+    _espnow.recvStart();
 
+    bool matched = false;
+    espnow_msg_t msg;
 
-// 对mac地址匹配的总逻辑
-void MacMatch::mac_match()
-{
+#ifdef INSIDE
+    // 主机：广播配对请求，等从机回复
+    _espnow.addPeer(ESPNOW_BROADCAST);
 
-    // 初始化ESP-NOW，保存自己的mac地址
-    mac_match_init();
+    protocol_frame_t req;
+    frame_build(&req, MASTER_FRAME_HEAD, FRAME_MASTER_MATCH);
 
-    // 判断NVS mac空间里是否存在key
-    key_exist_flag();
-    
-    // 判断mac地址是否存在的标志位在执行对应的操作
-    if(get_mac_exist_flag())
+    for (uint8_t i = 0; i < max_retry && !matched; i++) {
+        _espnow.send(ESPNOW_BROADCAST, (uint8_t*)&req, sizeof(req));
+        ESP_LOGI(MAC_TAG, "Pair request %d/%d", i + 1, max_retry);
+
+        for (int t = 0; t < PAIR_ROUND_CHECKS && !matched; t++) {
+            vTaskDelay(pdMS_TO_TICKS(PAIR_POLL_INTERVAL_MS));
+            if (_espnow.read(&msg)) {
+                if (frame_validate(msg.data, msg.len, SLAVE_FRAME_HEAD, FRAME_SLAVE_MATCH)) {
+                    /* 先判断A槽是不是空的，如果是空的就视为从机A放入A槽保存mac地址
+                    如果A槽不空，判断一下B槽是不是空的，如果空的在判断一下收到的mac地址和A槽的
+                    是不是同一个去重，不是同一个就放入B槽视为从机B保存mac，结束配对流程 
+                    */
+                    
+                    // 判断A槽是否为空
+                    if (!has_slave_a_mac()) {
+                        memcpy(_slave_a_mac, msg.src_mac, 6);
+                        save_slave_mac(_slave_a_mac, SLAVE_A_ID);
+                        has_slave_a = true;
+                        ESP_LOGI(MAC_TAG, "Slave A MAC saved: %02X:%02X:%02X:%02X:%02X:%02X"
+                             , _slave_a_mac[0], _slave_a_mac[1], _slave_a_mac[2], _slave_a_mac[3], _slave_a_mac[4], _slave_a_mac[5]);
+                    }
+                    // 判断B槽是否为空和是否与A槽地址一样
+                    else if (!has_slave_b_mac() && memcmp(_slave_a_mac, msg.src_mac, 6) != 0) {
+                        memcpy(_slave_b_mac, msg.src_mac, 6);
+                        save_slave_mac(_slave_b_mac, SLAVE_B_ID);
+                        has_slave_b = true;
+                        ESP_LOGI(MAC_TAG, "Slave B MAC saved: %02X:%02X:%02X:%02X:%02X:%02X"
+                             , _slave_b_mac[0], _slave_b_mac[1], _slave_b_mac[2], _slave_b_mac[3], _slave_b_mac[4], _slave_b_mac[5]);
+                    }
+                    if (has_slave_a && has_slave_b) {
+                        matched = true;
+                    }
+                } else {
+                    ESP_LOGW(MAC_TAG, "Received unexpected frame (head/type mismatch), ignoring");
+                }
+            }
+        }
+    }
+
+    _espnow.delPeer(ESPNOW_BROADCAST);
+#endif
+
+#ifdef OUTSIDE
+    // 从机：等主机广播，收到后回复
+    for (uint8_t i = 0; i < max_retry && !matched; i++) {
+        vTaskDelay(pdMS_TO_TICKS(PAIR_POLL_INTERVAL_MS));
+        if (_espnow.read(&msg)) {
+            if (frame_validate(msg.data, msg.len, MASTER_FRAME_HEAD, FRAME_MASTER_MATCH)) {
+                memcpy(_peer_mac, msg.src_mac, 6);
+                save_master_mac(_peer_mac);
+
+                // 回复配对应答
+                _espnow.addPeer(_peer_mac);
+                protocol_frame_t ack;
+                frame_build(&ack, SLAVE_FRAME_HEAD, FRAME_SLAVE_MATCH);
+                esp_err_t err = _espnow.send(_peer_mac, (uint8_t*)&ack, sizeof(ack));
+                if (err != ESP_OK) {
+                    ESP_LOGE(MAC_TAG, "Failed to send pair ACK, err=%d", err);
+                } else {
+                    ESP_LOGI(MAC_TAG, "Pair ACK sent");
+                }
+                matched = true;
+            } else {
+                ESP_LOGW(MAC_TAG, "Received unexpected frame, ignoring");
+            }
+        }
+    }
+#endif
+
+    _espnow.recvStop();
+
+#ifdef INSIDE
+    if(matched)
     {
-        // 从机1的地址已存在
-        slave1_mac_flag = true;
-        // mac地址已存在
-        ESP_LOGI(MAC_TAG, "mac address exist \r\n");
+        ESP_LOGI(MAC_TAG, "Pair OK! Slave A :%02X:%02X:%02X:%02X:%02X:%02X, Slave B: %02X:%02X:%02X:%02X:%02X:%02X"
+             , _slave_a_mac[0], _slave_a_mac[1], _slave_a_mac[2], _slave_a_mac[3], _slave_a_mac[4], _slave_a_mac[5]
+             , _slave_b_mac[0], _slave_b_mac[1], _slave_b_mac[2], _slave_b_mac[3], _slave_b_mac[4], _slave_b_mac[5]);
     }
     else
     {
-        // mac地址不存在，车内模块去广播自己的地址，车外模块接收任何信号，（这里看一下需不需要约定好信号帧, 目前只发送了字符, 发送端发送master）
-        ESP_LOGI(MAC_TAG, "mac address not exist \r\n");
-        slave1_mac_flag = false;
-        broadcast_init();
-        broadcast_send();
-        
+        ESP_LOGE(MAC_TAG, "Pair FAILED after %d retries", max_retry);
     }
+#endif
+
+#ifdef OUTSIDE
+    if (matched) {
+        ESP_LOGI(MAC_TAG, "Pair OK! Peer: %02X:%02X:%02X:%02X:%02X:%02X",
+                 _peer_mac[0], _peer_mac[1], _peer_mac[2],
+                 _peer_mac[3], _peer_mac[4], _peer_mac[5]);
+    }
+    else {
+        ESP_LOGE(MAC_TAG, "Pair FAILED after %d retries", max_retry);
+    }
+#endif
+    return matched;
 }

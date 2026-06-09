@@ -11,7 +11,7 @@ void esp_now_receive_cb(const esp_now_recv_info_t* info, const uint8_t* data, in
 
 #define LORA_RX_PIN         6
 #define LORA_TX_PIN         7
-#define LORA_CE_PIN         10
+#define LORA_CE_PIN         0
 
 // 发送端的mac地址
 const uint8_t send_mac[] = {0x58, 0x8C, 0x81, 0x9C, 0xD0, 0x00}; // 58:8C:81:9C:D0:00
@@ -64,9 +64,9 @@ void setup()
     LoraSerial.begin(9600, SERIAL_8N1, LORA_RX_PIN, LORA_TX_PIN);
     pinMode(LORA_CE_PIN, OUTPUT);
     digitalWrite(LORA_CE_PIN, LOW);
-    delay(1000);
     for(int i = 0; i < wireless_wake_len; i++)
     {
+        delay(100);
         send_at_wait_response(wireless_wake_cmd[i]);
     }
 
@@ -96,7 +96,7 @@ void setup()
 
 void loop()
 {
-    while(test_count < 20)
+    while(test_count < 1000)
     {
         send_count++;
         test_count++;
@@ -105,8 +105,8 @@ void loop()
         uint32_t send_start = millis();
         LoraSerial.printf("%d\r\n", send_count);
         // 等待espnow的接收标志位和判断超时时间
-        while(!flag && millis() - send_start < 10000);
-        if(millis() - send_start >= 10000)
+        while(!flag && millis() - send_start < 3000);
+        if(millis() - send_start >= 3000)
         {
             timeout_count++;
             Serial0.printf("Time out count: %d\r\n", timeout_count);
@@ -117,7 +117,6 @@ void loop()
             delay(2000);
         }
     }
-
     delay(1000);
 }
 
