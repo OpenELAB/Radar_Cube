@@ -147,7 +147,7 @@ static void audioPromptUpdate()
             return;
         }
         audio_prompt_playing = false;
-        Speaker.setVolume(SpeakerVolumeLevel::Medium);
+        Speaker.setVolume(SpeakerVolumeLevel::High);
     }
 
     if (audio_prompt_count == 0) {
@@ -171,7 +171,7 @@ static void audioPromptUpdate()
         audio_prompt_started_ms = millis();
         ESP_LOGI(MAIN_TAG, "Audio prompt playing: %s", audioIdName(prompt.audio));
     } else {
-        Speaker.setVolume(SpeakerVolumeLevel::Medium);
+        Speaker.setVolume(SpeakerVolumeLevel::High);
     }
 }
 
@@ -203,7 +203,7 @@ static void rgbEffectDrain(uint32_t timeout_ms)
 static void queueConnectionLostPrompt()
 {
     for (uint8_t i = 0; i < CONNECTION_LOST_REPEAT_COUNT; i++) {
-        audioPromptPush(AudioId::ConnectionLost, SpeakerVolumeLevel::Medium);
+        audioPromptPush(AudioId::ConnectionLost, SpeakerVolumeLevel::High);
     }
 }
 
@@ -295,7 +295,7 @@ static void pairAudioCallback(uint8_t slave_id, const uint8_t mac[6], void* cont
     (void)slave_id;
     (void)mac;
     (void)context;
-    audioPromptPush(AudioId::PairOk, SpeakerVolumeLevel::Medium);
+    audioPromptPush(AudioId::PairOk, SpeakerVolumeLevel::High);
     audioPromptUpdate();
 }
 
@@ -407,7 +407,7 @@ static void queueFaultPromptWithCooldown(SensorLinkState& sensor)
     const uint32_t now = millis();
     if (sensor.last_fault_prompt_ms == 0 ||
         now - sensor.last_fault_prompt_ms >= SENSOR_FAULT_COOLDOWN_MS) {
-        audioPromptPush(AudioId::Fault, SpeakerVolumeLevel::Medium);
+        audioPromptPush(AudioId::Fault, SpeakerVolumeLevel::High);
         sensor.last_fault_prompt_ms = now;
     }
 }
@@ -475,7 +475,7 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
                     // 这里判断一下是哪个从机返回的消息
                     if(memcmp(msg.src_mac, a_mac, 6) == 0) {
                         if (!slave_a_woke) {
-                            audioPromptPush(AudioId::PairOk, SpeakerVolumeLevel::Medium);
+                            audioPromptPush(AudioId::PairOk, SpeakerVolumeLevel::High);
                             RgbLed.sensorConnectedPulse(RgbSensorSide::Left);
                         }
                         slave_a_woke = true;
@@ -484,7 +484,7 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
                     }
                     else if(memcmp(msg.src_mac, b_mac, 6) == 0) {
                         if (!slave_b_wake) {
-                            audioPromptPush(AudioId::PairOk, SpeakerVolumeLevel::Medium);
+                            audioPromptPush(AudioId::PairOk, SpeakerVolumeLevel::High);
                             RgbLed.sensorConnectedPulse(RgbSensorSide::Right);
                         }
                         slave_b_wake = true;
