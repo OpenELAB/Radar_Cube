@@ -58,9 +58,9 @@ struct RgbColor {
 
 #define RGB_COLOR_BLACK       RgbColor{0, 0, 0}
 #define RGB_COLOR_RED         RgbColor{255, 0, 0}
-#define RGB_COLOR_ORANGE      RgbColor{255, 96, 0}
-#define RGB_COLOR_YELLOW      RgbColor{255, 180, 0}
-#define RGB_COLOR_GREEN       RgbColor{0, 255, 32}
+#define RGB_COLOR_ORANGE      RgbColor{255, 64, 0}
+#define RGB_COLOR_YELLOW      RgbColor{255, 240, 0}
+#define RGB_COLOR_GREEN       RgbColor{0, 255, 0}
 #define RGB_COLOR_BLUE        RgbColor{0, 64, 255}
 #define RGB_COLOR_WHITE       RgbColor{255, 255, 255}
 #define RGB_COLOR_SOFT_AMBER  RgbColor{120, 42, 0}
