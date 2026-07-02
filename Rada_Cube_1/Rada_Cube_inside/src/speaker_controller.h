@@ -46,7 +46,7 @@
 
 #define SPEAKER_VOLUME_LOW_VALUE            30
 #define SPEAKER_VOLUME_MED_VALUE            50
-#define SPEAKER_VOLUME_HIGH_VALUE           75
+#define SPEAKER_VOLUME_HIGH_VALUE           90
 
 // 播放任务和音频缓冲配置。
 #define SPEAKER_AUDIO_BUFFER_BYTES          1024
