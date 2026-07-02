@@ -1,0 +1,9 @@
+{
+    "name": "RadarCommon",
+    "frameworks": "*",
+    "platforms": "*",
+    "build": {
+        "srcFilter": "+<*>",
+        "includeDir": "src"
+    }
+}
