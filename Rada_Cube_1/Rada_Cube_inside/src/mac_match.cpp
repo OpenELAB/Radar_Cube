@@ -83,7 +83,9 @@ static const char* NVS_NAMESPACE = "mac";
 
 // ======================== 配对流程 ========================
 
-bool MacMatch::pair(uint8_t max_retry)
+bool MacMatch::pair(uint8_t max_retry,
+                    MacMatch::PairEventCallback callback,
+                    void* callback_context)
 {
     // 配对的前提应该是NVS里没有保存地址才能进行下一步，所以是先判断还是直接清除配对
     // 这里的逻辑我先改成的判断，如果NVS里有，直接跳过配对，返回false
@@ -135,6 +137,9 @@ bool MacMatch::pair(uint8_t max_retry)
                     if (!has_slave_a_mac()) {
                         memcpy(_slave_a_mac, msg.src_mac, 6);
                         save_slave_mac(_slave_a_mac, SLAVE_A_ID);
+                        if (callback != nullptr) {
+                            callback(SLAVE_A_ID, _slave_a_mac, callback_context);
+                        }
                         has_slave_a = true;
                         ESP_LOGI(MAC_TAG, "Slave A MAC saved: %02X:%02X:%02X:%02X:%02X:%02X"
                              , _slave_a_mac[0], _slave_a_mac[1], _slave_a_mac[2], _slave_a_mac[3], _slave_a_mac[4], _slave_a_mac[5]);
@@ -143,6 +148,9 @@ bool MacMatch::pair(uint8_t max_retry)
                     else if (!has_slave_b_mac() && memcmp(_slave_a_mac, msg.src_mac, 6) != 0) {
                         memcpy(_slave_b_mac, msg.src_mac, 6);
                         save_slave_mac(_slave_b_mac, SLAVE_B_ID);
+                        if (callback != nullptr) {
+                            callback(SLAVE_B_ID, _slave_b_mac, callback_context);
+                        }
                         has_slave_b = true;
                         ESP_LOGI(MAC_TAG, "Slave B MAC saved: %02X:%02X:%02X:%02X:%02X:%02X"
                              , _slave_b_mac[0], _slave_b_mac[1], _slave_b_mac[2], _slave_b_mac[3], _slave_b_mac[4], _slave_b_mac[5]);
