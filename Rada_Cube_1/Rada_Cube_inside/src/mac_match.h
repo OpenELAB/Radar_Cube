@@ -37,11 +37,15 @@
 class MacMatch
 {
 public:
+    typedef void (*PairEventCallback)(uint8_t slave_id, const uint8_t mac[6], void* context);
+
     // 构造时传入 EspNowManager 引用
     MacMatch(EspNowManager& espnow) : _espnow(espnow) {}
 
     // 执行配对流程（阻塞，超时返回 false）
-    bool pair(uint8_t max_retry = PAIR_MAX_RETRY);
+    bool pair(uint8_t max_retry = PAIR_MAX_RETRY,
+              PairEventCallback callback = nullptr,
+              void* callback_context = nullptr);
 
     // NVS 操作
     // 主机NVS操作
