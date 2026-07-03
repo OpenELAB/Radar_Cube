@@ -725,6 +725,9 @@ void RgbLedController::taskLoop()
             break;
 
         case RgbLedMode::SystemStatus: {
+            // SystemStatus 是持续状态渲染，不是优先级队列。
+            // 渲染顺序即语义覆盖顺序：正常绿色底色、低电提示、
+            // 失联提示、连接脉冲，最后由故障状态覆盖对应侧灯。
             const uint32_t left_fault_flash_elapsed = _runtime_status.left_fault_flash_start_ms == 0
                 ? UINT32_MAX
                 : now - _runtime_status.left_fault_flash_start_ms;
@@ -855,6 +858,9 @@ void RgbLedController::taskLoop()
         }
 
         case RgbLedMode::ParkingDistance: {
+            // ParkingDistance 是倒车实时主视觉。单侧失联可以覆盖对应侧灯；
+            // 普通低电不在停车距离模式下叠加显示；双侧失联或传感器故障
+            // 由 main.ino 先清除停车距离模式，再回到 SystemStatus 显示。
             const uint16_t dist = _runtime_status.parking_distance_cm;
             RgbColor parking_color = RGB_COLOR_GREEN;
             uint16_t period = 0;

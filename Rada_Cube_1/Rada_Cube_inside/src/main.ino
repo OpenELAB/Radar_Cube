@@ -78,6 +78,23 @@ enum class AudioPriority : uint8_t {
     P4 = 4  // 生命周期提示：启动、关机、进入模式、开始唤醒
 };
 
+// 业务事件语义只描述事件含义；音效和 RGB 仍各自使用独立执行机制。
+enum class RadarEventSeverity : uint8_t {
+    SafetyCritical,
+    RealtimeDistance,
+    WorkWarning,
+    FlowResult,
+    Lifecycle
+};
+
+enum class RadarEventTarget : uint8_t {
+    Inside,
+    Left,
+    Right,
+    Both,
+    Nearest
+};
+
 struct AudioPrompt {
     AudioId audio = AudioId::None;
     SpeakerVolumeLevel volume = SpeakerVolumeLevel::Default;
@@ -191,6 +208,23 @@ static bool audioPromptCanInterruptDistance(AudioPriority priority)
     return priority == AudioPriority::P0;
 }
 
+static AudioPriority audioPriorityForSeverity(RadarEventSeverity severity)
+{
+    switch (severity) {
+    case RadarEventSeverity::SafetyCritical:
+        return AudioPriority::P0;
+    case RadarEventSeverity::RealtimeDistance:
+        return AudioPriority::P1;
+    case RadarEventSeverity::WorkWarning:
+        return AudioPriority::P2;
+    case RadarEventSeverity::FlowResult:
+        return AudioPriority::P3;
+    case RadarEventSeverity::Lifecycle:
+    default:
+        return AudioPriority::P4;
+    }
+}
+
 static bool audioPromptPush(AudioId audio,
                             SpeakerVolumeLevel volume,
                             AudioPriority priority)
@@ -229,6 +263,20 @@ static bool audioPromptPush(AudioId audio,
     audio_prompt_count++;
     ESP_LOGI(MAIN_TAG, "Audio prompt queued: %s", audioIdName(audio));
     return true;
+}
+
+static bool audioPromptPushSemantic(AudioId audio,
+                                    SpeakerVolumeLevel volume,
+                                    RadarEventSeverity severity,
+                                    RadarEventTarget target)
+{
+    (void)target;
+    if (severity == RadarEventSeverity::RealtimeDistance) {
+        ESP_LOGW(MAIN_TAG, "Realtime distance audio must use distance beep path: %s",
+                 audioIdName(audio));
+        return false;
+    }
+    return audioPromptPush(audio, volume, audioPriorityForSeverity(severity));
 }
 
 static bool audioPromptPopNext(bool distance_active, AudioPrompt& prompt)
@@ -336,54 +384,69 @@ static void rgbEffectDrain(uint32_t timeout_ms)
 static void queueConnectionLostPrompt(bool left_lost, bool right_lost)
 {
     if (left_lost && right_lost) {
-        audioPromptPush(AudioId::LinkLostBoth, SpeakerVolumeLevel::High, AudioPriority::P0);
+        audioPromptPushSemantic(AudioId::LinkLostBoth, SpeakerVolumeLevel::High,
+                                RadarEventSeverity::SafetyCritical, RadarEventTarget::Both);
     } else if (left_lost) {
-        audioPromptPush(AudioId::LinkLostLeft, SpeakerVolumeLevel::High, AudioPriority::P2);
+        audioPromptPushSemantic(AudioId::LinkLostLeft, SpeakerVolumeLevel::High,
+                                RadarEventSeverity::WorkWarning, RadarEventTarget::Left);
     } else if (right_lost) {
-        audioPromptPush(AudioId::LinkLostRight, SpeakerVolumeLevel::High, AudioPriority::P2);
+        audioPromptPushSemantic(AudioId::LinkLostRight, SpeakerVolumeLevel::High,
+                                RadarEventSeverity::WorkWarning, RadarEventTarget::Right);
     }
 }
 
 static void queuePairResultPrompt(bool left_paired, bool right_paired)
 {
     if (left_paired && right_paired) {
-        audioPromptPush(AudioId::PairOkBoth, SpeakerVolumeLevel::High, AudioPriority::P3);
+        audioPromptPushSemantic(AudioId::PairOkBoth, SpeakerVolumeLevel::High,
+                                RadarEventSeverity::FlowResult, RadarEventTarget::Both);
     } else if (!left_paired && !right_paired) {
-        audioPromptPush(AudioId::PairFailBoth, SpeakerVolumeLevel::High, AudioPriority::P2);
+        audioPromptPushSemantic(AudioId::PairFailBoth, SpeakerVolumeLevel::High,
+                                RadarEventSeverity::WorkWarning, RadarEventTarget::Both);
     } else if (!left_paired) {
-        audioPromptPush(AudioId::PairFailLeft, SpeakerVolumeLevel::High, AudioPriority::P2);
+        audioPromptPushSemantic(AudioId::PairFailLeft, SpeakerVolumeLevel::High,
+                                RadarEventSeverity::WorkWarning, RadarEventTarget::Left);
     } else {
-        audioPromptPush(AudioId::PairFailRight, SpeakerVolumeLevel::High, AudioPriority::P2);
+        audioPromptPushSemantic(AudioId::PairFailRight, SpeakerVolumeLevel::High,
+                                RadarEventSeverity::WorkWarning, RadarEventTarget::Right);
     }
 }
 
 static void queueWakeResultPrompt(bool left_woke, bool right_woke)
 {
     if (left_woke && right_woke) {
-        audioPromptPush(AudioId::WakeOk, SpeakerVolumeLevel::High, AudioPriority::P3);
+        audioPromptPushSemantic(AudioId::WakeOk, SpeakerVolumeLevel::High,
+                                RadarEventSeverity::FlowResult, RadarEventTarget::Both);
     } else if (!left_woke && !right_woke) {
-        audioPromptPush(AudioId::WakeFailBoth, SpeakerVolumeLevel::High, AudioPriority::P2);
+        audioPromptPushSemantic(AudioId::WakeFailBoth, SpeakerVolumeLevel::High,
+                                RadarEventSeverity::WorkWarning, RadarEventTarget::Both);
     } else if (!left_woke) {
-        audioPromptPush(AudioId::WakeFailLeft, SpeakerVolumeLevel::High, AudioPriority::P2);
+        audioPromptPushSemantic(AudioId::WakeFailLeft, SpeakerVolumeLevel::High,
+                                RadarEventSeverity::WorkWarning, RadarEventTarget::Left);
     } else {
-        audioPromptPush(AudioId::WakeFailRight, SpeakerVolumeLevel::High, AudioPriority::P2);
+        audioPromptPushSemantic(AudioId::WakeFailRight, SpeakerVolumeLevel::High,
+                                RadarEventSeverity::WorkWarning, RadarEventTarget::Right);
     }
 }
 
 static void queueSensorLowBatteryPrompt(bool left_low, bool right_low)
 {
     if (left_low && right_low) {
-        audioPromptPush(AudioId::PowerSensorLowBoth, SpeakerVolumeLevel::High, AudioPriority::P2);
+        audioPromptPushSemantic(AudioId::PowerSensorLowBoth, SpeakerVolumeLevel::High,
+                                RadarEventSeverity::WorkWarning, RadarEventTarget::Both);
     } else if (left_low) {
-        audioPromptPush(AudioId::PowerSensorLowLeft, SpeakerVolumeLevel::High, AudioPriority::P2);
+        audioPromptPushSemantic(AudioId::PowerSensorLowLeft, SpeakerVolumeLevel::High,
+                                RadarEventSeverity::WorkWarning, RadarEventTarget::Left);
     } else if (right_low) {
-        audioPromptPush(AudioId::PowerSensorLowRight, SpeakerVolumeLevel::High, AudioPriority::P2);
+        audioPromptPushSemantic(AudioId::PowerSensorLowRight, SpeakerVolumeLevel::High,
+                                RadarEventSeverity::WorkWarning, RadarEventTarget::Right);
     }
 }
 
 static void queueShutdownPrompt()
 {
-    audioPromptPush(AudioId::SysShutdown, SpeakerVolumeLevel::Low, AudioPriority::P4);
+    audioPromptPushSemantic(AudioId::SysShutdown, SpeakerVolumeLevel::Low,
+                            RadarEventSeverity::Lifecycle, RadarEventTarget::Inside);
 }
 
 static AudioId distanceToBeepAudio(uint16_t dist_cm)
@@ -598,7 +661,8 @@ static void queueSensorFaultPromptWithCooldown(SensorLinkState& left_sensor,
         const bool right_ready = right_sensor.last_fault_prompt_ms == 0 ||
             now - right_sensor.last_fault_prompt_ms >= SENSOR_FAULT_COOLDOWN_MS;
         if (left_ready || right_ready) {
-            audioPromptPush(AudioId::FaultSensorBoth, SpeakerVolumeLevel::High, AudioPriority::P0);
+            audioPromptPushSemantic(AudioId::FaultSensorBoth, SpeakerVolumeLevel::High,
+                                    RadarEventSeverity::SafetyCritical, RadarEventTarget::Both);
             left_sensor.last_fault_prompt_ms = now;
             right_sensor.last_fault_prompt_ms = now;
         }
@@ -608,10 +672,11 @@ static void queueSensorFaultPromptWithCooldown(SensorLinkState& left_sensor,
     SensorLinkState& sensor = left_fault ? left_sensor : right_sensor;
     if (sensor.last_fault_prompt_ms == 0 ||
         now - sensor.last_fault_prompt_ms >= SENSOR_FAULT_COOLDOWN_MS) {
-        audioPromptPush(
+        audioPromptPushSemantic(
             left_fault ? AudioId::FaultSensorLeft : AudioId::FaultSensorRight,
             SpeakerVolumeLevel::High,
-            AudioPriority::P0);
+            RadarEventSeverity::SafetyCritical,
+            left_fault ? RadarEventTarget::Left : RadarEventTarget::Right);
         sensor.last_fault_prompt_ms = now;
     }
 }
@@ -664,7 +729,8 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
     // ================ 把循环里的电平切换放到外面来，加上100ms延时，之前的10ms延时不够会导致帧发送不完全 =================
     Lora.enable_ce();
     vTaskDelay(pdMS_TO_TICKS(100));
-    audioPromptPush(AudioId::WakeStart, SpeakerVolumeLevel::High, AudioPriority::P4);
+    audioPromptPushSemantic(AudioId::WakeStart, SpeakerVolumeLevel::High,
+                            RadarEventSeverity::Lifecycle, RadarEventTarget::Both);
     for (int retry = 0; retry < WAKE_MAX_RETRY && !woke; retry++) {
         audioPromptUpdate();
         Lora.sendWakeFrame();
@@ -960,16 +1026,18 @@ static void handleMode(SysMode mode)
         Lora.setup();               // 需要先初始化 Lora 才能清配置
         Lora.clearConfigFlag();
         Lora.shutdown();
-        audioPromptPush(
+        audioPromptPushSemantic(
             AudioId::ModeFactoryResetDone,
             SpeakerVolumeLevel::High,
-            AudioPriority::P3);
+            RadarEventSeverity::FlowResult,
+            RadarEventTarget::Inside);
         break;
     
     // TODO：unpair模式要不要直接开始配对？
     case UNPAIRED_MODE:
         ESP_LOGI(MAIN_TAG, "Mode: UNPAIRED");
-        audioPromptPush(AudioId::ModeUnpaired, SpeakerVolumeLevel::High, AudioPriority::P3);
+        audioPromptPushSemantic(AudioId::ModeUnpaired, SpeakerVolumeLevel::High,
+                                RadarEventSeverity::FlowResult, RadarEventTarget::Inside);
         RgbLed.unpairedWarning();
         rgbEffectDrain(800);
         // for (int i = 0; i < 2; i++) Led.blink(LED_PERIOD_2);
@@ -977,7 +1045,8 @@ static void handleMode(SysMode mode)
 
     case PAIRED_MODE:
         ESP_LOGI(MAIN_TAG, "Mode: PAIRED");
-        audioPromptPush(AudioId::ModePairing, SpeakerVolumeLevel::High, AudioPriority::P4);
+        audioPromptPushSemantic(AudioId::ModePairing, SpeakerVolumeLevel::High,
+                                RadarEventSeverity::Lifecycle, RadarEventTarget::Inside);
         audioPromptUpdate();
         RgbLed.pairing();
         // TODO：这里需不要要用灯来指示配对过程，比如处于配对时用呼吸灯？
@@ -1069,7 +1138,8 @@ void setup()
 
     if (Speaker.begin()) {
         Speaker.setVolume(SpeakerVolumeLevel::High);
-        audioPromptPush(AudioId::SysBoot, SpeakerVolumeLevel::High, AudioPriority::P4);
+        audioPromptPushSemantic(AudioId::SysBoot, SpeakerVolumeLevel::High,
+                                RadarEventSeverity::Lifecycle, RadarEventTarget::Inside);
         audioPromptUpdate();
     } else {
         ESP_LOGE(MAIN_TAG, "Speaker init failed");
@@ -1079,14 +1149,16 @@ void setup()
     uint8_t bat = Power.get_battery_value();
     if (bat == 0) {
         RgbLed.setInsideLowBattery(true);
-        audioPromptPush(AudioId::PowerCritical, SpeakerVolumeLevel::High, AudioPriority::P0);
+        audioPromptPushSemantic(AudioId::PowerCritical, SpeakerVolumeLevel::High,
+                                RadarEventSeverity::SafetyCritical, RadarEventTarget::Inside);
         ESP_LOGE(MAIN_TAG, "Battery empty, going to sleep");
         enterDeepSleepWithAudio();
         return;
     }
     if (bat <= LOW_BATTERY_PERCENT) {
         RgbLed.setInsideLowBattery(true);
-        audioPromptPush(AudioId::PowerLow, SpeakerVolumeLevel::High, AudioPriority::P2);
+        audioPromptPushSemantic(AudioId::PowerLow, SpeakerVolumeLevel::High,
+                                RadarEventSeverity::WorkWarning, RadarEventTarget::Inside);
     }
     // 这个可以调高一点，bat是0的时候可能不能上电了就
     // TODO：是不是可以在电量过低时发个警告？比如闪灯或者蜂鸣？
