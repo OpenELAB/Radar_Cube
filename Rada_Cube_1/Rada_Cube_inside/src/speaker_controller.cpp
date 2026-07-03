@@ -4,6 +4,10 @@
 
 namespace {
 
+constexpr const char* SPEAKER_FS_BASE_PATH = "/littlefs";
+constexpr uint8_t SPEAKER_FS_MAX_OPEN_FILES = 10;
+constexpr const char* SPEAKER_FS_PARTITION_LABEL = "littlefs";
+
 uint16_t readLE16(File& file)
 {
     uint8_t bytes[2];
@@ -58,7 +62,7 @@ bool SpeakerController::begin()
     digitalWrite(SPEAKER_SHUTDOWN_PIN, SPEAKER_SHUTDOWN_ACTIVE_LEVEL);
     _speaker_enabled = false;
 
-    if (!LittleFS.begin()) {
+    if (!LittleFS.begin(false, SPEAKER_FS_BASE_PATH, SPEAKER_FS_MAX_OPEN_FILES, SPEAKER_FS_PARTITION_LABEL)) {
         return false;
     }
 
@@ -301,28 +305,84 @@ bool SpeakerController::sendCommand(const SpeakerCommand& command)
 const char* SpeakerController::audioFilePath(AudioId audio) const
 {
     switch (audio) {
-    case AudioId::BeepSlow:
-        return SPEAKER_FILE_BEEP_SLOW;
-    case AudioId::BeepMediumSlow:
-        return SPEAKER_FILE_BEEP_MEDIUM_SLOW;
-    case AudioId::BeepMedium:
-        return SPEAKER_FILE_BEEP_MEDIUM;
-    case AudioId::BeepFast:
-        return SPEAKER_FILE_BEEP_FAST;
-    case AudioId::BeepContinuous:
-        return SPEAKER_FILE_BEEP_CONTINUOUS;
-    case AudioId::Boot:
-        return SPEAKER_FILE_BOOT;
-    case AudioId::PairOk:
-        return SPEAKER_FILE_PAIR_OK;
-    case AudioId::PairFail:
-        return SPEAKER_FILE_PAIR_FAIL;
-    case AudioId::ConnectionLost:
-        return SPEAKER_FILE_CONNECTION_LOST;
-    case AudioId::LowBattery:
-        return SPEAKER_FILE_LOW_BATTERY;
-    case AudioId::Fault:
-        return SPEAKER_FILE_FAULT;
+    case AudioId::DistBeepFar:
+        return SPEAKER_FILE_DIST_BEEP_FAR;
+    case AudioId::DistBeepMidFar:
+        return SPEAKER_FILE_DIST_BEEP_MID_FAR;
+    case AudioId::DistBeepMid:
+        return SPEAKER_FILE_DIST_BEEP_MID;
+    case AudioId::DistBeepNear:
+        return SPEAKER_FILE_DIST_BEEP_NEAR;
+    case AudioId::DistBeepDanger:
+        return SPEAKER_FILE_DIST_BEEP_DANGER;
+    case AudioId::SysBoot:
+        return SPEAKER_FILE_SYS_BOOT;
+    case AudioId::SysShutdown:
+        return SPEAKER_FILE_SYS_SHUTDOWN;
+    case AudioId::ModeUnpaired:
+        return SPEAKER_FILE_MODE_UNPAIRED;
+    case AudioId::ModePairing:
+        return SPEAKER_FILE_MODE_PAIRING;
+    case AudioId::ModeFactoryResetDone:
+        return SPEAKER_FILE_MODE_FACTORY_RESET_DONE;
+    case AudioId::PairOkLeft:
+        return SPEAKER_FILE_PAIR_OK_LEFT;
+    case AudioId::PairOkRight:
+        return SPEAKER_FILE_PAIR_OK_RIGHT;
+    case AudioId::PairOkBoth:
+        return SPEAKER_FILE_PAIR_OK_BOTH;
+    case AudioId::PairFailLeft:
+        return SPEAKER_FILE_PAIR_FAIL_LEFT;
+    case AudioId::PairFailRight:
+        return SPEAKER_FILE_PAIR_FAIL_RIGHT;
+    case AudioId::PairFailBoth:
+        return SPEAKER_FILE_PAIR_FAIL_BOTH;
+    case AudioId::WakeStart:
+        return SPEAKER_FILE_WAKE_START;
+    case AudioId::WakeOk:
+        return SPEAKER_FILE_WAKE_OK;
+    case AudioId::WakeFailLeft:
+        return SPEAKER_FILE_WAKE_FAIL_LEFT;
+    case AudioId::WakeFailRight:
+        return SPEAKER_FILE_WAKE_FAIL_RIGHT;
+    case AudioId::WakeFailBoth:
+        return SPEAKER_FILE_WAKE_FAIL_BOTH;
+    case AudioId::LinkLostLeft:
+        return SPEAKER_FILE_LINK_LOST_LEFT;
+    case AudioId::LinkLostRight:
+        return SPEAKER_FILE_LINK_LOST_RIGHT;
+    case AudioId::LinkLostBoth:
+        return SPEAKER_FILE_LINK_LOST_BOTH;
+    case AudioId::LinkRestoredLeft:
+        return SPEAKER_FILE_LINK_RESTORED_LEFT;
+    case AudioId::LinkRestoredRight:
+        return SPEAKER_FILE_LINK_RESTORED_RIGHT;
+    case AudioId::PowerLow:
+        return SPEAKER_FILE_POWER_LOW;
+    case AudioId::PowerCritical:
+        return SPEAKER_FILE_POWER_CRITICAL;
+    case AudioId::PowerSensorLowLeft:
+        return SPEAKER_FILE_POWER_SENSOR_LOW_LEFT;
+    case AudioId::PowerSensorLowRight:
+        return SPEAKER_FILE_POWER_SENSOR_LOW_RIGHT;
+    case AudioId::PowerSensorLowBoth:
+        return SPEAKER_FILE_POWER_SENSOR_LOW_BOTH;
+    case AudioId::PowerSensorCriticalLeft:
+        return SPEAKER_FILE_POWER_SENSOR_CRIT_LEFT;
+    case AudioId::PowerSensorCriticalRight:
+        return SPEAKER_FILE_POWER_SENSOR_CRIT_RIGHT;
+    case AudioId::PowerSensorCriticalBoth:
+        return SPEAKER_FILE_POWER_SENSOR_CRIT_BOTH;
+    case AudioId::FaultSensorLeft:
+        return SPEAKER_FILE_FAULT_SENSOR_LEFT;
+    case AudioId::FaultSensorRight:
+        return SPEAKER_FILE_FAULT_SENSOR_RIGHT;
+    case AudioId::FaultSensorBoth:
+        return SPEAKER_FILE_FAULT_SENSOR_BOTH;
+    case AudioId::FaultComm:
+        return SPEAKER_FILE_FAULT_COMM;
+    case AudioId::FaultSystem:
+        return SPEAKER_FILE_FAULT_SYSTEM;
     case AudioId::None:
     default:
         return nullptr;

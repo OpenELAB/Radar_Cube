@@ -46,7 +46,7 @@
 
 #define SPEAKER_VOLUME_LOW_VALUE            30
 #define SPEAKER_VOLUME_MED_VALUE            50
-#define SPEAKER_VOLUME_HIGH_VALUE           90
+#define SPEAKER_VOLUME_HIGH_VALUE           100
 
 // 播放任务和音频缓冲配置。
 #define SPEAKER_AUDIO_BUFFER_BYTES          1024
@@ -60,40 +60,103 @@
 // ======================== WAV 文件配置 ========================
 //
 // 蜂鸣周期已经做进 WAV 文件内部：
-// - beep_slow.wav          慢速蜂鸣
-// - beep_medium_slow.wav   中慢速蜂鸣
-// - beep_medium.wav        中速蜂鸣
-// - beep_fast.wav          快速蜂鸣
-// - beep_continuous.wav    连续/危险提示蜂鸣
+// - dist_beep_far.wav      远距离蜂鸣
+// - dist_beep_mid_far.wav  中远距离蜂鸣
+// - dist_beep_mid.wav      中距离蜂鸣
+// - dist_beep_near.wav     近距离蜂鸣
+// - dist_beep_danger.wav   危险距离蜂鸣
 //
 // 替换 data/ 下同名 WAV 文件即可调整音色、频率、包络和周期。
-#define SPEAKER_FILE_BEEP_SLOW              "/beep_slow.wav"
-#define SPEAKER_FILE_BEEP_MEDIUM_SLOW       "/beep_medium_slow.wav"
-#define SPEAKER_FILE_BEEP_MEDIUM            "/beep_medium.wav"
-#define SPEAKER_FILE_BEEP_FAST              "/beep_fast.wav"
-#define SPEAKER_FILE_BEEP_CONTINUOUS        "/beep_continuous.wav"
-#define SPEAKER_FILE_BOOT                   "/boot.wav"
-#define SPEAKER_FILE_PAIR_OK                "/pair_ok.wav"
-#define SPEAKER_FILE_PAIR_FAIL              "/pair_fail.wav"
-#define SPEAKER_FILE_CONNECTION_LOST        "/connection_lost.wav"
-#define SPEAKER_FILE_LOW_BATTERY            "/low_battery.wav"
-#define SPEAKER_FILE_FAULT                  "/fault.wav"
+#define SPEAKER_FILE_DIST_BEEP_FAR              "/dist_beep_far.wav"
+#define SPEAKER_FILE_DIST_BEEP_MID_FAR          "/dist_beep_mid_far.wav"
+#define SPEAKER_FILE_DIST_BEEP_MID              "/dist_beep_mid.wav"
+#define SPEAKER_FILE_DIST_BEEP_NEAR             "/dist_beep_near.wav"
+#define SPEAKER_FILE_DIST_BEEP_DANGER           "/dist_beep_danger.wav"
+#define SPEAKER_FILE_SYS_BOOT                   "/sys_boot.wav"
+#define SPEAKER_FILE_SYS_SHUTDOWN               "/sys_shutdown.wav"
+#define SPEAKER_FILE_MODE_UNPAIRED              "/mode_unpaired.wav"
+#define SPEAKER_FILE_MODE_PAIRING               "/mode_pairing.wav"
+#define SPEAKER_FILE_MODE_FACTORY_RESET_DONE    "/mode_factory_reset_done.wav"
+#define SPEAKER_FILE_PAIR_OK_LEFT               "/pair_ok_left.wav"
+#define SPEAKER_FILE_PAIR_OK_RIGHT              "/pair_ok_right.wav"
+#define SPEAKER_FILE_PAIR_OK_BOTH               "/pair_ok_both.wav"
+#define SPEAKER_FILE_PAIR_FAIL_LEFT             "/pair_fail_left.wav"
+#define SPEAKER_FILE_PAIR_FAIL_RIGHT            "/pair_fail_right.wav"
+#define SPEAKER_FILE_PAIR_FAIL_BOTH             "/pair_fail_both.wav"
+#define SPEAKER_FILE_WAKE_START                 "/wake_start.wav"
+#define SPEAKER_FILE_WAKE_OK                    "/wake_ok.wav"
+#define SPEAKER_FILE_WAKE_FAIL_LEFT             "/wake_fail_left.wav"
+#define SPEAKER_FILE_WAKE_FAIL_RIGHT            "/wake_fail_right.wav"
+#define SPEAKER_FILE_WAKE_FAIL_BOTH             "/wake_fail_both.wav"
+#define SPEAKER_FILE_LINK_LOST_LEFT             "/link_lost_left.wav"
+#define SPEAKER_FILE_LINK_LOST_RIGHT            "/link_lost_right.wav"
+#define SPEAKER_FILE_LINK_LOST_BOTH             "/link_lost_both.wav"
+#define SPEAKER_FILE_LINK_RESTORED_LEFT         "/link_restored_left.wav"
+#define SPEAKER_FILE_LINK_RESTORED_RIGHT        "/link_restored_right.wav"
+#define SPEAKER_FILE_POWER_LOW                  "/power_low.wav"
+#define SPEAKER_FILE_POWER_CRITICAL             "/power_critical.wav"
+#define SPEAKER_FILE_POWER_SENSOR_LOW_LEFT      "/power_sensor_low_left.wav"
+#define SPEAKER_FILE_POWER_SENSOR_LOW_RIGHT     "/power_sensor_low_right.wav"
+#define SPEAKER_FILE_POWER_SENSOR_LOW_BOTH      "/power_sensor_low_both.wav"
+#define SPEAKER_FILE_POWER_SENSOR_CRIT_LEFT     "/power_sensor_critical_left.wav"
+#define SPEAKER_FILE_POWER_SENSOR_CRIT_RIGHT    "/power_sensor_critical_right.wav"
+#define SPEAKER_FILE_POWER_SENSOR_CRIT_BOTH     "/power_sensor_critical_both.wav"
+#define SPEAKER_FILE_FAULT_SENSOR_LEFT          "/fault_sensor_left.wav"
+#define SPEAKER_FILE_FAULT_SENSOR_RIGHT         "/fault_sensor_right.wav"
+#define SPEAKER_FILE_FAULT_SENSOR_BOTH          "/fault_sensor_both.wav"
+#define SPEAKER_FILE_FAULT_COMM                 "/fault_comm.wav"
+#define SPEAKER_FILE_FAULT_SYSTEM               "/fault_system.wav"
 
 // ======================== 数据结构 ========================
 
 enum class AudioId : uint8_t {
-    None,
-    BeepSlow,       // 慢速蜂鸣
-    BeepMediumSlow, // 中慢速蜂鸣
-    BeepMedium,     // 中速蜂鸣
-    BeepFast,       // 快速蜂鸣
-    BeepContinuous, // 连续/危险蜂鸣
-    Boot,           // 上电/启动提示
-    PairOk,         // 配对成功
-    PairFail,       // 配对失败
-    ConnectionLost, // 连接丢失
-    LowBattery,     // 低电量
-    Fault           // 硬件/通信异常
+    None,                     // 无音效，用于空命令或非法映射保护
+
+    DistBeepFar,              // 120cm < min_dist <= 150cm，远距离循环蜂鸣
+    DistBeepMidFar,           // 90cm < min_dist <= 120cm，中远距离循环蜂鸣
+    DistBeepMid,              // 60cm < min_dist <= 90cm，中距离循环蜂鸣
+    DistBeepNear,             // 30cm < min_dist <= 60cm，近距离循环蜂鸣
+    DistBeepDanger,           // 0cm < min_dist <= 30cm，危险距离连续/高紧急蜂鸣
+
+    SysBoot,                  // 车内主机启动提示
+    SysShutdown,              // 准备进入深度睡眠/关机提示
+    ModeUnpaired,             // 未保存完整左右车外节点 MAC
+    ModePairing,              // 进入无线配对流程
+    ModeFactoryResetDone,     // MAC 和 LoRa 配置清除完成
+
+    PairOkLeft,               // 左侧车外节点配对成功
+    PairOkRight,              // 右侧车外节点配对成功
+    PairOkBoth,               // 左右车外节点均配对成功
+    PairFailLeft,             // 配对结束时左侧车外节点未完成
+    PairFailRight,            // 配对结束时右侧车外节点未完成
+    PairFailBoth,             // 配对结束时左右车外节点均未完成
+
+    WakeStart,                // WORK_MODE 开始 LoRa 唤醒
+    WakeOk,                   // 左右车外节点均返回 WAKE_ACK
+    WakeFailLeft,             // 左侧车外节点唤醒失败
+    WakeFailRight,            // 右侧车外节点唤醒失败
+    WakeFailBoth,             // 左右车外节点均唤醒失败
+
+    LinkLostLeft,             // 工作中左侧节点通信失联
+    LinkLostRight,            // 工作中右侧节点通信失联
+    LinkLostBoth,             // 工作中左右节点均失联
+    LinkRestoredLeft,         // 左侧节点失联后重新收到有效数据
+    LinkRestoredRight,        // 右侧节点失联后重新收到有效数据
+
+    PowerLow,                 // 车内主机普通低电，仍可继续工作
+    PowerCritical,            // 车内主机严重低电，播完后即将关机
+    PowerSensorLowLeft,       // 左侧车外节点普通低电
+    PowerSensorLowRight,      // 右侧车外节点普通低电
+    PowerSensorLowBoth,       // 左右车外节点普通低电
+    PowerSensorCriticalLeft,  // 左侧车外节点严重低电
+    PowerSensorCriticalRight, // 右侧车外节点严重低电
+    PowerSensorCriticalBoth,  // 左右车外节点严重低电，雷达即将不可用
+
+    FaultSensorLeft,          // 左侧雷达连续无效距离达到故障阈值
+    FaultSensorRight,         // 右侧雷达连续无效距离达到故障阈值
+    FaultSensorBoth,          // 左右雷达均达到故障阈值
+    FaultComm,                // 通信/协议异常
+    FaultSystem               // 无法归类的系统级故障
 };
 
 enum class SpeakerMode : uint8_t {
@@ -226,17 +289,17 @@ private:
 // {
 //     Speaker.begin();
 //     Speaker.setVolume(SpeakerVolumeLevel::Medium);
-//     Speaker.playOnce(AudioId::Boot);
+//     Speaker.playOnce(AudioId::SysBoot);
 // }
 //
 // void onPairSuccess()
 // {
-//     Speaker.playOnce(AudioId::PairOk);
+//     Speaker.playOnce(AudioId::PairOkBoth);
 // }
 //
 // void onConnectionLost()
 // {
-//     Speaker.playOnce(AudioId::ConnectionLost);
+//     Speaker.playOnce(AudioId::LinkLostBoth);
 // }
 //
 // void updateParkingDistance(uint16_t distance_cm)
@@ -244,15 +307,15 @@ private:
 //     if (distance_cm > 220) {
 //         Speaker.stop();
 //     } else if (distance_cm > 170) {
-//         Speaker.playLoop(AudioId::BeepSlow);
+//         Speaker.playLoop(AudioId::DistBeepFar);
 //     } else if (distance_cm > 120) {
-//         Speaker.playLoop(AudioId::BeepMediumSlow);
+//         Speaker.playLoop(AudioId::DistBeepMidFar);
 //     } else if (distance_cm > 70) {
-//         Speaker.playLoop(AudioId::BeepMedium);
+//         Speaker.playLoop(AudioId::DistBeepMid);
 //     } else if (distance_cm > 30) {
-//         Speaker.playLoop(AudioId::BeepFast);
+//         Speaker.playLoop(AudioId::DistBeepNear);
 //     } else {
-//         Speaker.playLoop(AudioId::BeepContinuous);
+//         Speaker.playLoop(AudioId::DistBeepDanger);
 //     }
 // }
 //

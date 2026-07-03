@@ -177,7 +177,6 @@ private:
         bool inside_low_battery = false;
         bool left_fault = false;
         bool right_fault = false;
-        bool parking_active = false;
         uint16_t parking_distance_cm = UINT16_MAX;
         uint32_t left_connected_pulse_start_ms = 0;
         uint32_t right_connected_pulse_start_ms = 0;

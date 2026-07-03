@@ -42,6 +42,7 @@
 struct SensorLinkState {
     bool woke = false;
     bool lost_announced = false;
+    bool low_battery = false;
     uint32_t last_data_ms = 0;
     uint32_t last_fault_prompt_ms = 0;
     uint8_t invalid_count = 0;
@@ -69,16 +70,24 @@ MacMatch Matcher(Espnow);
 SpeakerController Speaker;
 RgbLedController RgbLed;
 
+enum class AudioPriority : uint8_t {
+    P0 = 0, // 安全最高优先级：严重低电、双侧不可用、传感器故障等，可打断距离蜂鸣
+    P1 = 1, // 实时距离蜂鸣：不进入提示音队列，由 current_distance_beep 表示
+    P2 = 2, // 工作中重要状态：单侧失联、普通低电、单侧唤醒失败
+    P3 = 3, // 流程结果：配对结果、恢复出厂完成、连接恢复等
+    P4 = 4  // 生命周期提示：启动、关机、进入模式、开始唤醒
+};
+
 struct AudioPrompt {
     AudioId audio = AudioId::None;
     SpeakerVolumeLevel volume = SpeakerVolumeLevel::Default;
+    AudioPriority priority = AudioPriority::P4;
 };
 
 static AudioPrompt audio_prompt_queue[AUDIO_PROMPT_QUEUE_LENGTH];
-static uint8_t audio_prompt_head = 0;
-static uint8_t audio_prompt_tail = 0;
 static uint8_t audio_prompt_count = 0;
 static bool audio_prompt_playing = false;
+static AudioPriority current_audio_prompt_priority = AudioPriority::P4;
 static uint32_t audio_prompt_started_ms = 0;
 static AudioId current_distance_beep = AudioId::None;
 static AudioId pending_distance_beep = AudioId::None;
@@ -88,47 +97,165 @@ static uint32_t last_distance_beep_switch_ms = 0;
 static const char* audioIdName(AudioId audio)
 {
     switch (audio) {
-    case AudioId::BeepSlow:
-        return "BeepSlow";
-    case AudioId::BeepMediumSlow:
-        return "BeepMediumSlow";
-    case AudioId::BeepMedium:
-        return "BeepMedium";
-    case AudioId::BeepFast:
-        return "BeepFast";
-    case AudioId::BeepContinuous:
-        return "BeepContinuous";
-    case AudioId::Boot:
-        return "Boot";
-    case AudioId::PairOk:
-        return "PairOk";
-    case AudioId::PairFail:
-        return "PairFail";
-    case AudioId::ConnectionLost:
-        return "ConnectionLost";
-    case AudioId::LowBattery:
-        return "LowBattery";
-    case AudioId::Fault:
-        return "Fault";
+    case AudioId::DistBeepFar:
+        return "DistBeepFar";
+    case AudioId::DistBeepMidFar:
+        return "DistBeepMidFar";
+    case AudioId::DistBeepMid:
+        return "DistBeepMid";
+    case AudioId::DistBeepNear:
+        return "DistBeepNear";
+    case AudioId::DistBeepDanger:
+        return "DistBeepDanger";
+    case AudioId::SysBoot:
+        return "SysBoot";
+    case AudioId::SysShutdown:
+        return "SysShutdown";
+    case AudioId::ModeUnpaired:
+        return "ModeUnpaired";
+    case AudioId::ModePairing:
+        return "ModePairing";
+    case AudioId::ModeFactoryResetDone:
+        return "ModeFactoryResetDone";
+    case AudioId::PairOkLeft:
+        return "PairOkLeft";
+    case AudioId::PairOkRight:
+        return "PairOkRight";
+    case AudioId::PairOkBoth:
+        return "PairOkBoth";
+    case AudioId::PairFailLeft:
+        return "PairFailLeft";
+    case AudioId::PairFailRight:
+        return "PairFailRight";
+    case AudioId::PairFailBoth:
+        return "PairFailBoth";
+    case AudioId::WakeStart:
+        return "WakeStart";
+    case AudioId::WakeOk:
+        return "WakeOk";
+    case AudioId::WakeFailLeft:
+        return "WakeFailLeft";
+    case AudioId::WakeFailRight:
+        return "WakeFailRight";
+    case AudioId::WakeFailBoth:
+        return "WakeFailBoth";
+    case AudioId::LinkLostLeft:
+        return "LinkLostLeft";
+    case AudioId::LinkLostRight:
+        return "LinkLostRight";
+    case AudioId::LinkLostBoth:
+        return "LinkLostBoth";
+    case AudioId::LinkRestoredLeft:
+        return "LinkRestoredLeft";
+    case AudioId::LinkRestoredRight:
+        return "LinkRestoredRight";
+    case AudioId::PowerLow:
+        return "PowerLow";
+    case AudioId::PowerCritical:
+        return "PowerCritical";
+    case AudioId::PowerSensorLowLeft:
+        return "PowerSensorLowLeft";
+    case AudioId::PowerSensorLowRight:
+        return "PowerSensorLowRight";
+    case AudioId::PowerSensorLowBoth:
+        return "PowerSensorLowBoth";
+    case AudioId::PowerSensorCriticalLeft:
+        return "PowerSensorCriticalLeft";
+    case AudioId::PowerSensorCriticalRight:
+        return "PowerSensorCriticalRight";
+    case AudioId::PowerSensorCriticalBoth:
+        return "PowerSensorCriticalBoth";
+    case AudioId::FaultSensorLeft:
+        return "FaultSensorLeft";
+    case AudioId::FaultSensorRight:
+        return "FaultSensorRight";
+    case AudioId::FaultSensorBoth:
+        return "FaultSensorBoth";
+    case AudioId::FaultComm:
+        return "FaultComm";
+    case AudioId::FaultSystem:
+        return "FaultSystem";
     case AudioId::None:
     default:
         return "None";
     }
 }
 
-static bool audioPromptPush(AudioId audio,
-                            SpeakerVolumeLevel volume = SpeakerVolumeLevel::Default)
+static bool audioPriorityHigher(AudioPriority left, AudioPriority right)
 {
-    if (audio == AudioId::None || audio_prompt_count >= AUDIO_PROMPT_QUEUE_LENGTH) {
+    return static_cast<uint8_t>(left) < static_cast<uint8_t>(right);
+}
+
+static bool audioPromptCanInterruptDistance(AudioPriority priority)
+{
+    return priority == AudioPriority::P0;
+}
+
+static bool audioPromptPush(AudioId audio,
+                            SpeakerVolumeLevel volume,
+                            AudioPriority priority)
+{
+    if (audio == AudioId::None) {
         ESP_LOGW(MAIN_TAG, "Audio prompt dropped: %s", audioIdName(audio));
         return false;
     }
 
-    audio_prompt_queue[audio_prompt_tail].audio = audio;
-    audio_prompt_queue[audio_prompt_tail].volume = volume;
-    audio_prompt_tail = (audio_prompt_tail + 1) % AUDIO_PROMPT_QUEUE_LENGTH;
+    if (audio_prompt_count >= AUDIO_PROMPT_QUEUE_LENGTH) {
+        // 队列很短，满队列时只允许更高优先级提示挤掉最低优先级提示。
+        uint8_t worst_index = 0;
+        for (uint8_t i = 1; i < audio_prompt_count; i++) {
+            if (audioPriorityHigher(audio_prompt_queue[worst_index].priority,
+                                    audio_prompt_queue[i].priority)) {
+                worst_index = i;
+            }
+        }
+
+        if (!audioPriorityHigher(priority, audio_prompt_queue[worst_index].priority)) {
+            ESP_LOGW(MAIN_TAG, "Audio prompt dropped: %s", audioIdName(audio));
+            return false;
+        }
+
+        ESP_LOGW(MAIN_TAG, "Audio prompt replaced: %s",
+                 audioIdName(audio_prompt_queue[worst_index].audio));
+        for (uint8_t i = worst_index; i + 1 < audio_prompt_count; i++) {
+            audio_prompt_queue[i] = audio_prompt_queue[i + 1];
+        }
+        audio_prompt_count--;
+    }
+
+    audio_prompt_queue[audio_prompt_count].audio = audio;
+    audio_prompt_queue[audio_prompt_count].volume = volume;
+    audio_prompt_queue[audio_prompt_count].priority = priority;
     audio_prompt_count++;
     ESP_LOGI(MAIN_TAG, "Audio prompt queued: %s", audioIdName(audio));
+    return true;
+}
+
+static bool audioPromptPopNext(bool distance_active, AudioPrompt& prompt)
+{
+    int8_t best_index = -1;
+    for (uint8_t i = 0; i < audio_prompt_count; i++) {
+        if (distance_active &&
+            !audioPromptCanInterruptDistance(audio_prompt_queue[i].priority)) {
+            // 倒车距离蜂鸣是实时 P1，普通 P2-P4 提示保留在队列中等待距离蜂鸣结束。
+            continue;
+        }
+        if (best_index < 0 ||
+            audioPriorityHigher(audio_prompt_queue[i].priority,
+                                audio_prompt_queue[best_index].priority)) {
+            best_index = i;
+        }
+    }
+
+    if (best_index < 0) {
+        return false;
+    }
+
+    prompt = audio_prompt_queue[best_index];
+    for (uint8_t i = best_index; i + 1 < audio_prompt_count; i++) {
+        audio_prompt_queue[i] = audio_prompt_queue[i + 1];
+    }
+    audio_prompt_count--;
     return true;
 }
 
@@ -147,16 +274,14 @@ static void audioPromptUpdate()
             return;
         }
         audio_prompt_playing = false;
+        current_audio_prompt_priority = AudioPriority::P4;
         Speaker.setVolume(SpeakerVolumeLevel::High);
     }
 
-    if (audio_prompt_count == 0) {
+    AudioPrompt prompt;
+    if (!audioPromptPopNext(current_distance_beep != AudioId::None, prompt)) {
         return;
     }
-
-    AudioPrompt prompt = audio_prompt_queue[audio_prompt_head];
-    audio_prompt_head = (audio_prompt_head + 1) % AUDIO_PROMPT_QUEUE_LENGTH;
-    audio_prompt_count--;
 
     if (current_distance_beep != AudioId::None) {
         current_distance_beep = AudioId::None;
@@ -168,9 +293,11 @@ static void audioPromptUpdate()
     Speaker.setVolume(prompt.volume);
     if (Speaker.playOnce(prompt.audio)) {
         audio_prompt_playing = true;
+        current_audio_prompt_priority = prompt.priority;
         audio_prompt_started_ms = millis();
         ESP_LOGI(MAIN_TAG, "Audio prompt playing: %s", audioIdName(prompt.audio));
     } else {
+        current_audio_prompt_priority = AudioPriority::P4;
         Speaker.setVolume(SpeakerVolumeLevel::High);
     }
 }
@@ -178,6 +305,12 @@ static void audioPromptUpdate()
 static bool audioPromptBusy()
 {
     return audio_prompt_playing || audio_prompt_count > 0;
+}
+
+static bool audioPromptBlocksDistance()
+{
+    return audio_prompt_playing &&
+        audioPromptCanInterruptDistance(current_audio_prompt_priority);
 }
 
 static void audioPromptDrain(uint32_t timeout_ms)
@@ -200,17 +333,57 @@ static void rgbEffectDrain(uint32_t timeout_ms)
     }
 }
 
-static void queueConnectionLostPrompt()
+static void queueConnectionLostPrompt(bool left_lost, bool right_lost)
 {
-    for (uint8_t i = 0; i < CONNECTION_LOST_REPEAT_COUNT; i++) {
-        audioPromptPush(AudioId::ConnectionLost, SpeakerVolumeLevel::High);
+    if (left_lost && right_lost) {
+        audioPromptPush(AudioId::LinkLostBoth, SpeakerVolumeLevel::High, AudioPriority::P0);
+    } else if (left_lost) {
+        audioPromptPush(AudioId::LinkLostLeft, SpeakerVolumeLevel::High, AudioPriority::P2);
+    } else if (right_lost) {
+        audioPromptPush(AudioId::LinkLostRight, SpeakerVolumeLevel::High, AudioPriority::P2);
+    }
+}
+
+static void queuePairResultPrompt(bool left_paired, bool right_paired)
+{
+    if (left_paired && right_paired) {
+        audioPromptPush(AudioId::PairOkBoth, SpeakerVolumeLevel::High, AudioPriority::P3);
+    } else if (!left_paired && !right_paired) {
+        audioPromptPush(AudioId::PairFailBoth, SpeakerVolumeLevel::High, AudioPriority::P2);
+    } else if (!left_paired) {
+        audioPromptPush(AudioId::PairFailLeft, SpeakerVolumeLevel::High, AudioPriority::P2);
+    } else {
+        audioPromptPush(AudioId::PairFailRight, SpeakerVolumeLevel::High, AudioPriority::P2);
+    }
+}
+
+static void queueWakeResultPrompt(bool left_woke, bool right_woke)
+{
+    if (left_woke && right_woke) {
+        audioPromptPush(AudioId::WakeOk, SpeakerVolumeLevel::High, AudioPriority::P3);
+    } else if (!left_woke && !right_woke) {
+        audioPromptPush(AudioId::WakeFailBoth, SpeakerVolumeLevel::High, AudioPriority::P2);
+    } else if (!left_woke) {
+        audioPromptPush(AudioId::WakeFailLeft, SpeakerVolumeLevel::High, AudioPriority::P2);
+    } else {
+        audioPromptPush(AudioId::WakeFailRight, SpeakerVolumeLevel::High, AudioPriority::P2);
+    }
+}
+
+static void queueSensorLowBatteryPrompt(bool left_low, bool right_low)
+{
+    if (left_low && right_low) {
+        audioPromptPush(AudioId::PowerSensorLowBoth, SpeakerVolumeLevel::High, AudioPriority::P2);
+    } else if (left_low) {
+        audioPromptPush(AudioId::PowerSensorLowLeft, SpeakerVolumeLevel::High, AudioPriority::P2);
+    } else if (right_low) {
+        audioPromptPush(AudioId::PowerSensorLowRight, SpeakerVolumeLevel::High, AudioPriority::P2);
     }
 }
 
 static void queueShutdownPrompt()
 {
-    // Temporary shutdown prompt: reuse boot.wav at a lower volume until shutdown.wav exists.
-    audioPromptPush(AudioId::Boot, SpeakerVolumeLevel::Low);
+    audioPromptPush(AudioId::SysShutdown, SpeakerVolumeLevel::Low, AudioPriority::P4);
 }
 
 static AudioId distanceToBeepAudio(uint16_t dist_cm)
@@ -219,18 +392,18 @@ static AudioId distanceToBeepAudio(uint16_t dist_cm)
         return AudioId::None;
     }
     if (dist_cm > 120) {
-        return AudioId::BeepSlow;
+        return AudioId::DistBeepFar;
     }
     if (dist_cm > 90) {
-        return AudioId::BeepMediumSlow;
+        return AudioId::DistBeepMidFar;
     }
     if (dist_cm > 60) {
-        return AudioId::BeepMedium;
+        return AudioId::DistBeepMid;
     }
     if (dist_cm > 30) {
-        return AudioId::BeepFast;
+        return AudioId::DistBeepNear;
     }
-    return AudioId::BeepContinuous;
+    return AudioId::DistBeepDanger;
 }
 
 static void stopDistanceBeep()
@@ -280,6 +453,14 @@ static void updateDistanceBeep(uint16_t min_dist_cm)
         return;
     }
 
+    if (audio_prompt_playing &&
+        !audioPromptCanInterruptDistance(current_audio_prompt_priority)) {
+        // P1 距离蜂鸣优先于普通提示；只有正在播放的 P0 可以继续压住距离蜂鸣。
+        audio_prompt_playing = false;
+        current_audio_prompt_priority = AudioPriority::P4;
+        Speaker.setVolume(SpeakerVolumeLevel::High);
+    }
+
     if (Speaker.playLoop(target)) {
         current_distance_beep = target;
         pending_distance_beep = AudioId::None;
@@ -295,8 +476,6 @@ static void pairAudioCallback(uint8_t slave_id, const uint8_t mac[6], void* cont
     (void)slave_id;
     (void)mac;
     (void)context;
-    audioPromptPush(AudioId::PairOk, SpeakerVolumeLevel::High);
-    audioPromptUpdate();
 }
 
 static void enterDeepSleepWithAudio()
@@ -402,12 +581,37 @@ static bool isRadarDistanceValid(uint16_t dist)
     return dist > 0 && dist <= DIST_MAX_CM;
 }
 
-static void queueFaultPromptWithCooldown(SensorLinkState& sensor)
+static void queueSensorFaultPromptWithCooldown(SensorLinkState& left_sensor,
+                                               SensorLinkState& right_sensor)
 {
+    const bool left_fault = left_sensor.invalid_count >= SENSOR_INVALID_MAX_COUNT;
+    const bool right_fault = right_sensor.invalid_count >= SENSOR_INVALID_MAX_COUNT;
+    if (!left_fault && !right_fault) {
+        return;
+    }
+
     const uint32_t now = millis();
+
+    if (left_fault && right_fault) {
+        const bool left_ready = left_sensor.last_fault_prompt_ms == 0 ||
+            now - left_sensor.last_fault_prompt_ms >= SENSOR_FAULT_COOLDOWN_MS;
+        const bool right_ready = right_sensor.last_fault_prompt_ms == 0 ||
+            now - right_sensor.last_fault_prompt_ms >= SENSOR_FAULT_COOLDOWN_MS;
+        if (left_ready || right_ready) {
+            audioPromptPush(AudioId::FaultSensorBoth, SpeakerVolumeLevel::High, AudioPriority::P0);
+            left_sensor.last_fault_prompt_ms = now;
+            right_sensor.last_fault_prompt_ms = now;
+        }
+        return;
+    }
+
+    SensorLinkState& sensor = left_fault ? left_sensor : right_sensor;
     if (sensor.last_fault_prompt_ms == 0 ||
         now - sensor.last_fault_prompt_ms >= SENSOR_FAULT_COOLDOWN_MS) {
-        audioPromptPush(AudioId::Fault, SpeakerVolumeLevel::High);
+        audioPromptPush(
+            left_fault ? AudioId::FaultSensorLeft : AudioId::FaultSensorRight,
+            SpeakerVolumeLevel::High,
+            AudioPriority::P0);
         sensor.last_fault_prompt_ms = now;
     }
 }
@@ -429,23 +633,21 @@ static void updateSensorDataState(SensorLinkState& sensor, const protocol_frame_
     if (sensor.invalid_count < UINT8_MAX) {
         sensor.invalid_count++;
     }
-    if (sensor.invalid_count >= SENSOR_INVALID_MAX_COUNT) {
-        queueFaultPromptWithCooldown(sensor);
-    }
 }
 
-static void checkSensorConnectionLost(SensorLinkState& sensor, RgbSensorSide side)
+static bool checkSensorConnectionLost(SensorLinkState& sensor, RgbSensorSide side)
 {
     if (!sensor.woke || sensor.lost_announced || sensor.last_data_ms == 0) {
-        return;
+        return false;
     }
 
     if (millis() - sensor.last_data_ms >= CONNECTION_LOST_TIMEOUT_MS) {
         sensor.lost_announced = true;
         sensor.invalid_count = 0;
         RgbLed.setSensorLost(side, true);
-        queueConnectionLostPrompt();
+        return true;
     }
+    return false;
 }
 
 static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
@@ -462,6 +664,7 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
     // ================ 把循环里的电平切换放到外面来，加上100ms延时，之前的10ms延时不够会导致帧发送不完全 =================
     Lora.enable_ce();
     vTaskDelay(pdMS_TO_TICKS(100));
+    audioPromptPush(AudioId::WakeStart, SpeakerVolumeLevel::High, AudioPriority::P4);
     for (int retry = 0; retry < WAKE_MAX_RETRY && !woke; retry++) {
         audioPromptUpdate();
         Lora.sendWakeFrame();
@@ -475,7 +678,6 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
                     // 这里判断一下是哪个从机返回的消息
                     if(memcmp(msg.src_mac, a_mac, 6) == 0) {
                         if (!slave_a_woke) {
-                            audioPromptPush(AudioId::PairOk, SpeakerVolumeLevel::High);
                             RgbLed.sensorConnectedPulse(RgbSensorSide::Left);
                         }
                         slave_a_woke = true;
@@ -484,7 +686,6 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
                     }
                     else if(memcmp(msg.src_mac, b_mac, 6) == 0) {
                         if (!slave_b_wake) {
-                            audioPromptPush(AudioId::PairOk, SpeakerVolumeLevel::High);
                             RgbLed.sensorConnectedPulse(RgbSensorSide::Right);
                         }
                         slave_b_wake = true;
@@ -505,9 +706,13 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
     // TODO：唤醒失败，可能是两个从机中其中一个醒来另一个出问题，还是要发送一下工作结束帧让醒来的从机停止工作
     if (!woke) {
         ESP_LOGE(MAIN_TAG, "Failed to wake slave after %d retries", WAKE_MAX_RETRY);
-        RgbLed.setSensorLost(RgbSensorSide::Left, true);
-        RgbLed.setSensorLost(RgbSensorSide::Right, true);
-        queueConnectionLostPrompt();
+        if (!slave_a_woke) {
+            RgbLed.setSensorLost(RgbSensorSide::Left, true);
+        }
+        if (!slave_b_wake) {
+            RgbLed.setSensorLost(RgbSensorSide::Right, true);
+        }
+        queueWakeResultPrompt(slave_a_woke, slave_b_wake);
         
 
         // 唤醒失败发送停止工作帧，确保从机全部关闭
@@ -517,6 +722,7 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
         return;
     }
     ESP_LOGI(MAIN_TAG, "Slave woke up");
+    queueWakeResultPrompt(true, true);
 
     
 
@@ -538,6 +744,7 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
     protocol_frame_t slave_b_data  = {0};
     uint16_t dist_min = 0;
     bool exit_flag = false;
+    uint8_t announced_sensor_low_battery_mask = 0;
 
     // 迟滞区间，用来记录上一次是什么模式，防止频繁切换
 
@@ -574,10 +781,12 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
                 {
                     memcpy(&slave_a_data, msg.data, sizeof(protocol_frame_t));
                     updateSensorDataState(sensor_a, slave_a_data);
+                    sensor_a.low_battery =
+                        (slave_a_data.reserve & SENSOR_RESERVE_LOW_BATTERY_FLAG) != 0;
                     RgbLed.setSensorLost(RgbSensorSide::Left, false);
                     RgbLed.setSensorLowBattery(
                         RgbSensorSide::Left,
-                        (slave_a_data.reserve & SENSOR_RESERVE_LOW_BATTERY_FLAG) != 0);
+                        sensor_a.low_battery);
                     RgbLed.setSensorFault(
                         RgbSensorSide::Left,
                         sensor_a.invalid_count >= SENSOR_INVALID_MAX_COUNT);
@@ -588,10 +797,12 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
                 {
                     memcpy(&slave_b_data, msg.data, sizeof(protocol_frame_t));
                     updateSensorDataState(sensor_b, slave_b_data);
+                    sensor_b.low_battery =
+                        (slave_b_data.reserve & SENSOR_RESERVE_LOW_BATTERY_FLAG) != 0;
                     RgbLed.setSensorLost(RgbSensorSide::Right, false);
                     RgbLed.setSensorLowBattery(
                         RgbSensorSide::Right,
-                        (slave_b_data.reserve & SENSOR_RESERVE_LOW_BATTERY_FLAG) != 0);
+                        sensor_b.low_battery);
                     RgbLed.setSensorFault(
                         RgbSensorSide::Right,
                         sensor_b.invalid_count >= SENSOR_INVALID_MAX_COUNT);
@@ -615,8 +826,33 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
 
         // 模式判断
         // TODO：如果从机数据很久没有更新了，是不是也应该认为它失联了？
-        checkSensorConnectionLost(sensor_a, RgbSensorSide::Left);
-        checkSensorConnectionLost(sensor_b, RgbSensorSide::Right);
+        const bool left_lost_changed =
+            checkSensorConnectionLost(sensor_a, RgbSensorSide::Left);
+        const bool right_lost_changed =
+            checkSensorConnectionLost(sensor_b, RgbSensorSide::Right);
+        if (left_lost_changed || right_lost_changed) {
+            queueConnectionLostPrompt(sensor_a.lost_announced, sensor_b.lost_announced);
+        }
+
+        uint8_t sensor_low_battery_mask = 0;
+        if (sensor_a.low_battery) {
+            sensor_low_battery_mask |= 0x01;
+        }
+        if (sensor_b.low_battery) {
+            sensor_low_battery_mask |= 0x02;
+        }
+        if (sensor_low_battery_mask != announced_sensor_low_battery_mask) {
+            const uint8_t newly_low =
+                sensor_low_battery_mask & ~announced_sensor_low_battery_mask;
+            if (newly_low != 0) {
+                queueSensorLowBatteryPrompt(
+                    (sensor_low_battery_mask & 0x01) != 0,
+                    (sensor_low_battery_mask & 0x02) != 0);
+            }
+            announced_sensor_low_battery_mask = sensor_low_battery_mask;
+        }
+
+        queueSensorFaultPromptWithCooldown(sensor_a, sensor_b);
 
         uint16_t dist_a = slave_a_data.dist;
         uint16_t dist_b = slave_b_data.dist;
@@ -663,7 +899,7 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
             RgbLed.updateParkingDistance(min_dist);
         }
 
-        if (audioPromptBusy()) {
+        if (audioPromptBlocksDistance()) {
             stopDistanceBeep();
         } else {
             updateDistanceBeep(min_dist);
@@ -724,11 +960,16 @@ static void handleMode(SysMode mode)
         Lora.setup();               // 需要先初始化 Lora 才能清配置
         Lora.clearConfigFlag();
         Lora.shutdown();
+        audioPromptPush(
+            AudioId::ModeFactoryResetDone,
+            SpeakerVolumeLevel::High,
+            AudioPriority::P3);
         break;
     
     // TODO：unpair模式要不要直接开始配对？
     case UNPAIRED_MODE:
         ESP_LOGI(MAIN_TAG, "Mode: UNPAIRED");
+        audioPromptPush(AudioId::ModeUnpaired, SpeakerVolumeLevel::High, AudioPriority::P3);
         RgbLed.unpairedWarning();
         rgbEffectDrain(800);
         // for (int i = 0; i < 2; i++) Led.blink(LED_PERIOD_2);
@@ -736,15 +977,22 @@ static void handleMode(SysMode mode)
 
     case PAIRED_MODE:
         ESP_LOGI(MAIN_TAG, "Mode: PAIRED");
+        audioPromptPush(AudioId::ModePairing, SpeakerVolumeLevel::High, AudioPriority::P4);
+        audioPromptUpdate();
         RgbLed.pairing();
         // TODO：这里需不要要用灯来指示配对过程，比如处于配对时用呼吸灯？
         // Led.blink(LED_PERIOD_1);
-        if (!Matcher.pair(PAIR_MAX_RETRY, pairAudioCallback, nullptr)) {
-            ESP_LOGE(MAIN_TAG, "Pair failed, going to sleep");
-        } else {
-            RgbLed.pairSuccess();
-            rgbEffectDrain(800);
-            // for (int i = 0; i < 3; i++) Led.blink(LED_PERIOD_1);  // 配对成功提示
+        {
+            if (!Matcher.pair(PAIR_MAX_RETRY, pairAudioCallback, nullptr)) {
+                ESP_LOGE(MAIN_TAG, "Pair failed, going to sleep");
+            } else {
+                RgbLed.pairSuccess();
+                rgbEffectDrain(800);
+                // for (int i = 0; i < 3; i++) Led.blink(LED_PERIOD_1);  // 配对成功提示
+            }
+            const bool after_pair_left = Matcher.has_slave_a_mac();
+            const bool after_pair_right = Matcher.has_slave_b_mac();
+            queuePairResultPrompt(after_pair_left, after_pair_right);
         }
         break;
 
@@ -821,7 +1069,7 @@ void setup()
 
     if (Speaker.begin()) {
         Speaker.setVolume(SpeakerVolumeLevel::High);
-        audioPromptPush(AudioId::Boot, SpeakerVolumeLevel::High);
+        audioPromptPush(AudioId::SysBoot, SpeakerVolumeLevel::High, AudioPriority::P4);
         audioPromptUpdate();
     } else {
         ESP_LOGE(MAIN_TAG, "Speaker init failed");
@@ -829,17 +1077,19 @@ void setup()
 
     // 电池电量检测
     uint8_t bat = Power.get_battery_value();
-    if (bat <= LOW_BATTERY_PERCENT) {
-        RgbLed.setInsideLowBattery(true);
-        audioPromptPush(AudioId::LowBattery, SpeakerVolumeLevel::High);
-    }
-    // 这个可以调高一点，bat是0的时候可能不能上电了就
     if (bat == 0) {
+        RgbLed.setInsideLowBattery(true);
+        audioPromptPush(AudioId::PowerCritical, SpeakerVolumeLevel::High, AudioPriority::P0);
         ESP_LOGE(MAIN_TAG, "Battery empty, going to sleep");
         enterDeepSleepWithAudio();
         return;
-        // TODO：是不是可以在电量过低时发个警告？比如闪灯或者蜂鸣？
     }
+    if (bat <= LOW_BATTERY_PERCENT) {
+        RgbLed.setInsideLowBattery(true);
+        audioPromptPush(AudioId::PowerLow, SpeakerVolumeLevel::High, AudioPriority::P2);
+    }
+    // 这个可以调高一点，bat是0的时候可能不能上电了就
+    // TODO：是不是可以在电量过低时发个警告？比如闪灯或者蜂鸣？
 
     // 读取已配对 MAC（如果有）
     bool has_peer = Matcher.has_slave_a_mac() && Matcher.has_slave_b_mac();

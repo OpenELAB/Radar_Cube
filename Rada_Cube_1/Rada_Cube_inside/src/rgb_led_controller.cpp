@@ -471,16 +471,13 @@ void RgbLedController::taskLoop()
                 setCurrentMode(new_command.mode);
                 setEffectFinished(!isOneShotMode(new_command.mode));
                 _effect_start_ms = now;
-                if (new_command.mode == RgbLedMode::Off) {
-                    _runtime_status.parking_active = false;
-                } else if (new_command.mode == RgbLedMode::Pairing) {
+                if (new_command.mode == RgbLedMode::Pairing) {
                     _runtime_status.left_lost = false;
                     _runtime_status.right_lost = false;
                     _runtime_status.left_fault = false;
                     _runtime_status.right_fault = false;
                     _runtime_status.left_low_battery = false;
                     _runtime_status.right_low_battery = false;
-                    _runtime_status.parking_active = false;
                 }
                 break;
 
@@ -595,14 +592,12 @@ void RgbLedController::taskLoop()
             }
 
             case RgbLedAction::UpdateParkingDistance:
-                _runtime_status.parking_active = true;
                 _runtime_status.parking_distance_cm = new_command.distance_cm;
                 setCurrentMode(RgbLedMode::ParkingDistance);
                 setEffectFinished(true);
                 break;
 
             case RgbLedAction::ClearParkingDistance:
-                _runtime_status.parking_active = false;
                 _runtime_status.parking_distance_cm = UINT16_MAX;
                 setCurrentMode(RgbLedMode::SystemStatus);
                 setEffectFinished(true);
