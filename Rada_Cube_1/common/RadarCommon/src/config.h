@@ -22,7 +22,7 @@
 #define WAKE_MAX_RETRY          10      // 唤醒最大重试次数（超过则放弃）
 #define WORK_POLL_INTERVAL_MS   50      // 工作循环轮询间隔 (ms)
 #define RADAR_SEND_INTERVAL_MS  200     // 雷达数据发送间隔 (ms)
-#define WORK_TIMEOUT_MS         (60000 * 5) // 工作模式超时 (ms)，超时自动退出 (目前设为 5 分钟)
+#define WORK_TIMEOUT_MS         (60000 * 3) // 工作模式超时 (ms)，超时自动退出 (目前设为 3 分钟)
 #define END_SEND_COUNT          3       // 结束帧重发次数（确保对方收到）
 
 // ======================== 按键 ========================
