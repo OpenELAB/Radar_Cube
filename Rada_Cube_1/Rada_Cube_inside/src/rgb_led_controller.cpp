@@ -802,21 +802,23 @@ void RgbLedController::taskLoop()
             } else {
                 if (_runtime_status.left_lost) {
                     const uint32_t lost_elapsed = now - _runtime_status.left_lost_start_ms;
-                    const uint16_t period = lost_elapsed < LOST_INITIAL_TOTAL_MS
-                        ? LOST_INITIAL_PERIOD_MS
-                        : LOST_SLOW_PERIOD_MS;
-                    pixels[RGB_LED_INDEX_LEFT] = blinkOn(lost_elapsed, period)
-                        ? RGB_COLOR_SOFT_AMBER
-                        : RGB_COLOR_BLACK;
+                    if (lost_elapsed < 3000) {
+                            // 3秒内：红色闪烁 (使用 500ms 周期)
+                            pixels[RGB_LED_INDEX_LEFT] = blinkOn(lost_elapsed, 500) ? RGB_COLOR_RED : RGB_COLOR_BLACK;
+                        } else {
+                            // 3秒后：红色常亮
+                            pixels[RGB_LED_INDEX_LEFT] = RGB_COLOR_RED;
+                        }
                 }
                 if (_runtime_status.right_lost) {
                     const uint32_t lost_elapsed = now - _runtime_status.right_lost_start_ms;
-                    const uint16_t period = lost_elapsed < LOST_INITIAL_TOTAL_MS
-                        ? LOST_INITIAL_PERIOD_MS
-                        : LOST_SLOW_PERIOD_MS;
-                    pixels[RGB_LED_INDEX_RIGHT] = blinkOn(lost_elapsed, period)
-                        ? RGB_COLOR_SOFT_AMBER
-                        : RGB_COLOR_BLACK;
+                    if (lost_elapsed < 3000) {
+                            // 3秒内：红色闪烁
+                            pixels[RGB_LED_INDEX_RIGHT] = blinkOn(lost_elapsed, 500) ? RGB_COLOR_RED : RGB_COLOR_BLACK;
+                        } else {
+                            // 3秒后：红色常亮
+                            pixels[RGB_LED_INDEX_RIGHT] = RGB_COLOR_RED;
+                        }
                 }
             }
 
@@ -889,21 +891,19 @@ void RgbLedController::taskLoop()
             }
             if (_runtime_status.left_lost) {
                 const uint32_t lost_elapsed = now - _runtime_status.left_lost_start_ms;
-                const uint16_t lost_period = lost_elapsed < LOST_INITIAL_TOTAL_MS
-                    ? LOST_INITIAL_PERIOD_MS
-                    : LOST_SLOW_PERIOD_MS;
-                pixels[RGB_LED_INDEX_LEFT] = blinkOn(lost_elapsed, lost_period)
-                    ? RGB_COLOR_SOFT_AMBER
-                    : RGB_COLOR_BLACK;
+                if (lost_elapsed < 3000) {
+                        pixels[RGB_LED_INDEX_LEFT] = blinkOn(lost_elapsed, 500) ? RGB_COLOR_RED : RGB_COLOR_BLACK;
+                    } else {
+                        pixels[RGB_LED_INDEX_LEFT] = RGB_COLOR_RED;
+                    }
             }
             if (_runtime_status.right_lost) {
                 const uint32_t lost_elapsed = now - _runtime_status.right_lost_start_ms;
-                const uint16_t lost_period = lost_elapsed < LOST_INITIAL_TOTAL_MS
-                    ? LOST_INITIAL_PERIOD_MS
-                    : LOST_SLOW_PERIOD_MS;
-                pixels[RGB_LED_INDEX_RIGHT] = blinkOn(lost_elapsed, lost_period)
-                    ? RGB_COLOR_SOFT_AMBER
-                    : RGB_COLOR_BLACK;
+                if (lost_elapsed < 3000) {
+                        pixels[RGB_LED_INDEX_RIGHT] = blinkOn(lost_elapsed, 500) ? RGB_COLOR_RED : RGB_COLOR_BLACK;
+                    } else {
+                        pixels[RGB_LED_INDEX_RIGHT] = RGB_COLOR_RED;
+                    }
             }
             break;
         }
