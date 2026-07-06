@@ -36,12 +36,15 @@
 #ifndef DISTANCE_BEEP_MIN_SWITCH_MS
 #define DISTANCE_BEEP_MIN_SWITCH_MS     350
 #endif
-
-#define SENSOR_RESERVE_LOW_BATTERY_FLAG 0x01
+#ifndef END_REPLY_WAIT_MS
+#define END_REPLY_WAIT_MS               800
+#endif
 
 struct SensorLinkState {
     bool woke = false;
     bool lost_announced = false;
+    bool battery_known = false;
+    uint8_t battery_percent = BATTERY_INVALID;
     uint32_t last_data_ms = 0;
     uint32_t last_fault_prompt_ms = 0;
     uint8_t invalid_count = 0;
@@ -448,6 +451,105 @@ static void checkSensorConnectionLost(SensorLinkState& sensor, RgbSensorSide sid
     }
 }
 
+static void updateSensorBattery(SensorLinkState& sensor, uint8_t battery)
+{
+    if (battery > 100) {
+        return;
+    }
+    sensor.battery_known = true;
+    sensor.battery_percent = battery;
+}
+
+static bool handleSlaveEndFrame(const espnow_msg_t& msg,
+                                uint8_t* a_mac,
+                                uint8_t* b_mac,
+                                SensorLinkState& sensor_a,
+                                SensorLinkState& sensor_b)
+{
+    if (!frame_validate(msg.data, msg.len, SLAVE_FRAME_HEAD, FRAME_END)) {
+        return false;
+    }
+
+    const protocol_frame_t* end_frame = (const protocol_frame_t*)msg.data;
+    if(memcmp(msg.src_mac, a_mac, 6) == 0)
+    {
+        updateSensorBattery(sensor_a, end_frame->battery);
+        RgbLed.setSensorLowBattery(
+            RgbSensorSide::Left,
+            sensor_a.battery_known && sensor_a.battery_percent <= LOW_BATTERY_PERCENT);
+        if (sensor_a.battery_known) {
+            ESP_LOGI(SLAVE_A_TAG, "slave_A end battery=%u%%", sensor_a.battery_percent);
+        }
+        return true;
+    }
+
+    if(memcmp(msg.src_mac, b_mac, 6) == 0)
+    {
+        updateSensorBattery(sensor_b, end_frame->battery);
+        RgbLed.setSensorLowBattery(
+            RgbSensorSide::Right,
+            sensor_b.battery_known && sensor_b.battery_percent <= LOW_BATTERY_PERCENT);
+        if (sensor_b.battery_known) {
+            ESP_LOGI(SLAVE_B_TAG, "slave_B end battery=%u%%", sensor_b.battery_percent);
+        }
+        return true;
+    }
+
+    return false;
+}
+
+static void waitSlaveEndBattery(uint8_t* a_mac,
+                                uint8_t* b_mac,
+                                SensorLinkState& sensor_a,
+                                SensorLinkState& sensor_b,
+                                uint32_t timeout_ms)
+{
+    const uint32_t start_ms = millis();
+    bool got_a_end = false;
+    bool got_b_end = false;
+
+    while (millis() - start_ms < timeout_ms) {
+        audioPromptUpdate();
+
+        espnow_msg_t msg;
+        bool received = false;
+        while(Espnow.read(&msg))
+        {
+            received = true;
+            if (!frame_validate(msg.data, msg.len, SLAVE_FRAME_HEAD, FRAME_END)) {
+                continue;
+            }
+
+            if(memcmp(msg.src_mac, a_mac, 6) == 0)
+            {
+                if (got_a_end) {
+                    continue;
+                }
+                got_a_end = true;
+            }
+            else if(memcmp(msg.src_mac, b_mac, 6) == 0)
+            {
+                if (got_b_end) {
+                    continue;
+                }
+                got_b_end = true;
+            }
+
+            if (handleSlaveEndFrame(msg, a_mac, b_mac, sensor_a, sensor_b)) {
+                ESP_LOGI(MAIN_TAG, "Received END frame from slave");
+            }
+        }
+
+        if (got_a_end && got_b_end) {
+            break;
+        }
+
+        if (!received) {
+            vTaskDelay(pdMS_TO_TICKS(20));
+        }
+    }
+}
+
 static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
 {
     RgbLed.showSystemStatus();
@@ -472,11 +574,19 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
             vTaskDelay(pdMS_TO_TICKS(WAKE_POLL_INTERVAL_MS));
             while (Espnow.read(&msg)) {
                 if (frame_validate(msg.data, msg.len, SLAVE_FRAME_HEAD, FRAME_WAKE_ACK)) {
+                    const protocol_frame_t* ack = (const protocol_frame_t*)msg.data;
                     // 这里判断一下是哪个从机返回的消息
                     if(memcmp(msg.src_mac, a_mac, 6) == 0) {
                         if (!slave_a_woke) {
                             audioPromptPush(AudioId::PairOk, SpeakerVolumeLevel::High);
                             RgbLed.sensorConnectedPulse(RgbSensorSide::Left);
+                        }
+                        updateSensorBattery(sensor_a, ack->battery);
+                        RgbLed.setSensorLowBattery(
+                            RgbSensorSide::Left,
+                            sensor_a.battery_known && sensor_a.battery_percent <= LOW_BATTERY_PERCENT);
+                        if (sensor_a.battery_known) {
+                            ESP_LOGI(SLAVE_A_TAG, "slave_A battery=%u%%", sensor_a.battery_percent);
                         }
                         slave_a_woke = true;
                         sensor_a.woke = true;
@@ -486,6 +596,13 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
                         if (!slave_b_wake) {
                             audioPromptPush(AudioId::PairOk, SpeakerVolumeLevel::High);
                             RgbLed.sensorConnectedPulse(RgbSensorSide::Right);
+                        }
+                        updateSensorBattery(sensor_b, ack->battery);
+                        RgbLed.setSensorLowBattery(
+                            RgbSensorSide::Right,
+                            sensor_b.battery_known && sensor_b.battery_percent <= LOW_BATTERY_PERCENT);
+                        if (sensor_b.battery_known) {
+                            ESP_LOGI(SLAVE_B_TAG, "slave_B battery=%u%%", sensor_b.battery_percent);
                         }
                         slave_b_wake = true;
                         sensor_b.woke = true;
@@ -577,7 +694,7 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
                     RgbLed.setSensorLost(RgbSensorSide::Left, false);
                     RgbLed.setSensorLowBattery(
                         RgbSensorSide::Left,
-                        (slave_a_data.reserve & SENSOR_RESERVE_LOW_BATTERY_FLAG) != 0);
+                        sensor_a.battery_known && sensor_a.battery_percent <= LOW_BATTERY_PERCENT);
                     RgbLed.setSensorFault(
                         RgbSensorSide::Left,
                         sensor_a.invalid_count >= SENSOR_INVALID_MAX_COUNT);
@@ -591,7 +708,7 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
                     RgbLed.setSensorLost(RgbSensorSide::Right, false);
                     RgbLed.setSensorLowBattery(
                         RgbSensorSide::Right,
-                        (slave_b_data.reserve & SENSOR_RESERVE_LOW_BATTERY_FLAG) != 0);
+                        sensor_b.battery_known && sensor_b.battery_percent <= LOW_BATTERY_PERCENT);
                     RgbLed.setSensorFault(
                         RgbSensorSide::Right,
                         sensor_b.invalid_count >= SENSOR_INVALID_MAX_COUNT);
@@ -601,6 +718,7 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
             }
             else if(frame_validate(msg.data, msg.len, SLAVE_FRAME_HEAD, FRAME_END))
             {
+                handleSlaveEndFrame(msg, a_mac, b_mac, sensor_a, sensor_b);
                 ESP_LOGI(MAIN_TAG, "Received END frame from slave");
                 exit_flag = true;
                 break;
@@ -678,6 +796,7 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
     // 4) 退出：停蜂鸣 + 通知从机结束
     sendEndFrame(a_mac, MASTER_FRAME_HEAD);
     sendEndFrame(b_mac, MASTER_FRAME_HEAD);
+    waitSlaveEndBattery(a_mac, b_mac, sensor_a, sensor_b, END_REPLY_WAIT_MS);
     ESP_LOGI(MAIN_TAG, "Work mode finished");
 }
 

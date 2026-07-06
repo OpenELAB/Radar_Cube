@@ -40,10 +40,10 @@ MacMatch Matcher(Espnow);
 // ======================== 辅助函数 ========================
 
 // 发送结束帧（重发 END_SEND_COUNT 次确保对方收到）
-static void sendEndFrame(const uint8_t* peer_mac, uint8_t head)
+static void sendEndFrame(const uint8_t* peer_mac, uint8_t head, uint8_t battery = BATTERY_INVALID)
 {
     protocol_frame_t frame;
-    frame_build(&frame, head, FRAME_END);
+    frame_build(&frame, head, FRAME_END, 0, 0, battery);
     for (int i = 0; i < END_SEND_COUNT; i++) {
         Espnow.send(peer_mac, (uint8_t*)&frame, sizeof(frame));
         vTaskDelay(pdMS_TO_TICKS(50));
@@ -115,11 +115,11 @@ static SysMode detectButtonMode(WakeupSource wakeup)
 
 // ======================== OUTSIDE 工作模式 ========================
 // #ifdef OUTSIDE
-static void outside_work_mode(uint8_t* peer_mac)
+static void outside_work_mode(uint8_t* peer_mac, uint8_t battery)
 {
     // 1) 回复唤醒 ACK
     protocol_frame_t ack;
-    frame_build(&ack, SLAVE_FRAME_HEAD, FRAME_WAKE_ACK);
+    frame_build(&ack, SLAVE_FRAME_HEAD, FRAME_WAKE_ACK, 0, 0, battery);
     if (Espnow.send(peer_mac, (uint8_t*)&ack, sizeof(ack)) != ESP_OK) {
         ESP_LOGE(MAIN_TAG, "Failed to send WAKE_ACK");
     }
@@ -174,7 +174,7 @@ static void outside_work_mode(uint8_t* peer_mac)
     }
 
     // 3) 退出：通知主机 + 关雷达
-    sendEndFrame(peer_mac, SLAVE_FRAME_HEAD);
+    sendEndFrame(peer_mac, SLAVE_FRAME_HEAD, battery);
     Radar.shutdown();
     ESP_LOGI(MAIN_TAG, "Work mode finished");
 }
@@ -220,7 +220,7 @@ static SysMode determineMode(WakeupSource wakeup, bool has_peer)
 
 // ======================== 模式处理 ========================
 
-static void handleMode(SysMode mode)
+static void handleMode(SysMode mode, uint8_t battery)
 {
     switch (mode)
     {
@@ -288,7 +288,7 @@ static void handleMode(SysMode mode)
         Espnow.recvStart();
 
         // 3) 回复 ACK → 雷达采集循环
-        outside_work_mode(master_mac);
+        outside_work_mode(master_mac, battery);
 
         // 4) 清理
         Espnow.recvStop();
@@ -342,7 +342,7 @@ void setup()
 
     // 判断模式 → 执行 → 睡眠
     SysMode mode = determineMode(wakeup, has_peer);
-    handleMode(mode);
+    handleMode(mode, bat);
     Power.deep_sleep();
 }
 

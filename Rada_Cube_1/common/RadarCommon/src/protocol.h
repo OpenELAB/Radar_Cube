@@ -18,13 +18,15 @@ enum frame_type_t : uint8_t {
 };
 
 // ======================== 协议帧（8 字节，4 字节对齐）========================
-//  [head 1B][type 1B][dist 2B][angle 2B][reserve 1B][checksum 1B] = 8B
+//  [head 1B][type 1B][dist 2B][angle 2B][battery 1B][checksum 1B] = 8B
+#define BATTERY_INVALID     0xFF
+
 typedef struct __attribute__((packed)) {
     uint8_t      head;          // 帧头 0xA5 / 0x5A
     frame_type_t type;          // 帧类型
     uint16_t     dist;          // 距离 (cm)
     int16_t      angle;         // 角度 (×0.01°)
-    uint8_t      reserve;       // 预留
+    uint8_t      battery;       // 电量百分比 0-100，0xFF 表示未携带
     uint8_t      checksum;      // 校验 = 前 7 字节之和 & 0xFF
 } protocol_frame_t;
 
@@ -48,9 +50,10 @@ static_assert(sizeof(protocol_frame_t) == 8, "protocol_frame_t must be 8 bytes")
 // 计算帧校验值
 uint8_t frame_calc_checksum(const protocol_frame_t* frame);
 
-// 构建帧（自动填充 reserve + checksum）
+// 构建帧（自动填充 battery + checksum）
 void frame_build(protocol_frame_t* frame, uint8_t head, frame_type_t type,
-                 uint16_t dist = 0, int16_t angle = 0);
+                 uint16_t dist = 0, int16_t angle = 0,
+                 uint8_t battery = BATTERY_INVALID);
 
 // 校验帧合法性
 bool frame_validate(const uint8_t* data, int len,
