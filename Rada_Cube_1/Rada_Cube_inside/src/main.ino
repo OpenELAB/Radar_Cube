@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include <string.h>
 #include "config.h"
 #include "pins.h"
 #include "lora.h"
@@ -35,6 +36,9 @@
 #endif
 #ifndef DISTANCE_BEEP_MIN_SWITCH_MS
 #define DISTANCE_BEEP_MIN_SWITCH_MS     350
+#endif
+#ifndef LORA_WAKE_RESEND_INTERVAL_MS
+#define LORA_WAKE_RESEND_INTERVAL_MS    500
 #endif
 
 #define SENSOR_RESERVE_LOW_BATTERY_FLAG 0x01
@@ -336,6 +340,16 @@ static void sendEndFrame(const uint8_t* peer_mac, uint8_t head)
 }
 
 // 检查是否收到结束帧
+static void sendWakeConfirm(const uint8_t* peer_mac)
+{
+    protocol_frame_t frame;
+    frame_build(&frame, MASTER_FRAME_HEAD, FRAME_WAKE_CONFIRM);
+    for (int i = 0; i < END_SEND_COUNT; i++) {
+        Espnow.send(peer_mac, (uint8_t*)&frame, sizeof(frame));
+        vTaskDelay(pdMS_TO_TICKS(30));
+    }
+}
+
 static bool checkEndFrame(uint8_t expect_head)
 {
     espnow_msg_t msg;
@@ -465,15 +479,21 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
     for (int retry = 0; retry < WAKE_MAX_RETRY && !woke; retry++) {
         audioPromptUpdate();
         Lora.sendWakeFrame();
+        uint32_t last_lora_wake_ms = millis();
         ESP_LOGI(MAIN_TAG, "Wake attempt %d/%d", retry + 1, WAKE_MAX_RETRY);
 
         for (int t = 0; t < WAKE_POLL_ROUNDS && !woke; t++) {
             audioPromptUpdate();
             vTaskDelay(pdMS_TO_TICKS(WAKE_POLL_INTERVAL_MS));
+            if (millis() - last_lora_wake_ms >= LORA_WAKE_RESEND_INTERVAL_MS) {
+                Lora.sendWakeFrame();
+                last_lora_wake_ms = millis();
+            }
             while (Espnow.read(&msg)) {
                 if (frame_validate(msg.data, msg.len, SLAVE_FRAME_HEAD, FRAME_WAKE_ACK)) {
                     // 这里判断一下是哪个从机返回的消息
                     if(memcmp(msg.src_mac, a_mac, 6) == 0) {
+                        sendWakeConfirm(a_mac);
                         if (!slave_a_woke) {
                             audioPromptPush(AudioId::PairOk, SpeakerVolumeLevel::High);
                             RgbLed.sensorConnectedPulse(RgbSensorSide::Left);
@@ -483,6 +503,7 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
                         ESP_LOGI(MAIN_TAG, "Slave A woke up");
                     }
                     else if(memcmp(msg.src_mac, b_mac, 6) == 0) {
+                        sendWakeConfirm(b_mac);
                         if (!slave_b_wake) {
                             audioPromptPush(AudioId::PairOk, SpeakerVolumeLevel::High);
                             RgbLed.sensorConnectedPulse(RgbSensorSide::Right);

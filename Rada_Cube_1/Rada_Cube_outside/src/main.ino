@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include <string.h>
 #include "config.h"
 #include "pins.h"
 #include "radar.h"
@@ -115,15 +116,47 @@ static SysMode detectButtonMode(WakeupSource wakeup)
 
 // ======================== OUTSIDE 工作模式 ========================
 // #ifdef OUTSIDE
-static void outside_work_mode(uint8_t* peer_mac)
+static void sendWakeAck(const uint8_t* peer_mac)
 {
-    // 1) 回复唤醒 ACK
     protocol_frame_t ack;
     frame_build(&ack, SLAVE_FRAME_HEAD, FRAME_WAKE_ACK);
     if (Espnow.send(peer_mac, (uint8_t*)&ack, sizeof(ack)) != ESP_OK) {
         ESP_LOGE(MAIN_TAG, "Failed to send WAKE_ACK");
     }
+}
 
+static bool waitWakeConfirm(const uint8_t* master_mac,
+                            uint32_t timeout_ms = 3000,
+                            uint32_t ack_interval_ms = 300)
+{
+    uint32_t start = millis();
+    uint32_t last_ack_ms = 0;
+    espnow_msg_t msg;
+
+    while (millis() - start < timeout_ms) {
+        if (last_ack_ms == 0 || millis() - last_ack_ms >= ack_interval_ms) {
+            sendWakeAck(master_mac);
+            last_ack_ms = millis();
+        }
+
+        while (Espnow.read(&msg)) {
+            if (memcmp(msg.src_mac, master_mac, 6) == 0 &&
+                frame_validate(msg.data, msg.len, MASTER_FRAME_HEAD, FRAME_WAKE_CONFIRM)) {
+                ESP_LOGI(MAIN_TAG, "Wake confirm received");
+                return true;
+            }
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(20));
+    }
+
+    ESP_LOGW(MAIN_TAG, "Wake confirm timeout");
+    return false;
+}
+
+static void outside_work_mode(uint8_t* peer_mac)
+{
+    // 1) 回复唤醒 ACK
     // Lora 不再需要，关掉串口给雷达让路（共用 Serial1）
     LoraSerial.end();
 
@@ -279,7 +312,6 @@ static void handleMode(SysMode mode)
         // ---- 车外模块工作流程 ----
         // 1) Lora 初始化（被唤醒后需要就绪状态）
         Lora.setup();
-
         // 2) ESP-NOW 初始化
         Espnow.init();
         uint8_t master_mac[6]{};
@@ -288,6 +320,15 @@ static void handleMode(SysMode mode)
         Espnow.recvStart();
 
         // 3) 回复 ACK → 雷达采集循环
+        if (!waitWakeConfirm(master_mac)) {
+            ESP_LOGW(MAIN_TAG, "No wake confirm, skip radar work");
+            Espnow.recvStop();
+            Espnow.deinit();
+            Lora.shutdown();
+            Led.led_off();
+            break;
+        }
+
         outside_work_mode(master_mac);
 
         // 4) 清理

@@ -15,6 +15,7 @@ enum frame_type_t : uint8_t {
     FRAME_WAKE_ACK      = 0x04,     // 从机唤醒应答
     FRAME_RADAR_DATA    = 0x05,     // 雷达数据帧
     FRAME_END           = 0x06,     // 结束帧
+    FRAME_WAKE_CONFIRM  = 0x07,
 };
 
 // ======================== 协议帧（8 字节，4 字节对齐）========================

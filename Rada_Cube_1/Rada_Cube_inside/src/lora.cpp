@@ -169,6 +169,7 @@ void LoraManager::sendWakeFrame()
     // digitalWrite(LORA_CE_PIN, LORA_CE_INACTIVE);
     // vTaskDelay(pdMS_TO_TICKS(100));  // TODO: 确保进入配置模式,记得是2ms,这里加10ms以防万一？
     LoraSerial.write((uint8_t*)&frame, sizeof(frame));
+    ESP_LOGI(LORA_TAG, "Wake frame sent");
     // digitalWrite(LORA_CE_PIN, LORA_CE_ACTIVE);
 }
 
