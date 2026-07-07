@@ -34,12 +34,33 @@ bool readChunkId(File& file, char id[5])
     return true;
 }
 
+bool copyPath(char* dest, size_t dest_size, const char* src)
+{
+    if (dest == nullptr || dest_size == 0) {
+        return false;
+    }
+
+    if (src == nullptr) {
+        dest[0] = '\0';
+        return false;
+    }
+
+    if (strlen(src) >= dest_size) {
+        dest[0] = '\0';
+        return false;
+    }
+
+    strncpy(dest, src, dest_size - 1);
+    dest[dest_size - 1] = '\0';
+    return true;
+}
+
 } // namespace
 
 SpeakerController::SpeakerController()
 {
     _current_command.mode = SpeakerMode::Silent;
-    _current_command.audio = AudioId::None;
+    _current_command.path[0] = '\0';
     _current_command.volume = SpeakerVolumeLevel::Default;
 }
 
@@ -129,7 +150,7 @@ void SpeakerController::end()
     }
 
     _current_mode = SpeakerMode::Silent;
-    _current_audio = AudioId::None;
+    _current_path[0] = '\0';
     _fade_in_next_playback = false;
     _begun = false;
     LittleFS.end();
@@ -154,31 +175,35 @@ bool SpeakerController::stop()
 {
     SpeakerCommand command;
     command.mode = SpeakerMode::Silent;
-    command.audio = AudioId::None;
+    command.path[0] = '\0';
     return sendCommand(command);
 }
 
-bool SpeakerController::playOnce(AudioId audio)
+bool SpeakerController::playOnce(const char* wav_path)
 {
-    if (audio == AudioId::None) {
+    if (wav_path == nullptr || wav_path[0] == '\0') {
         return stop();
     }
 
     SpeakerCommand command;
     command.mode = SpeakerMode::PlayOnce;
-    command.audio = audio;
+    if (!copyPath(command.path, sizeof(command.path), wav_path)) {
+        return false;
+    }
     return sendCommand(command);
 }
 
-bool SpeakerController::playLoop(AudioId audio)
+bool SpeakerController::playLoop(const char* wav_path)
 {
-    if (audio == AudioId::None) {
+    if (wav_path == nullptr || wav_path[0] == '\0') {
         return stop();
     }
 
     SpeakerCommand command;
     command.mode = SpeakerMode::Loop;
-    command.audio = audio;
+    if (!copyPath(command.path, sizeof(command.path), wav_path)) {
+        return false;
+    }
     return sendCommand(command);
 }
 
@@ -197,9 +222,9 @@ SpeakerMode SpeakerController::currentMode() const
     return _current_mode;
 }
 
-AudioId SpeakerController::currentAudio() const
+const char* SpeakerController::currentPath() const
 {
-    return _current_audio;
+    return _current_path;
 }
 
 bool SpeakerController::lastPlaybackFailed() const
@@ -235,7 +260,7 @@ void SpeakerController::taskLoop()
         if (xQueueReceive(_command_queue, &new_command, 0) == pdTRUE) {
             _current_command = new_command;
             _current_mode = new_command.mode;
-            _current_audio = new_command.audio;
+            copyPath(_current_path, sizeof(_current_path), new_command.path);
             if (_current_mode != SpeakerMode::Silent) {
                 _last_playback_failed = false;
             }
@@ -243,7 +268,7 @@ void SpeakerController::taskLoop()
 
         switch (_current_mode) {
         case SpeakerMode::Silent:
-            _current_audio = AudioId::None;
+            _current_path[0] = '\0';
             if (!_keep_output_alive &&
                 _i2s_started &&
                 _last_output_ms != 0 &&
@@ -254,26 +279,26 @@ void SpeakerController::taskLoop()
 
         case SpeakerMode::PlayOnce:
             {
-                const PlaybackResult result = playWav(_current_audio, true);
+                const PlaybackResult result = playWav(_current_path, true);
                 if (result != PlaybackResult::Interrupted) {
                     _last_playback_failed = (result == PlaybackResult::Failed);
                     _current_command.mode = SpeakerMode::Silent;
-                    _current_command.audio = AudioId::None;
+                    _current_command.path[0] = '\0';
                     _current_mode = SpeakerMode::Silent;
-                    _current_audio = AudioId::None;
+                    _current_path[0] = '\0';
                 }
             }
             break;
 
         case SpeakerMode::Loop:
             {
-                const PlaybackResult result = playWav(_current_audio, false);
+                const PlaybackResult result = playWav(_current_path, false);
                 if (result == PlaybackResult::Failed) {
                     _last_playback_failed = true;
                     _current_command.mode = SpeakerMode::Silent;
-                    _current_command.audio = AudioId::None;
+                    _current_command.path[0] = '\0';
                     _current_mode = SpeakerMode::Silent;
-                    _current_audio = AudioId::None;
+                    _current_path[0] = '\0';
                 } else if (result == PlaybackResult::Finished) {
                     _last_playback_failed = false;
                 }
@@ -296,37 +321,6 @@ bool SpeakerController::sendCommand(const SpeakerCommand& command)
     }
 
     return xQueueOverwrite(_command_queue, &command) == pdPASS;
-}
-
-const char* SpeakerController::audioFilePath(AudioId audio) const
-{
-    switch (audio) {
-    case AudioId::BeepSlow:
-        return SPEAKER_FILE_BEEP_SLOW;
-    case AudioId::BeepMediumSlow:
-        return SPEAKER_FILE_BEEP_MEDIUM_SLOW;
-    case AudioId::BeepMedium:
-        return SPEAKER_FILE_BEEP_MEDIUM;
-    case AudioId::BeepFast:
-        return SPEAKER_FILE_BEEP_FAST;
-    case AudioId::BeepContinuous:
-        return SPEAKER_FILE_BEEP_CONTINUOUS;
-    case AudioId::Boot:
-        return SPEAKER_FILE_BOOT;
-    case AudioId::PairOk:
-        return SPEAKER_FILE_PAIR_OK;
-    case AudioId::PairFail:
-        return SPEAKER_FILE_PAIR_FAIL;
-    case AudioId::ConnectionLost:
-        return SPEAKER_FILE_CONNECTION_LOST;
-    case AudioId::LowBattery:
-        return SPEAKER_FILE_LOW_BATTERY;
-    case AudioId::Fault:
-        return SPEAKER_FILE_FAULT;
-    case AudioId::None:
-    default:
-        return nullptr;
-    }
 }
 
 uint8_t SpeakerController::volumeValue(SpeakerVolumeLevel volume) const
@@ -547,18 +541,17 @@ void SpeakerController::shutdownAudioOutput()
     stopI2S();
 }
 
-SpeakerController::PlaybackResult SpeakerController::playWav(AudioId audio, bool append_end_silence)
+SpeakerController::PlaybackResult SpeakerController::playWav(const char* wav_path, bool append_end_silence)
 {
-    const char* audio_file = audioFilePath(audio);
-    if (audio_file == nullptr) {
+    if (wav_path == nullptr || wav_path[0] == '\0') {
         shutdownAudioOutput();
         return PlaybackResult::Failed;
     }
 
-    File file = LittleFS.open(audio_file, "r");
+    File file = LittleFS.open(wav_path, "r");
     if (!file) {
         Serial.print("Could not open audio file: ");
-        Serial.println(audio_file);
+        Serial.println(wav_path);
         shutdownAudioOutput();
         return PlaybackResult::Failed;
     }
@@ -566,7 +559,7 @@ SpeakerController::PlaybackResult SpeakerController::playWav(AudioId audio, bool
     WavInfo wav_info;
     if (!readWavInfo(file, wav_info)) {
         Serial.print("Unsupported WAV: ");
-        Serial.println(audio_file);
+        Serial.println(wav_path);
         file.close();
         shutdownAudioOutput();
         return PlaybackResult::Failed;
@@ -596,7 +589,7 @@ SpeakerController::PlaybackResult SpeakerController::playWav(AudioId audio, bool
         if (xQueueReceive(_command_queue, &new_command, 0) == pdTRUE) {
             _current_command = new_command;
             _current_mode = new_command.mode;
-            _current_audio = new_command.audio;
+            copyPath(_current_path, sizeof(_current_path), new_command.path);
             file.close();
             if (_current_mode == SpeakerMode::Silent) {
                 writeFadeToSilence(wav_info.sample_rate, SPEAKER_FADE_MS);
@@ -613,7 +606,7 @@ SpeakerController::PlaybackResult SpeakerController::playWav(AudioId audio, bool
         const size_t bytes_read = file.read(_audio_buffer, to_read);
         if (bytes_read == 0) {
             Serial.print("Audio read ended early: ");
-            Serial.println(audio_file);
+            Serial.println(wav_path);
             file.close();
             shutdownAudioOutput();
             return PlaybackResult::Failed;

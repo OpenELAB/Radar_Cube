@@ -15,9 +15,10 @@
 //
 // 设计边界：
 // - I2SClass + LittleFS + WAV 解析负责真正播放音频。
-// - SpeakerController 只给主程序提供简单声音 API。
-// - 主程序只调用 playOnce / playLoop / stop 等接口。
+// - SpeakerController 只给上层提供通用 WAV 播放 API。
+// - 上层只调用 playOnce(path) / playLoop(path) / stop 等接口。
 // - Speaker task 是唯一真正读 WAV、写 I2S 的地方。
+// - 具体业务音效 ID 和文件名映射不属于本驱动层。
 //
 // 当前蜂鸣节奏方案：
 // - 不再由代码用定时器拼出不同蜂鸣周期。
@@ -57,44 +58,9 @@
 #define SPEAKER_INTERRUPT_SILENCE_MS        20
 #define SPEAKER_FADE_MS                     30
 
-// ======================== WAV 文件配置 ========================
-//
-// 蜂鸣周期已经做进 WAV 文件内部：
-// - beep_slow.wav          慢速蜂鸣
-// - beep_medium_slow.wav   中慢速蜂鸣
-// - beep_medium.wav        中速蜂鸣
-// - beep_fast.wav          快速蜂鸣
-// - beep_continuous.wav    连续/危险提示蜂鸣
-//
-// 替换 data/ 下同名 WAV 文件即可调整音色、频率、包络和周期。
-#define SPEAKER_FILE_BEEP_SLOW              "/beep_slow.wav"
-#define SPEAKER_FILE_BEEP_MEDIUM_SLOW       "/beep_medium_slow.wav"
-#define SPEAKER_FILE_BEEP_MEDIUM            "/beep_medium.wav"
-#define SPEAKER_FILE_BEEP_FAST              "/beep_fast.wav"
-#define SPEAKER_FILE_BEEP_CONTINUOUS        "/beep_continuous.wav"
-#define SPEAKER_FILE_BOOT                   "/boot.wav"
-#define SPEAKER_FILE_PAIR_OK                "/pair_ok.wav"
-#define SPEAKER_FILE_PAIR_FAIL              "/pair_fail.wav"
-#define SPEAKER_FILE_CONNECTION_LOST        "/connection_lost.wav"
-#define SPEAKER_FILE_LOW_BATTERY            "/low_battery.wav"
-#define SPEAKER_FILE_FAULT                  "/fault.wav"
+#define SPEAKER_PATH_MAX_LENGTH             64
 
 // ======================== 数据结构 ========================
-
-enum class AudioId : uint8_t {
-    None,
-    BeepSlow,       // 慢速蜂鸣
-    BeepMediumSlow, // 中慢速蜂鸣
-    BeepMedium,     // 中速蜂鸣
-    BeepFast,       // 快速蜂鸣
-    BeepContinuous, // 连续/危险蜂鸣
-    Boot,           // 上电/启动提示
-    PairOk,         // 配对成功
-    PairFail,       // 配对失败
-    ConnectionLost, // 连接丢失
-    LowBattery,     // 低电量
-    Fault           // 硬件/通信异常
-};
 
 enum class SpeakerMode : uint8_t {
     Silent,      // 静音
@@ -111,7 +77,7 @@ enum class SpeakerVolumeLevel : uint8_t {
 
 struct SpeakerCommand {
     SpeakerMode mode = SpeakerMode::Silent;
-    AudioId audio = AudioId::None;
+    char path[SPEAKER_PATH_MAX_LENGTH] = {0};
 
     // 当前保留为命令字段，实际默认使用 setVolume() 设置的全局音量。
     SpeakerVolumeLevel volume = SpeakerVolumeLevel::Default;
@@ -146,15 +112,15 @@ public:
     // 主程序使用的声音 API。
     // 这些接口只负责投递命令，不直接读文件或写 I2S。
     bool stop();
-    bool playOnce(AudioId audio);
-    bool playLoop(AudioId audio);
+    bool playOnce(const char* wav_path);
+    bool playLoop(const char* wav_path);
     void setKeepOutputAlive(bool enabled);
     bool keepOutputAlive() const;
 
     bool isBegun() const;
     bool isTaskRunning() const;
     SpeakerMode currentMode() const;
-    AudioId currentAudio() const;
+    const char* currentPath() const;
     bool lastPlaybackFailed() const;
 
 private:
@@ -165,7 +131,7 @@ private:
 
     SpeakerCommand _current_command;
     SpeakerMode _current_mode = SpeakerMode::Silent;
-    AudioId _current_audio = AudioId::None;
+    char _current_path[SPEAKER_PATH_MAX_LENGTH] = {0};
     SpeakerVolumeLevel _current_volume = SpeakerVolumeLevel::Default;
     bool _begun = false;
     bool _task_running = false;
@@ -191,7 +157,6 @@ private:
     // 统一投递命令，内部使用 xQueueOverwrite() 覆盖旧命令。
     bool sendCommand(const SpeakerCommand& command);
 
-    const char* audioFilePath(AudioId audio) const;
     uint8_t volumeValue(SpeakerVolumeLevel volume) const;
     bool readWavInfo(File& file, WavInfo& info);
     bool startI2S(const WavInfo& info);
@@ -209,7 +174,7 @@ private:
         Failed
     };
 
-    PlaybackResult playWav(AudioId audio, bool append_end_silence);
+    PlaybackResult playWav(const char* wav_path, bool append_end_silence);
     void writeAudioChunk(uint8_t* data, size_t bytes_read, const WavInfo& info);
     int16_t applyVolume(int16_t sample) const;
 };
@@ -226,17 +191,17 @@ private:
 // {
 //     Speaker.begin();
 //     Speaker.setVolume(SpeakerVolumeLevel::Medium);
-//     Speaker.playOnce(AudioId::Boot);
+//     Speaker.playOnce(path_from_upper_layer);
 // }
 //
 // void onPairSuccess()
 // {
-//     Speaker.playOnce(AudioId::PairOk);
+//     Speaker.playOnce(path_from_upper_layer);
 // }
 //
 // void onConnectionLost()
 // {
-//     Speaker.playOnce(AudioId::ConnectionLost);
+//     Speaker.playOnce(path_from_upper_layer);
 // }
 //
 // void updateParkingDistance(uint16_t distance_cm)
@@ -244,15 +209,15 @@ private:
 //     if (distance_cm > 220) {
 //         Speaker.stop();
 //     } else if (distance_cm > 170) {
-//         Speaker.playLoop(AudioId::BeepSlow);
+//         Speaker.playLoop(path_from_upper_layer);
 //     } else if (distance_cm > 120) {
-//         Speaker.playLoop(AudioId::BeepMediumSlow);
+//         Speaker.playLoop(path_from_upper_layer);
 //     } else if (distance_cm > 70) {
-//         Speaker.playLoop(AudioId::BeepMedium);
+//         Speaker.playLoop(path_from_upper_layer);
 //     } else if (distance_cm > 30) {
-//         Speaker.playLoop(AudioId::BeepFast);
+//         Speaker.playLoop(path_from_upper_layer);
 //     } else {
-//         Speaker.playLoop(AudioId::BeepContinuous);
+//         Speaker.playLoop(path_from_upper_layer);
 //     }
 // }
 //
