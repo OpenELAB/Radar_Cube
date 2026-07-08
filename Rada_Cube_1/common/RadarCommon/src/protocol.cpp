@@ -13,13 +13,13 @@ uint8_t frame_calc_checksum(const protocol_frame_t* frame)
 
 // 构建帧
 void frame_build(protocol_frame_t* frame, uint8_t head, frame_type_t type,
-                 uint16_t dist, int16_t angle)
+                 uint16_t dist, int16_t angle, uint8_t battery)
 {
     frame->head     = head;
     frame->type     = type;
     frame->dist     = dist;
     frame->angle    = angle;
-    frame->reserve  = 0;
+    frame->battery  = battery;
     frame->checksum = frame_calc_checksum(frame);
 }
 
