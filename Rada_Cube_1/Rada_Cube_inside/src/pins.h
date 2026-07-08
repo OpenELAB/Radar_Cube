@@ -32,7 +32,7 @@ extern HardwareSerial& LoraSerial;
 #define LORA_POWER_OFF              LOW
 #define LORA_CE_ACTIVE              HIGH    // CE 拉高 = 正常工作
 #define LORA_CE_INACTIVE            LOW     // CE 拉低 = 进入配置模式
-#define LORA_WAKE_ACTIVE            HIGH    // WAKE 拉高 = 有数据，唤醒 MCU
+#define LORA_WAKE_ACTIVE            HIGH   // WAKE 拉高 = 有数据，唤醒 MCU
 #define LORA_WAKE_INACTIVE          LOW     // WAKE 拉低 = 空闲
 
 // ======================== 按键电平 ========================

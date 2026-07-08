@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <HardwareSerial.h>
+#include <cstring>
 #include "lora.h"
 #include "protocol.h"
 
@@ -13,7 +14,7 @@ static const char* LORA_INIT_CMDS[] = {
     "AT+RFCH=18",
     "AT+PID=255",
     "AT+MAMP=2",
-    "AT+MLPWR=2",
+    "AT+MLPWR=0",
     "AT+MID=17",
     "AT+MODE=1"
 };
@@ -161,16 +162,79 @@ void LoraManager::setup()
 
 // ======================== 发送唤醒帧 ========================
 
-void LoraManager::sendWakeFrame()
+void LoraManager::sendWakeFrame(const uint8_t master_mac[6])
 {
-    protocol_frame_t frame;
-    frame_build(&frame, MASTER_FRAME_HEAD, FRAME_WAKE);
+    lora_wake_frame_t frame;
+    lora_wake_frame_build(&frame, master_mac);
 
     // 问题: 这里切换电平会导致第一次发送失败和导致校验位数据错误
     // digitalWrite(LORA_CE_PIN, LORA_CE_INACTIVE);
     // vTaskDelay(pdMS_TO_TICKS(100));  // TODO: 确保进入配置模式,记得是2ms,这里加10ms以防万一？
     LoraSerial.write((uint8_t*)&frame, sizeof(frame));
     // digitalWrite(LORA_CE_PIN, LORA_CE_ACTIVE);
+}
+
+bool LoraManager::readWakeFrame(uint8_t master_mac_out[6], uint32_t timeout_ms)
+{
+    uint8_t buffer[sizeof(lora_wake_frame_t)]{};
+    uint8_t index = 0;
+    uint8_t raw_sample[32]{};
+    uint8_t raw_sample_count = 0;
+    uint32_t raw_total_count = 0;
+    const uint32_t start_ms = millis();
+
+    while (millis() - start_ms < timeout_ms) {
+        while (LoraSerial.available()) {
+            const uint8_t byte = (uint8_t)LoraSerial.read();
+            raw_total_count++;
+            if (raw_sample_count < sizeof(raw_sample)) {
+                raw_sample[raw_sample_count++] = byte;
+            }
+
+            if (index == 0 && byte != MASTER_FRAME_HEAD) {
+                continue;
+            }
+
+            buffer[index++] = byte;
+
+            if (index == 2 && buffer[1] != FRAME_WAKE) {
+                index = 0;
+                continue;
+            }
+
+            if (index == sizeof(protocol_frame_t) &&
+                frame_validate(buffer, sizeof(protocol_frame_t), MASTER_FRAME_HEAD, FRAME_WAKE)) {
+                ESP_LOGW(LORA_TAG, "Received legacy 8-byte LoRa wake frame without master MAC");
+                index = 0;
+                continue;
+            }
+
+            if (index == sizeof(lora_wake_frame_t)) {
+                if (lora_wake_frame_validate(buffer, sizeof(buffer))) {
+                    const lora_wake_frame_t* frame = (const lora_wake_frame_t*)buffer;
+                    memcpy(master_mac_out, frame->master_mac, 6);
+                    ESP_LOGI(LORA_TAG, "Received %u raw LoRa bytes before valid wake frame",
+                             (unsigned)raw_total_count);
+                    return true;
+                }
+
+                index = 0;
+            }
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+
+    ESP_LOGW(LORA_TAG, "LoRa wake raw byte count: %u", (unsigned)raw_total_count);
+    if (raw_sample_count > 0) {
+        char hex[sizeof(raw_sample) * 3 + 1]{};
+        for (uint8_t i = 0; i < raw_sample_count; i++) {
+            snprintf(hex + (i * 3), sizeof(hex) - (i * 3), "%02X ", raw_sample[i]);
+        }
+        ESP_LOGW(LORA_TAG, "LoRa wake raw sample: %s", hex);
+    }
+
+    return false;
 }
 
 // ======================== 关闭 ========================

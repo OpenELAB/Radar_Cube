@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include <cstring>
 #include "config.h"
 #include "pins.h"
 #include "radar.h"
@@ -7,6 +8,10 @@
 #include "mac_match.h"
 #include "protocol.h"
 #include "espnow.h"
+
+#ifndef LORA_WAKE_FRAME_WAIT_MS
+#define LORA_WAKE_FRAME_WAIT_MS ((WAKE_POLL_INTERVAL_MS * WAKE_POLL_ROUNDS) + 1200)
+#endif
 
 // 系统模式
 enum SysMode {
@@ -117,6 +122,20 @@ static SysMode detectButtonMode(WakeupSource wakeup)
 // #ifdef OUTSIDE
 static void outside_work_mode(uint8_t* peer_mac)
 {
+    uint8_t lora_master_mac[6]{};
+    if (Lora.readWakeFrame(lora_master_mac, LORA_WAKE_FRAME_WAIT_MS)) {
+        ESP_LOGI(MAIN_TAG, "LoRa wake master MAC: %02X:%02X:%02X:%02X:%02X:%02X",
+                 lora_master_mac[0], lora_master_mac[1], lora_master_mac[2],
+                 lora_master_mac[3], lora_master_mac[4], lora_master_mac[5]);
+        ESP_LOGI(MAIN_TAG, "Paired master MAC: %02X:%02X:%02X:%02X:%02X:%02X",
+                 peer_mac[0], peer_mac[1], peer_mac[2],
+                 peer_mac[3], peer_mac[4], peer_mac[5]);
+        ESP_LOGI(MAIN_TAG, "LoRa wake MAC %s paired master MAC",
+                 memcmp(lora_master_mac, peer_mac, 6) == 0 ? "matches" : "does not match");
+    } else {
+        ESP_LOGW(MAIN_TAG, "No valid LoRa wake frame with master MAC received in %u ms",
+                 (unsigned)LORA_WAKE_FRAME_WAIT_MS);
+    }
     // 1) 回复唤醒 ACK
     protocol_frame_t ack;
     frame_build(&ack, SLAVE_FRAME_HEAD, FRAME_WAKE_ACK);

@@ -13,7 +13,7 @@ static const char* LORA_INIT_CMDS[] = {
     "AT+RFCH=18",
     "AT+PID=255",
     "AT+MAMP=2",
-    "AT+MLPWR=2",
+    "AT+MLPWR=0",
     "AT+MID=17",
     "AT+MODE=1"
 };
@@ -160,10 +160,10 @@ void LoraManager::setup()
 
 // ======================== 发送唤醒帧 ========================
 
-void LoraManager::sendWakeFrame()
+void LoraManager::sendWakeFrame(const uint8_t master_mac[6])
 {
-    protocol_frame_t frame;
-    frame_build(&frame, MASTER_FRAME_HEAD, FRAME_WAKE);
+    lora_wake_frame_t frame;
+    lora_wake_frame_build(&frame, master_mac);
 
     // 问题: 这里切换电平会导致第一次发送失败和导致校验位数据错误
     // digitalWrite(LORA_CE_PIN, LORA_CE_INACTIVE);

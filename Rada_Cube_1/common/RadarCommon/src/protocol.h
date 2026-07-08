@@ -30,6 +30,15 @@ typedef struct __attribute__((packed)) {
 
 static_assert(sizeof(protocol_frame_t) == 8, "protocol_frame_t must be 8 bytes");
 
+typedef struct __attribute__((packed)) {
+    uint8_t      head;
+    frame_type_t type;
+    uint8_t      master_mac[6];
+    uint8_t      checksum;
+} lora_wake_frame_t;
+
+static_assert(sizeof(lora_wake_frame_t) == 9, "lora_wake_frame_t must be 9 bytes");
+
 // ======================== 工具函数 ========================
 //
 // 使用示例：
@@ -47,13 +56,16 @@ static_assert(sizeof(protocol_frame_t) == 8, "protocol_frame_t must be 8 bytes")
 
 // 计算帧校验值
 uint8_t frame_calc_checksum(const protocol_frame_t* frame);
+uint8_t lora_wake_frame_calc_checksum(const lora_wake_frame_t* frame);
 
 // 构建帧（自动填充 reserve + checksum）
 void frame_build(protocol_frame_t* frame, uint8_t head, frame_type_t type,
                  uint16_t dist = 0, int16_t angle = 0);
+void lora_wake_frame_build(lora_wake_frame_t* frame, const uint8_t master_mac[6]);
 
 // 校验帧合法性
 bool frame_validate(const uint8_t* data, int len,
                     uint8_t expect_head, frame_type_t expect_type);
+bool lora_wake_frame_validate(const uint8_t* data, int len);
 
 #endif

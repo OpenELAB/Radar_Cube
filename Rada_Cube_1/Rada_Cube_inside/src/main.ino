@@ -36,6 +36,12 @@
 #ifndef DISTANCE_BEEP_MIN_SWITCH_MS
 #define DISTANCE_BEEP_MIN_SWITCH_MS     350
 #endif
+#ifndef LORA_WAKE_BURST_COUNT
+#define LORA_WAKE_BURST_COUNT           5
+#endif
+#ifndef LORA_WAKE_BURST_INTERVAL_MS
+#define LORA_WAKE_BURST_INTERVAL_MS     300
+#endif
 
 #define SENSOR_RESERVE_LOW_BATTERY_FLAG 0x01
 
@@ -458,14 +464,24 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
     espnow_msg_t msg;
     SensorLinkState sensor_a;
     SensorLinkState sensor_b;
+    uint8_t master_mac[6]{};
+
+    Espnow.getMac(master_mac);
+    ESP_LOGI(MAIN_TAG, "Inside master MAC: %02X:%02X:%02X:%02X:%02X:%02X",
+             master_mac[0], master_mac[1], master_mac[2],
+             master_mac[3], master_mac[4], master_mac[5]);
 
     // ================ 把循环里的电平切换放到外面来，加上100ms延时，之前的10ms延时不够会导致帧发送不完全 =================
     Lora.enable_ce();
     vTaskDelay(pdMS_TO_TICKS(100));
     for (int retry = 0; retry < WAKE_MAX_RETRY && !woke; retry++) {
         audioPromptUpdate();
-        Lora.sendWakeFrame();
         ESP_LOGI(MAIN_TAG, "Wake attempt %d/%d", retry + 1, WAKE_MAX_RETRY);
+        for (int i = 0; i < LORA_WAKE_BURST_COUNT; i++) {
+            Lora.sendWakeFrame(master_mac);
+            audioPromptUpdate();
+            vTaskDelay(pdMS_TO_TICKS(LORA_WAKE_BURST_INTERVAL_MS));
+        }
 
         for (int t = 0; t < WAKE_POLL_ROUNDS && !woke; t++) {
             audioPromptUpdate();

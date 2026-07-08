@@ -37,7 +37,7 @@ public:
     bool sendAT(const char* cmd, int timeout_ms = LORA_AT_TIMEOUT, uint8_t max_retry = LORA_AT_RETRY);
 
     // 通过 Lora 发送无线唤醒帧
-    void sendWakeFrame();
+    void sendWakeFrame(const uint8_t master_mac[6]);
 
     // 关闭 Lora 模块（拉低电源 + 关串口）
     void shutdown();
