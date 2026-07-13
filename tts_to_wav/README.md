@@ -54,7 +54,7 @@ $env:MIMO_API_KEY="你的_api_key"
 
 ### 按音效清单批量生成语音
 
-根据 `tts_to_wav/雷达项目音效清单设计.md` 批量生成所有语音类 WAV：
+根据 `tts_to_wav/音频与音效清单.md` 批量生成所有语音类 WAV：
 
 ```powershell
 $env:MIMO_API_KEY="你的_api_key"
@@ -63,8 +63,9 @@ python .\tts_to_wav\gen_voice_from_sound_list.py
 
 默认行为：
 
-- 只生成“播报语音”非空的状态/系统/模式/通信/电源/故障提示。
-- 不生成 `dist_beep_*` 距离蜂鸣。
+- 根据 Markdown 表头读取资源，只生成 `类型` 为 `语音` 且“播报内容”非空的条目。
+- 不生成 `短音效` 和 `距离蜂鸣` 条目。
+- 当前默认清单包含 22 条语音资源。
 - 输出到 `.\tts_to_wav\data`。
 - 已有同名 WAV 会被覆盖。
 - 使用 MiMo 内置音色 `茉莉`。
@@ -84,7 +85,7 @@ python .\tts_to_wav\gen_voice_from_sound_list.py --skip-existing
 指定清单、输出目录或音色：
 
 ```powershell
-python .\tts_to_wav\gen_voice_from_sound_list.py --source .\tts_to_wav\雷达项目音效清单设计.md --out-dir .\tts_to_wav\data --voice 茉莉
+python .\tts_to_wav\gen_voice_from_sound_list.py --source .\tts_to_wav\音频与音效清单.md --out-dir .\tts_to_wav\data --voice 茉莉
 ```
 
 ### 交互式批量生成
@@ -188,7 +189,7 @@ python -m py_compile .\tts_to_wav\mimo_tts_to_wav.py
 ## 现有脚本说明
 
 - `mimo_tts_to_wav.py`: 使用小米 MiMo 官方 TTS API 生成语音。
-- `gen_voice_from_sound_list.py`: 从 `雷达项目音效清单设计.md` 解析语音条目并批量生成 WAV。
+- `gen_voice_from_sound_list.py`: 从 `音频与音效清单.md` 按资源类型解析语音条目并批量生成 WAV。
 - `tts_to_wav.py`: 原有 Edge TTS 语音生成脚本；无参数运行时也会先配置一次，然后循环输入文本生成。
 - `gen_beeps.py`: 使用 `ffmpeg` 生成或归一化蜂鸣音资源。
 
