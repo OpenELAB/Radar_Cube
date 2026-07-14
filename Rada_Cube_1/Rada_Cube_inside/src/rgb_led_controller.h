@@ -164,8 +164,8 @@ private:
         RgbAnimation animation = RGB_ANIMATION_NONE;
     };
 
-    // _strip 只允许 RGB task 访问。
-    Adafruit_NeoPixel _strip;
+    // _strip 只允许 RGB task 访问；每个 begin()/end() 周期独立创建和释放。
+    Adafruit_NeoPixel* _strip = nullptr;
     QueueHandle_t _command_queue = nullptr;
 
     // 锁顺序固定为 api -> queue；RGB task 只获取 queue，避免强制退出遗留 api 锁。
@@ -203,6 +203,9 @@ private:
     void setTaskHandle(TaskHandle_t handle);
     void setTaskRunning(bool running);
     bool taskShouldRun() const;
+
+    // 熄灭灯珠并释放 NeoPixel 在 ESP32 上占用的 RMT 资源。
+    void releaseStripHardware();
 };
 
 #endif

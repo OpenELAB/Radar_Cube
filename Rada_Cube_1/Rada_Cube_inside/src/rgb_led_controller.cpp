@@ -1,5 +1,7 @@
 #include "rgb_led_controller.h"
 
+#include <new>
+
 namespace {
 
 constexpr uint8_t RGB_LED_POWER_ENABLE_LEVEL = HIGH;
@@ -159,7 +161,6 @@ void fillZone(RgbColor pixels[RGB_LED_COUNT],
 } // namespace
 
 RgbLedController::RgbLedController()
-    : _strip(RGB_LED_COUNT, RGB_LED_PIN, RGB_LED_PIXEL_TYPE)
 {
     _active_command.type = COMMAND_OFF;
     _active_command.brightness = RGB_LED_DEFAULT_BRIGHTNESS;
@@ -210,6 +211,24 @@ bool RgbLedController::begin()
         return false;
     }
 
+    _strip = new (std::nothrow) Adafruit_NeoPixel(
+        RGB_LED_COUNT,
+        RGB_LED_PIN,
+        RGB_LED_PIXEL_TYPE);
+    if (_strip == nullptr || _strip->numPixels() != RGB_LED_COUNT) {
+        delete _strip;
+        _strip = nullptr;
+        vSemaphoreDelete(_task_stopped);
+        _task_stopped = nullptr;
+        vQueueDelete(_command_queue);
+        _command_queue = nullptr;
+        vSemaphoreDelete(_queue_mutex);
+        _queue_mutex = nullptr;
+        vSemaphoreDelete(_api_mutex);
+        _api_mutex = nullptr;
+        return false;
+    }
+
     taskENTER_CRITICAL(&_state_mux);
     _active_command = Command{};
     _requested_brightness = RGB_LED_DEFAULT_BRIGHTNESS;
@@ -237,6 +256,8 @@ bool RgbLedController::begin()
     if (created != pdPASS) {
         setTaskRunning(false);
         setRgbPower(false);
+        delete _strip;
+        _strip = nullptr;
         vSemaphoreDelete(_task_stopped);
         _task_stopped = nullptr;
         vQueueDelete(_command_queue);
@@ -293,7 +314,7 @@ void RgbLedController::end()
             vTaskDelete(task_handle);
             setTaskRunning(false);
             setAnimationBusy(false);
-            setRgbPower(false);
+            releaseStripHardware();
         } else if (task_stopped != nullptr) {
             stopped_cleanly = xSemaphoreTake(
                 task_stopped,
@@ -451,10 +472,10 @@ void RgbLedController::taskEntry(void* arg)
 
 void RgbLedController::taskLoop()
 {
-    _strip.begin();
-    _strip.setBrightness(_current_brightness);
-    _strip.clear();
-    _strip.show();
+    _strip->begin();
+    _strip->setBrightness(_current_brightness);
+    _strip->clear();
+    _strip->show();
 
     while (taskShouldRun()) {
         Command command;
@@ -472,18 +493,16 @@ void RgbLedController::taskLoop()
         RgbColor pixels[RGB_LED_COUNT];
         renderFrame(millis(), pixels);
         for (uint8_t i = 0; i < RGB_LED_COUNT; i++) {
-            _strip.setPixelColor(
+            _strip->setPixelColor(
                 i,
-                _strip.Color(pixels[i].r, pixels[i].g, pixels[i].b));
+                _strip->Color(pixels[i].r, pixels[i].g, pixels[i].b));
         }
-        _strip.show();
+        _strip->show();
 
         vTaskDelay(pdMS_TO_TICKS(RGB_LED_FRAME_INTERVAL_MS));
     }
 
-    _strip.clear();
-    _strip.show();
-    setRgbPower(false);
+    releaseStripHardware();
 
     setAnimationBusy(false);
     setTaskRunning(false);
@@ -572,7 +591,7 @@ void RgbLedController::handleCommand(const Command& command)
     taskEXIT_CRITICAL(&_state_mux);
 
     _current_brightness = command.brightness;
-    _strip.setBrightness(_current_brightness);
+    _strip->setBrightness(_current_brightness);
 
     if (command.type == COMMAND_SET_BRIGHTNESS) {
         return;
@@ -724,4 +743,17 @@ bool RgbLedController::taskShouldRun() const
     const bool running = _task_running;
     taskEXIT_CRITICAL(&_state_mux);
     return running;
+}
+
+void RgbLedController::releaseStripHardware()
+{
+    if (_strip != nullptr) {
+        _strip->clear();
+        _strip->show();
+
+        // 析构函数按 Adafruit NeoPixel 的 ESP32 实现释放 RMT 和像素缓冲区。
+        delete _strip;
+        _strip = nullptr;
+    }
+    setRgbPower(false);
 }
