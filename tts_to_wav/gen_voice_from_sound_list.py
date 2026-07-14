@@ -23,7 +23,7 @@ from mimo_tts_to_wav import (
 SCRIPT_DIR = Path(__file__).resolve().parent
 DEFAULT_SOURCE = SCRIPT_DIR / "音频与音效清单.md"
 DEFAULT_OUT_DIR = SCRIPT_DIR / "data"
-DEFAULT_EXPECTED_COUNT = 22
+DEFAULT_EXPECTED_COUNT = 19
 
 COLUMN_ALIASES = {
     "文件名": ("文件名",),
