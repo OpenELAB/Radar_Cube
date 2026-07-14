@@ -29,10 +29,11 @@
 #define BUTTON_LONG_PRESS_MS    3000    // 长按阈值 (ms)，>3s 判定为长按
 
 // 距离报警阈值 (mm)
-#define DIST_DANGER_CM          70      // < 0.7m  紧急报警
-#define DIST_CLOSE_CM           120     // < 0.5m  急促报警
-#define DIST_MID_CM             170    // < 1.5m  中速报警
-#define DIST_FAR_CM             220    // < 2.2m  慢速报警
+#define DIST_DANGER_CM          30      // <= 30 cm
+#define DIST_CLOSE_CM           60      // 31..60 cm
+#define DIST_MID_CM             90      // 61..90 cm
+#define DIST_VERY_FAR_CM        120     // 91..120 cm
+#define DIST_FAR_CM             150     // 121..150 cm；> 150 cm 为安全距离
 // 迟滞区间大小
 #define DIST_HYSTERESIS_CM      5
 
