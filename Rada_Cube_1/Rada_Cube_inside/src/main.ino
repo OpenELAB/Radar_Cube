@@ -8,42 +8,28 @@
 #include "espnow.h"
 #include "rgb_led_controller.h"
 #include "speaker_controller.h"
+#include "feedback_controller.h"
 
 #ifndef LOW_BATTERY_PERCENT
 #define LOW_BATTERY_PERCENT             20
 #endif
-#ifndef AUDIO_PROMPT_QUEUE_LENGTH
-#define AUDIO_PROMPT_QUEUE_LENGTH       8
-#endif
-#ifndef AUDIO_PROMPT_DRAIN_TIMEOUT_MS
-#define AUDIO_PROMPT_DRAIN_TIMEOUT_MS   5000
-#endif
 #ifndef CONNECTION_LOST_TIMEOUT_MS
 #define CONNECTION_LOST_TIMEOUT_MS      1500
-#endif
-#ifndef CONNECTION_LOST_REPEAT_COUNT
-#define CONNECTION_LOST_REPEAT_COUNT    3
 #endif
 #ifndef SENSOR_INVALID_MAX_COUNT
 #define SENSOR_INVALID_MAX_COUNT        5
 #endif
-#ifndef SENSOR_FAULT_COOLDOWN_MS
-#define SENSOR_FAULT_COOLDOWN_MS        5000
+#ifndef DISTANCE_LEVEL_CONFIRM_COUNT
+#define DISTANCE_LEVEL_CONFIRM_COUNT    2
 #endif
-#ifndef DISTANCE_BEEP_CONFIRM_COUNT
-#define DISTANCE_BEEP_CONFIRM_COUNT     2
+#ifndef DISTANCE_LEVEL_MIN_SWITCH_MS
+#define DISTANCE_LEVEL_MIN_SWITCH_MS    350
 #endif
-#ifndef DISTANCE_BEEP_MIN_SWITCH_MS
-#define DISTANCE_BEEP_MIN_SWITCH_MS     350
-#endif
-
-#define SENSOR_RESERVE_LOW_BATTERY_FLAG 0x01
 
 struct SensorLinkState {
     bool woke = false;
     bool lost_announced = false;
     uint32_t last_data_ms = 0;
-    uint32_t last_fault_prompt_ms = 0;
     uint8_t invalid_count = 0;
 };
 
@@ -68,252 +54,103 @@ EspNowManager Espnow;
 MacMatch Matcher(Espnow);
 SpeakerController Speaker;
 RgbLedController RgbLed;
+FeedbackController Feedback(RgbLed, Speaker);
+static bool feedback_ready = false;
 
-struct AudioPrompt {
-    AudioId audio = AudioId::None;
-    SpeakerVolumeLevel volume = SpeakerVolumeLevel::Default;
+struct PairFeedbackContext {
+    bool left_paired = false;
+    bool right_paired = false;
 };
 
-static AudioPrompt audio_prompt_queue[AUDIO_PROMPT_QUEUE_LENGTH];
-static uint8_t audio_prompt_head = 0;
-static uint8_t audio_prompt_tail = 0;
-static uint8_t audio_prompt_count = 0;
-static bool audio_prompt_playing = false;
-static uint32_t audio_prompt_started_ms = 0;
-static AudioId current_distance_beep = AudioId::None;
-static AudioId pending_distance_beep = AudioId::None;
-static uint8_t pending_distance_beep_count = 0;
-static uint32_t last_distance_beep_switch_ms = 0;
-
-static const char* audioIdName(AudioId audio)
+static FeedbackScene modeToFeedbackScene(SysMode mode)
 {
-    switch (audio) {
-    case AudioId::BeepSlow:
-        return "BeepSlow";
-    case AudioId::BeepMediumSlow:
-        return "BeepMediumSlow";
-    case AudioId::BeepMedium:
-        return "BeepMedium";
-    case AudioId::BeepFast:
-        return "BeepFast";
-    case AudioId::BeepContinuous:
-        return "BeepContinuous";
-    case AudioId::Boot:
-        return "Boot";
-    case AudioId::PairOk:
-        return "PairOk";
-    case AudioId::PairFail:
-        return "PairFail";
-    case AudioId::ConnectionLost:
-        return "ConnectionLost";
-    case AudioId::LowBattery:
-        return "LowBattery";
-    case AudioId::Fault:
-        return "Fault";
-    case AudioId::None:
+    switch (mode) {
+    case UNPAIRED_MODE:
+        return FeedbackScene::Unpaired;
+    case PAIRED_MODE:
+        return FeedbackScene::Pairing;
+    case WORK_MODE:
+        return FeedbackScene::Working;
     default:
-        return "None";
+        return FeedbackScene::Idle;
     }
 }
 
-static bool audioPromptPush(AudioId audio,
-                            SpeakerVolumeLevel volume = SpeakerVolumeLevel::Default)
+static FeedbackSensorSet toFeedbackSensorSet(bool left_active, bool right_active)
 {
-    if (audio == AudioId::None || audio_prompt_count >= AUDIO_PROMPT_QUEUE_LENGTH) {
-        ESP_LOGW(MAIN_TAG, "Audio prompt dropped: %s", audioIdName(audio));
-        return false;
+    if (left_active && right_active) {
+        return FeedbackSensorSet::Both;
     }
-
-    audio_prompt_queue[audio_prompt_tail].audio = audio;
-    audio_prompt_queue[audio_prompt_tail].volume = volume;
-    audio_prompt_tail = (audio_prompt_tail + 1) % AUDIO_PROMPT_QUEUE_LENGTH;
-    audio_prompt_count++;
-    ESP_LOGI(MAIN_TAG, "Audio prompt queued: %s", audioIdName(audio));
-    return true;
+    if (left_active) {
+        return FeedbackSensorSet::Left;
+    }
+    if (right_active) {
+        return FeedbackSensorSet::Right;
+    }
+    return FeedbackSensorSet::None;
 }
 
-static void audioPromptUpdate()
+static FeedbackDistanceLevel distanceToFeedbackLevel(uint16_t distance_cm)
 {
-    if (!Speaker.isBegun()) {
+    if (distance_cm == UINT16_MAX || distance_cm > DIST_FAR_CM) {
+        return FeedbackDistanceLevel::Safe;
+    }
+    if (distance_cm > DIST_MID_CM) {
+        return FeedbackDistanceLevel::Far;
+    }
+    if (distance_cm > DIST_CLOSE_CM) {
+        return FeedbackDistanceLevel::Medium;
+    }
+    if (distance_cm > DIST_DANGER_CM) {
+        return FeedbackDistanceLevel::Near;
+    }
+    return FeedbackDistanceLevel::Danger;
+}
+
+static void waitFeedbackOrTimeout(uint32_t timeout_ms)
+{
+    if (!feedback_ready) {
         return;
     }
 
-    if (audio_prompt_playing) {
-        if (Speaker.currentMode() == SpeakerMode::Silent &&
-            millis() - audio_prompt_started_ms < (SPEAKER_TASK_IDLE_DELAY_MS * 3)) {
-            return;
-        }
-        if (Speaker.currentMode() != SpeakerMode::Silent) {
-            return;
-        }
-        audio_prompt_playing = false;
-        Speaker.setVolume(SpeakerVolumeLevel::High);
-    }
-
-    if (audio_prompt_count == 0) {
-        return;
-    }
-
-    AudioPrompt prompt = audio_prompt_queue[audio_prompt_head];
-    audio_prompt_head = (audio_prompt_head + 1) % AUDIO_PROMPT_QUEUE_LENGTH;
-    audio_prompt_count--;
-
-    if (current_distance_beep != AudioId::None) {
-        current_distance_beep = AudioId::None;
-        pending_distance_beep = AudioId::None;
-        pending_distance_beep_count = 0;
-        last_distance_beep_switch_ms = millis();
-    }
-
-    Speaker.setVolume(prompt.volume);
-    if (Speaker.playOnce(prompt.audio)) {
-        audio_prompt_playing = true;
-        audio_prompt_started_ms = millis();
-        ESP_LOGI(MAIN_TAG, "Audio prompt playing: %s", audioIdName(prompt.audio));
-    } else {
-        Speaker.setVolume(SpeakerVolumeLevel::High);
+    const uint32_t started_ms = millis();
+    while (Feedback.isBusy() && millis() - started_ms < timeout_ms) {
+        vTaskDelay(pdMS_TO_TICKS(10));
     }
 }
 
-static bool audioPromptBusy()
+static void pairFeedbackCallback(uint8_t slave_id,
+                                 const uint8_t mac[6],
+                                 void* context)
 {
-    return audio_prompt_playing || audio_prompt_count > 0;
-}
-
-static void audioPromptDrain(uint32_t timeout_ms)
-{
-    const uint32_t start_ms = millis();
-    while (audioPromptBusy() && millis() - start_ms < timeout_ms) {
-        audioPromptUpdate();
-        vTaskDelay(pdMS_TO_TICKS(SPEAKER_TASK_IDLE_DELAY_MS));
-    }
-}
-
-static void rgbEffectDrain(uint32_t timeout_ms)
-{
-    const uint32_t start_ms = millis();
-    while (RgbLed.isBegun() &&
-           !RgbLed.effectFinished() &&
-           millis() - start_ms < timeout_ms) {
-        audioPromptUpdate();
-        vTaskDelay(pdMS_TO_TICKS(RGB_LED_FRAME_INTERVAL_MS));
-    }
-}
-
-static void queueConnectionLostPrompt()
-{
-    for (uint8_t i = 0; i < CONNECTION_LOST_REPEAT_COUNT; i++) {
-        audioPromptPush(AudioId::ConnectionLost, SpeakerVolumeLevel::High);
-    }
-}
-
-static void queueShutdownPrompt()
-{
-    // Temporary shutdown prompt: reuse boot.wav at a lower volume until shutdown.wav exists.
-    audioPromptPush(AudioId::Boot, SpeakerVolumeLevel::Low);
-}
-
-static AudioId distanceToBeepAudio(uint16_t dist_cm)
-{
-    if (dist_cm == UINT16_MAX || dist_cm > 150) {
-        return AudioId::None;
-    }
-    if (dist_cm > 120) {
-        return AudioId::BeepSlow;
-    }
-    if (dist_cm > 90) {
-        return AudioId::BeepMediumSlow;
-    }
-    if (dist_cm > 60) {
-        return AudioId::BeepMedium;
-    }
-    if (dist_cm > 30) {
-        return AudioId::BeepFast;
-    }
-    return AudioId::BeepContinuous;
-}
-
-static void stopDistanceBeep()
-{
-    if (current_distance_beep == AudioId::None) {
-        return;
-    }
-
-    Speaker.stop();
-    ESP_LOGI(MAIN_TAG, "Distance beep stopped");
-    current_distance_beep = AudioId::None;
-    pending_distance_beep = AudioId::None;
-    pending_distance_beep_count = 0;
-    last_distance_beep_switch_ms = millis();
-}
-
-static void updateDistanceBeep(uint16_t min_dist_cm)
-{
-    if (!Speaker.isBegun()) {
-        return;
-    }
-
-    const AudioId target = distanceToBeepAudio(min_dist_cm);
-    if (target == current_distance_beep) {
-        pending_distance_beep = AudioId::None;
-        pending_distance_beep_count = 0;
-        return;
-    }
-
-    if (target != pending_distance_beep) {
-        pending_distance_beep = target;
-        pending_distance_beep_count = 1;
-        return;
-    }
-
-    if (pending_distance_beep_count < DISTANCE_BEEP_CONFIRM_COUNT) {
-        pending_distance_beep_count++;
-        return;
-    }
-
-    if (millis() - last_distance_beep_switch_ms < DISTANCE_BEEP_MIN_SWITCH_MS) {
-        return;
-    }
-
-    if (target == AudioId::None) {
-        stopDistanceBeep();
-        return;
-    }
-
-    if (Speaker.playLoop(target)) {
-        current_distance_beep = target;
-        pending_distance_beep = AudioId::None;
-        pending_distance_beep_count = 0;
-        last_distance_beep_switch_ms = millis();
-        ESP_LOGI(MAIN_TAG, "Distance beep playing: %s, dist=%u cm",
-                 audioIdName(target), min_dist_cm);
-    }
-}
-
-static void pairAudioCallback(uint8_t slave_id, const uint8_t mac[6], void* context)
-{
-    (void)slave_id;
     (void)mac;
-    (void)context;
-    audioPromptPush(AudioId::PairOk, SpeakerVolumeLevel::High);
-    audioPromptUpdate();
+    auto* pair_context = static_cast<PairFeedbackContext*>(context);
+
+    if (slave_id == SLAVE_A_ID) {
+        pair_context->left_paired = true;
+        if (!pair_context->right_paired && feedback_ready) {
+            Feedback.onPairLeftSucceededEvent();
+        }
+    } else if (slave_id == SLAVE_B_ID) {
+        pair_context->right_paired = true;
+        if (!pair_context->left_paired && feedback_ready) {
+            Feedback.onPairRightSucceededEvent();
+        }
+    }
 }
 
-static void enterDeepSleepWithAudio()
+static void enterDeepSleepWithFeedback(FeedbackScene current_scene)
 {
-    if (RgbLed.isBegun()) {
-        RgbLed.standby();
-        rgbEffectDrain(1200);
+    if (feedback_ready) {
+        Feedback.onShutdownEvent(current_scene);
+        waitFeedbackOrTimeout(FEEDBACK_DEFAULT_TIMEOUT_MS);
+        Feedback.end();
+        feedback_ready = false;
     }
 
     if (Speaker.isBegun()) {
-        Speaker.setKeepOutputAlive(false);
-        queueShutdownPrompt();
-        audioPromptDrain(AUDIO_PROMPT_DRAIN_TIMEOUT_MS);
-        Speaker.stop();
         Speaker.end();
     }
-
     if (RgbLed.isBegun()) {
         RgbLed.end();
     }
@@ -357,7 +194,6 @@ static uint32_t waitButtonRelease()
     while (digitalRead(USER_BUTTON_PIN) == BUTTON_PRESSED ||
            digitalRead(DEV_BUTTON_PIN)  == BUTTON_PRESSED)
     {
-        audioPromptUpdate();
         vTaskDelay(pdMS_TO_TICKS(300));
         if (millis() - t_start > BUTTON_LONG_PRESS_MS && led_flag) {
             // Led.led_off();
@@ -402,55 +238,45 @@ static bool isRadarDistanceValid(uint16_t dist)
     return dist > 0 && dist <= DIST_MAX_CM;
 }
 
-static void queueFaultPromptWithCooldown(SensorLinkState& sensor)
-{
-    const uint32_t now = millis();
-    if (sensor.last_fault_prompt_ms == 0 ||
-        now - sensor.last_fault_prompt_ms >= SENSOR_FAULT_COOLDOWN_MS) {
-        audioPromptPush(AudioId::Fault, SpeakerVolumeLevel::High);
-        sensor.last_fault_prompt_ms = now;
-    }
-}
-
-static void updateSensorDataState(SensorLinkState& sensor, const protocol_frame_t& data)
+static bool updateSensorDataState(SensorLinkState& sensor,
+                                  const protocol_frame_t& data)
 {
     const bool valid_distance = isRadarDistanceValid(data.dist);
     sensor.last_data_ms = millis();
 
-    if (sensor.lost_announced) {
+    bool just_restored = false;
+    if (valid_distance && sensor.lost_announced) {
         sensor.lost_announced = false;
+        just_restored = true;
     }
 
     if (valid_distance) {
         sensor.invalid_count = 0;
-        return;
+        return just_restored;
     }
 
     if (sensor.invalid_count < UINT8_MAX) {
         sensor.invalid_count++;
     }
-    if (sensor.invalid_count >= SENSOR_INVALID_MAX_COUNT) {
-        queueFaultPromptWithCooldown(sensor);
-    }
+    return false;
 }
 
-static void checkSensorConnectionLost(SensorLinkState& sensor, RgbSensorSide side)
+static bool updateSensorConnectionLost(SensorLinkState& sensor)
 {
     if (!sensor.woke || sensor.lost_announced || sensor.last_data_ms == 0) {
-        return;
+        return false;
     }
 
     if (millis() - sensor.last_data_ms >= CONNECTION_LOST_TIMEOUT_MS) {
         sensor.lost_announced = true;
         sensor.invalid_count = 0;
-        RgbLed.setSensorLost(side, true);
-        queueConnectionLostPrompt();
+        return true;
     }
+    return false;
 }
 
 static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
 {
-    RgbLed.showSystemStatus();
     // 1) Lora 发送唤醒帧，等从机 ESP-NOW 回复 WAKE_ACK
     bool slave_a_woke = false;
     bool slave_b_wake = false;
@@ -463,20 +289,19 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
     Lora.enable_ce();
     vTaskDelay(pdMS_TO_TICKS(100));
     for (int retry = 0; retry < WAKE_MAX_RETRY && !woke; retry++) {
-        audioPromptUpdate();
         Lora.sendWakeFrame();
         ESP_LOGI(MAIN_TAG, "Wake attempt %d/%d", retry + 1, WAKE_MAX_RETRY);
 
         for (int t = 0; t < WAKE_POLL_ROUNDS && !woke; t++) {
-            audioPromptUpdate();
             vTaskDelay(pdMS_TO_TICKS(WAKE_POLL_INTERVAL_MS));
             while (Espnow.read(&msg)) {
                 if (frame_validate(msg.data, msg.len, SLAVE_FRAME_HEAD, FRAME_WAKE_ACK)) {
                     // 这里判断一下是哪个从机返回的消息
                     if(memcmp(msg.src_mac, a_mac, 6) == 0) {
                         if (!slave_a_woke) {
-                            audioPromptPush(AudioId::PairOk, SpeakerVolumeLevel::High);
-                            RgbLed.sensorConnectedPulse(RgbSensorSide::Left);
+                            if (feedback_ready) {
+                                Feedback.onWakeLeftSucceededEvent();
+                            }
                         }
                         slave_a_woke = true;
                         sensor_a.woke = true;
@@ -484,8 +309,9 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
                     }
                     else if(memcmp(msg.src_mac, b_mac, 6) == 0) {
                         if (!slave_b_wake) {
-                            audioPromptPush(AudioId::PairOk, SpeakerVolumeLevel::High);
-                            RgbLed.sensorConnectedPulse(RgbSensorSide::Right);
+                            if (feedback_ready) {
+                                Feedback.onWakeRightSucceededEvent();
+                            }
                         }
                         slave_b_wake = true;
                         sensor_b.woke = true;
@@ -505,14 +331,16 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
     // TODO：唤醒失败，可能是两个从机中其中一个醒来另一个出问题，还是要发送一下工作结束帧让醒来的从机停止工作
     if (!woke) {
         ESP_LOGE(MAIN_TAG, "Failed to wake slave after %d retries", WAKE_MAX_RETRY);
-        RgbLed.setSensorLost(RgbSensorSide::Left, true);
-        RgbLed.setSensorLost(RgbSensorSide::Right, true);
-        queueConnectionLostPrompt();
+        if (feedback_ready) {
+            Feedback.onWakeTimedOutEvent(
+                toFeedbackSensorSet(slave_a_woke, slave_b_wake));
+        }
         
 
         // 唤醒失败发送停止工作帧，确保从机全部关闭
         sendEndFrame(a_mac, MASTER_FRAME_HEAD);
         sendEndFrame(b_mac, MASTER_FRAME_HEAD);
+        waitFeedbackOrTimeout(FEEDBACK_DEFAULT_TIMEOUT_MS);
         
         return;
     }
@@ -536,14 +364,17 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
 
     protocol_frame_t slave_a_data = {0};
     protocol_frame_t slave_b_data  = {0};
-    uint16_t dist_min = 0;
     bool exit_flag = false;
+    bool distance_feedback_started = false;
+    FeedbackSensorSet last_active_sensors = FeedbackSensorSet::None;
+    FeedbackDistanceLevel last_distance_level = FeedbackDistanceLevel::Safe;
+    FeedbackDistanceLevel pending_distance_level = FeedbackDistanceLevel::Safe;
+    uint8_t pending_distance_level_count = 0;
+    uint32_t last_distance_level_switch_ms = 0;
 
     // 迟滞区间，用来记录上一次是什么模式，防止频繁切换
 
     while (true) {
-        audioPromptUpdate();
-
         // 退出条件1：超时
         if (millis() - work_start > WORK_TIMEOUT_MS) {
             ESP_LOGI(MAIN_TAG, "Work timeout, exiting");
@@ -565,6 +396,9 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
         // ESP_LOGI(MAIN_TAG, "Queue depth: %d", Espnow.getQueueCount());
 
         // TODO：队列里读取雷达数据, 如果队列里一直有数据，会不会出现卡死的情况?
+        bool left_just_restored = false;
+        bool right_just_restored = false;
+
         while(Espnow.read(&msg))
         {
             if(frame_validate(msg.data, msg.len, SLAVE_FRAME_HEAD, FRAME_RADAR_DATA))
@@ -573,28 +407,16 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
                 if(memcmp(msg.src_mac, a_mac, 6) == 0)
                 {
                     memcpy(&slave_a_data, msg.data, sizeof(protocol_frame_t));
-                    updateSensorDataState(sensor_a, slave_a_data);
-                    RgbLed.setSensorLost(RgbSensorSide::Left, false);
-                    RgbLed.setSensorLowBattery(
-                        RgbSensorSide::Left,
-                        (slave_a_data.reserve & SENSOR_RESERVE_LOW_BATTERY_FLAG) != 0);
-                    RgbLed.setSensorFault(
-                        RgbSensorSide::Left,
-                        sensor_a.invalid_count >= SENSOR_INVALID_MAX_COUNT);
+                    left_just_restored |=
+                        updateSensorDataState(sensor_a, slave_a_data);
                     ESP_LOGI(SLAVE_A_TAG, "slave_A: dist=%d mm, angle=%.2f deg"
                              , slave_a_data.dist, slave_a_data.angle * 0.01f);
                 }
                 else if(memcmp(msg.src_mac, b_mac, 6) == 0)
                 {
                     memcpy(&slave_b_data, msg.data, sizeof(protocol_frame_t));
-                    updateSensorDataState(sensor_b, slave_b_data);
-                    RgbLed.setSensorLost(RgbSensorSide::Right, false);
-                    RgbLed.setSensorLowBattery(
-                        RgbSensorSide::Right,
-                        (slave_b_data.reserve & SENSOR_RESERVE_LOW_BATTERY_FLAG) != 0);
-                    RgbLed.setSensorFault(
-                        RgbSensorSide::Right,
-                        sensor_b.invalid_count >= SENSOR_INVALID_MAX_COUNT);
+                    right_just_restored |=
+                        updateSensorDataState(sensor_b, slave_b_data);
                     ESP_LOGI(SLAVE_B_TAG, "slave_B: dist=%d mm, angle=%.2f deg"
                              , slave_b_data.dist, slave_b_data.angle * 0.01f);
                 }
@@ -615,16 +437,46 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
 
         // 模式判断
         // TODO：如果从机数据很久没有更新了，是不是也应该认为它失联了？
-        checkSensorConnectionLost(sensor_a, RgbSensorSide::Left);
-        checkSensorConnectionLost(sensor_b, RgbSensorSide::Right);
+        const bool left_just_lost = updateSensorConnectionLost(sensor_a);
+        const bool right_just_lost = updateSensorConnectionLost(sensor_b);
+        const bool both_sensor_lost =
+            sensor_a.lost_announced && sensor_b.lost_announced;
+
+        if (both_sensor_lost && (left_just_lost || right_just_lost)) {
+            if (feedback_ready) {
+                Feedback.onBothLinksLostEvent();
+            }
+            exit_flag = true;
+        } else if (feedback_ready) {
+            if (left_just_lost) {
+                Feedback.onLeftLinkLostEvent();
+            }
+            if (right_just_lost) {
+                Feedback.onRightLinkLostEvent();
+            }
+            if (left_just_restored) {
+                Feedback.onLeftLinkRestoredEvent();
+            }
+            if (right_just_restored) {
+                Feedback.onRightLinkRestoredEvent();
+            }
+        }
+
+        if (exit_flag) {
+            break;
+        }
 
         uint16_t dist_a = slave_a_data.dist;
         uint16_t dist_b = slave_b_data.dist;
 
         // 判断数据是否有效
         // TODO：需不需要加上最大值限制？
-        bool valid_a = !sensor_a.lost_announced && isRadarDistanceValid(dist_a);
-        bool valid_b = !sensor_b.lost_announced && isRadarDistanceValid(dist_b);
+        bool valid_a = sensor_a.woke &&
+                       !sensor_a.lost_announced &&
+                       isRadarDistanceValid(dist_a);
+        bool valid_b = sensor_b.woke &&
+                       !sensor_b.lost_announced &&
+                       isRadarDistanceValid(dist_b);
 
         // 取判断值
         uint16_t min_dist = UINT16_MAX;
@@ -652,30 +504,54 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
 
         // 加上迟滞区间，防止蜂鸣器模式频繁切换
 
-        const bool both_sensor_lost = sensor_a.lost_announced && sensor_b.lost_announced;
-        const bool any_sensor_fault =
-            sensor_a.invalid_count >= SENSOR_INVALID_MAX_COUNT ||
-            sensor_b.invalid_count >= SENSOR_INVALID_MAX_COUNT;
+        const FeedbackSensorSet active_sensors =
+            toFeedbackSensorSet(valid_a, valid_b);
+        FeedbackDistanceLevel distance_level =
+            distanceToFeedbackLevel(min_dist);
+        bool distance_level_confirmed = !distance_feedback_started;
 
-        if (both_sensor_lost || any_sensor_fault || min_dist == UINT16_MAX) {
-            RgbLed.clearParkingDistance();
-        } else {
-            RgbLed.updateParkingDistance(min_dist);
+        if (distance_feedback_started) {
+            if (distance_level == last_distance_level) {
+                pending_distance_level = last_distance_level;
+                pending_distance_level_count = 0;
+            } else {
+                if (distance_level != pending_distance_level) {
+                    pending_distance_level = distance_level;
+                    pending_distance_level_count = 1;
+                } else if (pending_distance_level_count < UINT8_MAX) {
+                    pending_distance_level_count++;
+                }
+
+                distance_level_confirmed =
+                    pending_distance_level_count >= DISTANCE_LEVEL_CONFIRM_COUNT &&
+                    millis() - last_distance_level_switch_ms >=
+                        DISTANCE_LEVEL_MIN_SWITCH_MS;
+            }
         }
 
-        if (audioPromptBusy()) {
-            stopDistanceBeep();
-        } else {
-            updateDistanceBeep(min_dist);
+        const bool active_sensors_changed =
+            active_sensors != last_active_sensors;
+        const bool distance_feedback_changed =
+            !distance_feedback_started ||
+            active_sensors_changed ||
+            (distance_level != last_distance_level && distance_level_confirmed);
+
+        if (feedback_ready &&
+            active_sensors != FeedbackSensorSet::None &&
+            distance_feedback_changed &&
+            !Feedback.isBusy()) {
+            Feedback.onDistanceLevelChangedEvent(active_sensors, distance_level);
+            last_active_sensors = active_sensors;
+            last_distance_level = distance_level;
+            pending_distance_level = distance_level;
+            pending_distance_level_count = 0;
+            last_distance_level_switch_ms = millis();
+            distance_feedback_started = true;
         }
 
         vTaskDelay(pdMS_TO_TICKS(WORK_POLL_INTERVAL_MS));
     }
-    // 改为主动杀死进程
-    stopDistanceBeep();
-    vTaskDelay(pdMS_TO_TICKS(200));
-
-    // 4) 退出：停蜂鸣 + 通知从机结束
+    // 4) 退出：通知从机结束。距离反馈由后续 shutdown 事件统一停止。
     sendEndFrame(a_mac, MASTER_FRAME_HEAD);
     sendEndFrame(b_mac, MASTER_FRAME_HEAD);
     ESP_LOGI(MAIN_TAG, "Work mode finished");
@@ -716,10 +592,7 @@ static void handleMode(SysMode mode)
     {
     case FACTORY_RESET_MODE:
         ESP_LOGI(MAIN_TAG, "Mode: FACTORY_RESET");
-        RgbLed.factoryReset();
-        rgbEffectDrain(800);
-        // for (int i = 0; i < 3; i++) Led.blink(LED_PERIOD_3);
-        // 清除
+        // 第一版 Feedback API 暂未定义恢复出厂反馈，只处理业务动作。
         Matcher.clear_slave_mac();
         Lora.setup();               // 需要先初始化 Lora 才能清配置
         Lora.clearConfigFlag();
@@ -729,24 +602,45 @@ static void handleMode(SysMode mode)
     // TODO：unpair模式要不要直接开始配对？
     case UNPAIRED_MODE:
         ESP_LOGI(MAIN_TAG, "Mode: UNPAIRED");
-        RgbLed.unpairedWarning();
-        rgbEffectDrain(800);
-        // for (int i = 0; i < 2; i++) Led.blink(LED_PERIOD_2);
+        if (feedback_ready) {
+            Feedback.onUnpairedDetectedEvent();
+        }
         break;
 
     case PAIRED_MODE:
-        ESP_LOGI(MAIN_TAG, "Mode: PAIRED");
-        RgbLed.pairing();
-        // TODO：这里需不要要用灯来指示配对过程，比如处于配对时用呼吸灯？
-        // Led.blink(LED_PERIOD_1);
-        if (!Matcher.pair(PAIR_MAX_RETRY, pairAudioCallback, nullptr)) {
-            ESP_LOGE(MAIN_TAG, "Pair failed, going to sleep");
-        } else {
-            RgbLed.pairSuccess();
-            rgbEffectDrain(800);
-            // for (int i = 0; i < 3; i++) Led.blink(LED_PERIOD_1);  // 配对成功提示
+    {
+        ESP_LOGI(MAIN_TAG, "Mode: PAIRING");
+        if (feedback_ready) {
+            Feedback.onPairingStartedEvent();
         }
+
+        PairFeedbackContext pair_context;
+        pair_context.left_paired = Matcher.has_slave_a_mac();
+        pair_context.right_paired = Matcher.has_slave_b_mac();
+
+        const bool pair_ok = Matcher.pair(
+            PAIR_MAX_RETRY,
+            pairFeedbackCallback,
+            &pair_context);
+
+        const FeedbackSensorSet paired_sensors =
+            toFeedbackSensorSet(pair_context.left_paired,
+                                pair_context.right_paired);
+
+        if (!pair_ok && paired_sensors != FeedbackSensorSet::Both) {
+            ESP_LOGE(MAIN_TAG, "Pair failed, going to sleep");
+            if (feedback_ready) {
+                Feedback.onPairingTimedOutEvent(paired_sensors);
+            }
+        } else {
+            if (feedback_ready) {
+                Feedback.onPairBothSucceededEvent();
+            }
+        }
+
+        waitFeedbackOrTimeout(FEEDBACK_DEFAULT_TIMEOUT_MS);
         break;
+    }
 
     case TEST_MODE:
         ESP_LOGI(MAIN_TAG, "Mode: TEST");
@@ -763,8 +657,6 @@ static void handleMode(SysMode mode)
     case WORK_MODE:
     {
         ESP_LOGI(MAIN_TAG, "Mode: WORK");
-        Speaker.setKeepOutputAlive(true);
-        // Led.led_on();
 
         // ---- 车内模块工作流程 ----
         // 1) Lora 初始化 + 发唤醒帧
@@ -784,7 +676,6 @@ static void handleMode(SysMode mode)
         inside_work_mode(a_mac, b_mac);
 
         // 4) 清理
-        Speaker.setKeepOutputAlive(false);
         Espnow.recvStop();
         Espnow.deinit();
         Lora.shutdown();
@@ -811,32 +702,37 @@ void setup()
     pinMode(LORA_POWER_PIN, OUTPUT);
     digitalWrite(LORA_POWER_PIN, LORA_POWER_ON);
 
-    if (RgbLed.begin()) {
-        RgbLed.setBrightness(RgbBrightnessLevel::Medium);
-        RgbLed.startup();
-        rgbEffectDrain(1400);
+    const bool rgb_ready = RgbLed.begin();
+    if (rgb_ready) {
+        RgbLed.setBrightness(48);
     } else {
         ESP_LOGE(MAIN_TAG, "RGB LED init failed");
     }
 
-    if (Speaker.begin()) {
-        Speaker.setVolume(SpeakerVolumeLevel::High);
-        audioPromptPush(AudioId::Boot, SpeakerVolumeLevel::High);
-        audioPromptUpdate();
+    const bool speaker_ready = Speaker.begin();
+    if (speaker_ready) {
+        Speaker.setVolume(75);
     } else {
         ESP_LOGE(MAIN_TAG, "Speaker init failed");
+    }
+
+    if (rgb_ready && speaker_ready) {
+        feedback_ready = Feedback.begin();
+        if (!feedback_ready) {
+            ESP_LOGE(MAIN_TAG, "Feedback controller init failed");
+        }
     }
 
     // 电池电量检测
     uint8_t bat = Power.get_battery_value();
     if (bat <= LOW_BATTERY_PERCENT) {
-        RgbLed.setInsideLowBattery(true);
-        audioPromptPush(AudioId::LowBattery, SpeakerVolumeLevel::High);
+        // 第一版 Feedback API 暂未定义低电事件，先保留业务日志。
+        ESP_LOGW(MAIN_TAG, "Low battery: %u%%", bat);
     }
     // 这个可以调高一点，bat是0的时候可能不能上电了就
     if (bat == 0) {
         ESP_LOGE(MAIN_TAG, "Battery empty, going to sleep");
-        enterDeepSleepWithAudio();
+        enterDeepSleepWithFeedback(FeedbackScene::Idle);
         return;
         // TODO：是不是可以在电量过低时发个警告？比如闪灯或者蜂鸣？
     }
@@ -848,8 +744,12 @@ void setup()
 
     // 判断模式 → 执行 → 睡眠
     SysMode mode = determineMode(wakeup, has_peer);
+    FeedbackScene scene = modeToFeedbackScene(mode);
+    if (feedback_ready) {
+        Feedback.onSystemBootEvent(scene);
+    }
     handleMode(mode);
-    enterDeepSleepWithAudio();
+    enterDeepSleepWithFeedback(scene);
 }
 
 void loop() { }
