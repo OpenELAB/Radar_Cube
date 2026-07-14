@@ -25,7 +25,6 @@
 #ifndef DISTANCE_LEVEL_MIN_SWITCH_MS
 #define DISTANCE_LEVEL_MIN_SWITCH_MS    350
 #endif
-
 struct SensorLinkState {
     bool woke = false;
     bool lost_announced = false;
@@ -94,6 +93,9 @@ static FeedbackDistanceLevel distanceToFeedbackLevel(uint16_t distance_cm)
 {
     if (distance_cm == UINT16_MAX || distance_cm > DIST_FAR_CM) {
         return FeedbackDistanceLevel::Safe;
+    }
+    if (distance_cm > (DIST_VERY_FAR_CM)) {
+        return FeedbackDistanceLevel::VeryFar;
     }
     if (distance_cm > DIST_MID_CM) {
         return FeedbackDistanceLevel::Far;
@@ -704,14 +706,14 @@ void setup()
 
     const bool rgb_ready = RgbLed.begin();
     if (rgb_ready) {
-        RgbLed.setBrightness(48);
+        RgbLed.setBrightness(RGB_LED_DEFAULT_BRIGHTNESS);
     } else {
         ESP_LOGE(MAIN_TAG, "RGB LED init failed");
     }
 
     const bool speaker_ready = Speaker.begin();
     if (speaker_ready) {
-        Speaker.setVolume(75);
+        Speaker.setVolume(SPEAKER_DEFAULT_VOLUME);
     } else {
         ESP_LOGE(MAIN_TAG, "Speaker init failed");
     }
@@ -726,7 +728,7 @@ void setup()
     // 电池电量检测
     uint8_t bat = Power.get_battery_value();
     if (bat <= LOW_BATTERY_PERCENT) {
-        // 第一版 Feedback API 暂未定义低电事件，先保留业务日志。
+        // 电量检测和低电处理由 main/电源管理负责；这里先记录低电日志。
         ESP_LOGW(MAIN_TAG, "Low battery: %u%%", bat);
     }
     // 这个可以调高一点，bat是0的时候可能不能上电了就
