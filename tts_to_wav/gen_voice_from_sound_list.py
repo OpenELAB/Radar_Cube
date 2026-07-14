@@ -1,9 +1,4 @@
-"""
-Generate voice WAV files from 雷达项目音效清单设计.md.
-
-This script only generates entries that have both a WAV filename and a spoken
-voice prompt. Distance beep assets are intentionally skipped.
-"""
+"""Generate voice WAV files from 音频与音效清单.md."""
 
 from __future__ import annotations
 
@@ -26,9 +21,17 @@ from mimo_tts_to_wav import (
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-DEFAULT_SOURCE = SCRIPT_DIR / "雷达项目音效清单设计.md"
+DEFAULT_SOURCE = SCRIPT_DIR / "音频与音效清单.md"
 DEFAULT_OUT_DIR = SCRIPT_DIR / "data"
-DEFAULT_EXPECTED_COUNT = 34
+DEFAULT_EXPECTED_COUNT = 19
+
+COLUMN_ALIASES = {
+    "文件名": ("文件名",),
+    "类型": ("类型",),
+    "播报内容": ("播报内容", "播报内容/声音说明"),
+}
+ALLOWED_AUDIO_TYPES = {"语音", "短音效", "距离蜂鸣"}
+VOICE_AUDIO_TYPE = "语音"
 
 
 @dataclass(frozen=True)
@@ -46,42 +49,81 @@ def split_markdown_row(line: str) -> list[str]:
 def extract_wav_filename(value: str) -> str | None:
     match = re.search(r"`([^`]+\.wav)`", value)
     if match:
-        return match.group(1).strip()
+        value = match.group(1).strip()
+    else:
+        value = value.strip()
 
-    value = value.strip()
     if re.fullmatch(r"[a-z0-9_]+\.wav", value):
         return value
 
     return None
 
 
-def is_voice_text(value: str) -> bool:
-    value = value.strip()
-    if not value or value == "播报语音":
-        return False
-    return not any(marker in value for marker in ("无语音", "仅蜂鸣"))
-
-
 def parse_voice_entries(source_path: Path) -> list[VoiceEntry]:
     entries: list[VoiceEntry] = []
+    column_indexes: dict[str, int] | None = None
+    seen_filenames: set[str] = set()
 
-    for line in source_path.read_text(encoding="utf-8").splitlines():
+    for line_number, line in enumerate(
+        source_path.read_text(encoding="utf-8").splitlines(),
+        start=1,
+    ):
         columns = split_markdown_row(line)
-        if len(columns) < 5:
+        if not columns:
             continue
 
-        filename = extract_wav_filename(columns[3])
+        matched_columns = {
+            logical_name: next(
+                (alias for alias in aliases if alias in columns),
+                None,
+            )
+            for logical_name, aliases in COLUMN_ALIASES.items()
+        }
+        if all(matched_columns.values()):
+            column_indexes = {
+                logical_name: columns.index(alias)
+                for logical_name, alias in matched_columns.items()
+                if alias is not None
+            }
+            continue
+
+        if column_indexes is None:
+            continue
+
+        if all(re.fullmatch(r":?-{3,}:?", column) for column in columns):
+            continue
+
+        last_required_index = max(column_indexes.values())
+        if len(columns) <= last_required_index:
+            raise ValueError(f"第 {line_number} 行缺少必需列")
+
+        raw_filename = columns[column_indexes["文件名"]]
+        filename = extract_wav_filename(raw_filename)
         if not filename:
+            raise ValueError(
+                f"第 {line_number} 行的 WAV 文件名无效: {raw_filename or '<空>'}"
+            )
+
+        if filename in seen_filenames:
+            raise ValueError(f"第 {line_number} 行存在重复的 WAV 文件名: {filename}")
+        seen_filenames.add(filename)
+
+        audio_type = columns[column_indexes["类型"]].strip()
+        if audio_type not in ALLOWED_AUDIO_TYPES:
+            raise ValueError(f"第 {line_number} 行的音频类型无效: {audio_type or '<空>'}")
+
+        if audio_type != VOICE_AUDIO_TYPE:
             continue
 
-        if filename.startswith("dist_beep_"):
-            continue
-
-        text = columns[4].strip()
-        if not is_voice_text(text):
-            continue
+        text = columns[column_indexes["播报内容"]].strip()
+        if not text:
+            raise ValueError(f"第 {line_number} 行的播报内容不能为空: {filename}")
 
         entries.append(VoiceEntry(filename=filename, text=text))
+
+    if column_indexes is None:
+        required = "、".join(COLUMN_ALIASES)
+        raise ValueError(f"未找到包含以下列的音频资源表: {required}")
 
     return entries
 
@@ -104,7 +146,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument(
         "--source",
         default=str(DEFAULT_SOURCE),
-        help="Path to 雷达项目音效清单设计.md.",
+        help="Path to 音频与音效清单.md.",
     )
     parser.add_argument(
         "--out-dir",

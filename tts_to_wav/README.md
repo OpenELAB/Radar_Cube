@@ -54,7 +54,7 @@ $env:MIMO_API_KEY="你的_api_key"
 
 ### 按音效清单批量生成语音
 
-根据 `tts_to_wav/雷达项目音效清单设计.md` 批量生成所有语音类 WAV：
+根据 `tts_to_wav/音频与音效清单.md` 批量生成所有语音类 WAV：
 
 ```powershell
 $env:MIMO_API_KEY="你的_api_key"
@@ -63,8 +63,9 @@ python .\tts_to_wav\gen_voice_from_sound_list.py
 
 默认行为：
 
-- 只生成“播报语音”非空的状态/系统/模式/通信/电源/故障提示。
-- 不生成 `dist_beep_*` 距离蜂鸣。
+- 根据 Markdown 表头读取资源，只生成 `类型` 为 `语音` 且“播报内容”非空的条目。
+- 不生成 `短音效` 和 `距离蜂鸣` 条目。
+- 当前默认清单包含 19 条语音资源。
 - 输出到 `.\tts_to_wav\data`。
 - 已有同名 WAV 会被覆盖。
 - 使用 MiMo 内置音色 `茉莉`。
@@ -84,7 +85,7 @@ python .\tts_to_wav\gen_voice_from_sound_list.py --skip-existing
 指定清单、输出目录或音色：
 
 ```powershell
-python .\tts_to_wav\gen_voice_from_sound_list.py --source .\tts_to_wav\雷达项目音效清单设计.md --out-dir .\tts_to_wav\data --voice 茉莉
+python .\tts_to_wav\gen_voice_from_sound_list.py --source .\tts_to_wav\音频与音效清单.md --out-dir .\tts_to_wav\data --voice 茉莉
 ```
 
 ### 交互式批量生成
@@ -104,8 +105,8 @@ python .\tts_to_wav\mimo_tts_to_wav.py --interactive
 进入后先配置一次模式、音色、输出目录、采样率等参数，然后一直输入文本生成 WAV：
 
 ```text
-文本> 雷达失联
-文本> 左侧雷达配对成功 => pair_ok_left.wav
+文本> 设备未配对
+文本> 主机电量低 => power_low.wav
 文本> :config
 文本> q
 ```
@@ -122,19 +123,19 @@ python .\tts_to_wav\mimo_tts_to_wav.py --interactive
 使用默认文本设计音色生成提示音：
 
 ```powershell
-python .\tts_to_wav\mimo_tts_to_wav.py "雷达失联" -o .\tts_to_wav\data\link_lost_both.wav
+python .\tts_to_wav\mimo_tts_to_wav.py "设备未配对" -o .\tts_to_wav\data\mode_unpaired.wav
 ```
 
 自定义文本设计音色：
 
 ```powershell
-python .\tts_to_wav\mimo_tts_to_wav.py "电量低" -o .\tts_to_wav\data\low_battery_left.wav --voice-design "年轻女性车载安全提示音，普通话标准，声音清晰明亮，语气冷静，短促直接。"
+python .\tts_to_wav\mimo_tts_to_wav.py "主机电量低" -o .\tts_to_wav\data\power_low.wav --voice-design "年轻女性车载安全提示音，普通话标准，声音清晰明亮，语气冷静，短促直接。"
 ```
 
 启用文本优化预览：
 
 ```powershell
-python .\tts_to_wav\mimo_tts_to_wav.py "雷达失联" -o .\tts_to_wav\data\link_lost_both.wav --optimize-text-preview
+python .\tts_to_wav\mimo_tts_to_wav.py "设备未配对" -o .\tts_to_wav\data\mode_unpaired.wav --optimize-text-preview
 ```
 
 注意：`--optimize-text-preview` 可能会润色或扩写播报文本。雷达提示音通常不建议开启。
@@ -142,31 +143,31 @@ python .\tts_to_wav\mimo_tts_to_wav.py "雷达失联" -o .\tts_to_wav\data\link_
 使用 MiMo 内置音色兼容模式：
 
 ```powershell
-python .\tts_to_wav\mimo_tts_to_wav.py "雷达故障" -o .\tts_to_wav\data\fault_left.wav --mode builtin --voice 茉莉
+python .\tts_to_wav\mimo_tts_to_wav.py "系统故障" -o .\tts_to_wav\data\fault_system.wav --mode builtin --voice 茉莉
 ```
 
 指定内置音色模式的播报风格：
 
 ```powershell
-python .\tts_to_wav\mimo_tts_to_wav.py "左侧雷达配对成功" -o .\tts_to_wav\data\pair_ok_left.wav --mode builtin --voice 茉莉 --style "清晰、标准普通话、冷静克制，适合车载安全提示音，短促直接。"
+python .\tts_to_wav\mimo_tts_to_wav.py "左侧雷达电量低" -o .\tts_to_wav\data\power_sensor_low_left.wav --mode builtin --voice 茉莉 --style "清晰、标准普通话、冷静克制，适合车载安全提示音，短促直接。"
 ```
 
 指定音频标签：
 
 ```powershell
-python .\tts_to_wav\mimo_tts_to_wav.py "雷达失联" -o .\tts_to_wav\data\link_lost_both.wav --style-tags "平静 干练 清亮"
+python .\tts_to_wav\mimo_tts_to_wav.py "通信异常" -o .\tts_to_wav\data\fault_comm.wav --style-tags "平静 干练 清亮"
 ```
 
 关闭音频标签，只使用普通文本：
 
 ```powershell
-python .\tts_to_wav\mimo_tts_to_wav.py "雷达失联" -o .\tts_to_wav\data\link_lost_both.wav --no-style-tags
+python .\tts_to_wav\mimo_tts_to_wav.py "通信异常" -o .\tts_to_wav\data\fault_comm.wav --no-style-tags
 ```
 
 保留 MiMo API 返回的原始 WAV，方便检查或对比：
 
 ```powershell
-python .\tts_to_wav\mimo_tts_to_wav.py "雷达故障" -o .\tts_to_wav\data\fault_left.wav --keep-temp
+python .\tts_to_wav\mimo_tts_to_wav.py "左侧雷达故障" -o .\tts_to_wav\data\fault_sensor_left.wav --keep-temp
 ```
 
 使用 `--keep-temp` 时，原始文件会保存为输出文件旁边的 `*.mimo_source.wav`。
@@ -188,7 +189,7 @@ python -m py_compile .\tts_to_wav\mimo_tts_to_wav.py
 ## 现有脚本说明
 
 - `mimo_tts_to_wav.py`: 使用小米 MiMo 官方 TTS API 生成语音。
-- `gen_voice_from_sound_list.py`: 从 `雷达项目音效清单设计.md` 解析语音条目并批量生成 WAV。
+- `gen_voice_from_sound_list.py`: 从 `音频与音效清单.md` 按资源类型解析语音条目并批量生成 WAV。
 - `tts_to_wav.py`: 原有 Edge TTS 语音生成脚本；无参数运行时也会先配置一次，然后循环输入文本生成。
 - `gen_beeps.py`: 使用 `ffmpeg` 生成或归一化蜂鸣音资源。
 
