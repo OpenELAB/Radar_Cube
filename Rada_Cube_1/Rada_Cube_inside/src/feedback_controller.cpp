@@ -36,11 +36,11 @@ static LedZone workZoneFromSensorSet(FeedbackSensorSet sensors)
 {
     switch (sensors) {
     case FeedbackSensorSet::Left:
-        return LED_ZONE_LEFT;
+        return LED_ZONE_ONLY_LEFT;
     case FeedbackSensorSet::Right:
-        return LED_ZONE_RIGHT;
+        return LED_ZONE_ONLY_RIGHT;
     case FeedbackSensorSet::Both:
-        return LED_ZONE_ALL;
+        return LED_ZONE_ONLY_SIDES;
     case FeedbackSensorSet::None:
     default:
         return LED_ZONE_NONE;
@@ -273,7 +273,6 @@ void FeedbackController::onPairLeftSucceededEvent()
 
     _rgb.solid(RGB_COLOR_GREEN,
                sideZoneFromSensorSet(_active_sensors));
-    playOnceAudio(_speaker, AUDIO_ID_TONE_SUCCESS_UP, false);
 }
 
 void FeedbackController::onPairRightSucceededEvent()
@@ -284,6 +283,10 @@ void FeedbackController::onPairRightSucceededEvent()
 
     _rgb.solid(RGB_COLOR_GREEN,
                sideZoneFromSensorSet(_active_sensors));
+}
+
+void FeedbackController::onPairSuccessToneEvent()
+{
     playOnceAudio(_speaker, AUDIO_ID_TONE_SUCCESS_UP, false);
 }
 
@@ -350,12 +353,6 @@ void FeedbackController::onWakeLeftSucceededEvent()
 
     _rgb.solid(RGB_COLOR_GREEN,
                sideZoneFromSensorSet(_woke_sensors));
-
-    const AudioId audio_id =
-        _woke_sensors == FeedbackSensorSet::Both
-        ? AUDIO_ID_WAKE_OK
-        : AUDIO_ID_TONE_SUCCESS_UP;
-    playOnceAudio(_speaker, audio_id, false);
 }
 
 void FeedbackController::onWakeRightSucceededEvent()
@@ -367,12 +364,16 @@ void FeedbackController::onWakeRightSucceededEvent()
 
     _rgb.solid(RGB_COLOR_GREEN,
                sideZoneFromSensorSet(_woke_sensors));
+}
 
-    const AudioId audio_id =
-        _woke_sensors == FeedbackSensorSet::Both
-        ? AUDIO_ID_WAKE_OK
-        : AUDIO_ID_TONE_SUCCESS_UP;
-    playOnceAudio(_speaker, audio_id, false);
+void FeedbackController::onWakeSuccessToneEvent()
+{
+    playOnceAudio(_speaker, AUDIO_ID_TONE_SUCCESS_UP, false);
+}
+
+void FeedbackController::onWakeCompletedToneEvent()
+{
+    playOnceAudio(_speaker, AUDIO_ID_WAKE_OK, false);
 }
 
 void FeedbackController::onWakeTimedOutEvent(
@@ -431,6 +432,80 @@ void FeedbackController::onDistanceLevelChangedEvent(
                           _speaker,
                           _active_sensors,
                           _distance_level);
+}
+
+void FeedbackController::onDistanceSensorFaultEvent(
+    FeedbackSensorSet faulted_sensors)
+{
+    _last_event = FeedbackEvent::DistanceSensorFault;
+    _scene = FeedbackScene::Working;
+
+    switch (faulted_sensors) {
+    case FeedbackSensorSet::Left:
+        _active_sensors = removeLeftSensor(_active_sensors);
+
+        if (_distance_feedback_enabled) {
+            applyDistanceFeedback(_rgb,
+                                  _speaker,
+                                  _active_sensors,
+                                  _distance_level);
+            if (_active_sensors == FeedbackSensorSet::None) {
+                _distance_feedback_enabled = false;
+            }
+        } else {
+            const LedZone zone = sideZoneFromSensorSet(_active_sensors);
+            if (zone == LED_ZONE_NONE) {
+                _rgb.off();
+            } else {
+                _rgb.solid(RGB_COLOR_GREEN, zone);
+            }
+        }
+
+        playOnceAudio(_speaker,
+                      AUDIO_ID_TONE_WARNING_DOWN,
+                      _distance_feedback_enabled);
+        break;
+
+    case FeedbackSensorSet::Right:
+        _active_sensors = removeRightSensor(_active_sensors);
+
+        if (_distance_feedback_enabled) {
+            applyDistanceFeedback(_rgb,
+                                  _speaker,
+                                  _active_sensors,
+                                  _distance_level);
+            if (_active_sensors == FeedbackSensorSet::None) {
+                _distance_feedback_enabled = false;
+            }
+        } else {
+            const LedZone zone = sideZoneFromSensorSet(_active_sensors);
+            if (zone == LED_ZONE_NONE) {
+                _rgb.off();
+            } else {
+                _rgb.solid(RGB_COLOR_GREEN, zone);
+            }
+        }
+
+        playOnceAudio(_speaker,
+                      AUDIO_ID_TONE_WARNING_DOWN,
+                      _distance_feedback_enabled);
+        break;
+
+    case FeedbackSensorSet::Both:
+        _active_sensors = FeedbackSensorSet::None;
+        _distance_feedback_enabled = false;
+
+        _speaker.stop();
+        _rgb.blink(RGB_COLOR_RED,
+                   RGB_EFFECT_SPEED_FAST,
+                   LED_ZONE_ALL);
+        playOnceAudio(_speaker, AUDIO_ID_CONNECTION_LOST, false);
+        break;
+
+    case FeedbackSensorSet::None:
+    default:
+        break;
+    }
 }
 
 void FeedbackController::onLeftLinkLostEvent()

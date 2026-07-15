@@ -109,6 +109,7 @@ enum class FeedbackEvent : uint8_t {
     WakeTimedOut,
 
     DistanceLevelChanged,
+    DistanceSensorFault,
 
     LeftLinkLost,
     RightLinkLost,
@@ -206,6 +207,12 @@ public:
     void onPairRightSucceededEvent();
 
     /*
+     * Play one pairing-success tone without changing pairing state or LEDs.
+     * main uses this event to serialize the two per-side success tones.
+     */
+    void onPairSuccessToneEvent();
+
+    /*
      * 双侧配对成功。
      * 建议：四灯成功动画，播放一次最终配对成功提示。
      * main 可等待 isBusy() 变 false 后退出配对流程。
@@ -230,17 +237,28 @@ public:
 
     /*
      * 左侧唤醒成功。
-     * 建议：左侧单灯绿色常亮，播放一次上升音。
-     * 如果上电动画或启动音还没结束，FeedbackController 自己负责替换或打断。
+     * 左侧加入已唤醒集合并立即更新状态灯；成功提示音由 main 单独调度。
      */
     void onWakeLeftSucceededEvent();
 
     /*
      * 右侧唤醒成功。
-     * 建议：右侧单灯绿色常亮，播放一次上升音。
-     * 如果需要“左上升音 + 右上升音 + wake_ok”的顺序，由 main 等待后依次调用事件。
+     * 右侧加入已唤醒集合并立即更新状态灯；成功提示音由 main 单独调度。
      */
     void onWakeRightSucceededEvent();
+
+    /*
+     * Play one wake-success tone without changing wake state or LED state.
+     * main uses this event to serialize multiple success tones while keeping
+     * sensor state and LEDs responsive.
+     */
+    void onWakeSuccessToneEvent();
+
+    /*
+     * Play the final wake-completed prompt without changing wake state or LEDs.
+     * main calls this after both per-side success tones have finished.
+     */
+    void onWakeCompletedToneEvent();
 
     /*
      * 唤醒超时。
@@ -266,12 +284,20 @@ public:
      * 如果业务上需要先播放 wake_ok，main 自己等待后再开始上报距离等级。
      *
      * active_sensors 用于决定物理灯区：
-     * - Left：上灯、下灯、左灯显示距离。
-     * - Right：上灯、下灯、右灯显示距离。
-     * - Both：四灯显示距离。
+     * - Left：仅左灯显示距离。
+     * - Right：仅右灯显示距离。
+     * - Both：左、右两个灯显示距离。
      */
     void onDistanceLevelChangedEvent(FeedbackSensorSet active_sensors,
                                      FeedbackDistanceLevel level);
+
+    /*
+     * One or both distance sensors reached the consecutive-invalid limit.
+     * The visual and audio feedback matches the corresponding link-loss
+     * feedback, but main must keep the work mode running and wait for the
+     * consecutive-valid recovery condition.
+     */
+    void onDistanceSensorFaultEvent(FeedbackSensorSet faulted_sensors);
 
     /*
      * 左侧确认失联。
