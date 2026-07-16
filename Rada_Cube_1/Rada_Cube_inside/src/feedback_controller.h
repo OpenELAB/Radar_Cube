@@ -199,13 +199,13 @@ public:
      * 左侧首先配对成功。
      * 建议：左侧单灯绿色常亮，播放一次短上升音，继续等待右侧。
      */
-    void onPairLeftSucceededEvent();
+    void onPairLeftSucceededEvent(FeedbackSensorSet paired_sensors);
 
     /*
      * 右侧首先配对成功。
      * 建议：右侧单灯绿色常亮，播放一次短上升音，继续等待左侧。
      */
-    void onPairRightSucceededEvent();
+    void onPairRightSucceededEvent(FeedbackSensorSet paired_sensors);
 
     /*
      * 播放一次配对成功提示音，不改变配对状态和 LED 状态。
@@ -239,15 +239,15 @@ public:
 
     /*
      * 左侧唤醒成功。
-     * 左侧加入已唤醒集合并立即更新状态灯；成功提示音由 main 单独调度。
+     * awake_sensors 是本次唤醒成功后的已唤醒集合；成功提示音由 main 单独调度。
      */
-    void onWakeLeftSucceededEvent();
+    void onWakeLeftSucceededEvent(FeedbackSensorSet awake_sensors);
 
     /*
      * 右侧唤醒成功。
-     * 右侧加入已唤醒集合并立即更新状态灯；成功提示音由 main 单独调度。
+     * awake_sensors 是本次唤醒成功后的已唤醒集合；成功提示音由 main 单独调度。
      */
-    void onWakeRightSucceededEvent();
+    void onWakeRightSucceededEvent(FeedbackSensorSet awake_sensors);
 
     /*
      * 播放一次唤醒成功提示音，不改变唤醒状态和 LED 状态。
@@ -302,19 +302,20 @@ public:
      * 灯光和声音反馈与对应的链路失联反馈一致，但 main 必须保持工作模式运行，
      * 并等待满足连续有效帧恢复条件。
      */
-    void onDistanceSensorFaultEvent(FeedbackSensorSet faulted_sensors);
+    void onDistanceSensorFaultEvent(FeedbackSensorSet faulted_sensors,
+                                    FeedbackSensorSet active_sensors);
 
     /*
      * 左侧确认失联。
      * 建议：左侧设备灯熄灭，剩余右侧继续距离反馈，播放一次短下降音。
      */
-    void onLeftLinkLostEvent();
+    void onLeftLinkLostEvent(FeedbackSensorSet active_sensors);
 
     /*
      * 右侧确认失联。
      * 建议：右侧设备灯熄灭，剩余左侧继续距离反馈，播放一次短下降音。
      */
-    void onRightLinkLostEvent();
+    void onRightLinkLostEvent(FeedbackSensorSet active_sensors);
 
     /*
      * 双侧确认失联。
@@ -327,13 +328,13 @@ public:
      * 左侧恢复在线。
      * 建议：左侧单灯绿色常亮，然后根据最新距离恢复距离反馈。
      */
-    void onLeftLinkRestoredEvent();
+    void onLeftLinkRestoredEvent(FeedbackSensorSet active_sensors);
 
     /*
      * 右侧恢复在线。
      * 建议：右侧单灯绿色常亮，然后根据最新距离恢复距离反馈。
      */
-    void onRightLinkRestoredEvent();
+    void onRightLinkRestoredEvent(FeedbackSensorSet active_sensors);
 
 private:
     RgbLedController& _rgb;
@@ -341,8 +342,6 @@ private:
 
     FeedbackEvent _last_event = FeedbackEvent::SystemBoot;
     FeedbackScene _scene = FeedbackScene::Idle;
-    FeedbackSensorSet _active_sensors = FeedbackSensorSet::None;
-    FeedbackSensorSet _woke_sensors = FeedbackSensorSet::None;
     FeedbackDistanceLevel _distance_level = FeedbackDistanceLevel::Safe;
     // 判断是否需要在距离显示期间禁止长语音插入
     bool _distance_feedback_enabled = false;

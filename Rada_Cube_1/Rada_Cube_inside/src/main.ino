@@ -32,6 +32,34 @@ struct SensorLinkState {
     uint8_t invalid_count = 0;
     uint8_t recovery_valid_count = 0;
     bool distance_fault = false;
+    protocol_frame_t latest_data{};
+
+    bool isActive() const
+    {
+        return woke && !lost_announced && !distance_fault;
+    }
+
+    bool hasValidDistance() const
+    {
+        return isActive() &&
+               latest_data.dist > 0 &&
+               latest_data.dist <= DIST_MAX_CM;
+    }
+};
+
+struct SensorChanges {
+    bool link_lost = false;
+    bool link_restored = false;
+    bool fault_started = false;
+    bool fault_cleared = false;
+
+    void merge(const SensorChanges& other)
+    {
+        link_lost = link_lost || other.link_lost;
+        link_restored = link_restored || other.link_restored;
+        fault_started = fault_started || other.fault_started;
+        fault_cleared = fault_cleared || other.fault_cleared;
+    }
 };
 
 
@@ -137,8 +165,13 @@ static void pairFeedbackCallback(uint8_t slave_id,
         }
         pair_context->left_paired = true;
         if (feedback_ready) {
-            Feedback.onPairLeftSucceededEvent();
+            const FeedbackSensorSet paired_sensors =
+                toFeedbackSensorSet(pair_context->left_paired,
+                                    pair_context->right_paired);
+            // PairLeftSucceeded event：发生左侧配对成功事件。
+            Feedback.onPairLeftSucceededEvent(paired_sensors);
             if (!Feedback.isBusy() && pair_context->pending_success_tones == 0) {
+                // PairSuccessTone event：发生单侧配对成功提示音事件。
                 Feedback.onPairSuccessToneEvent();
             } else {
                 ++pair_context->pending_success_tones;
@@ -150,8 +183,13 @@ static void pairFeedbackCallback(uint8_t slave_id,
         }
         pair_context->right_paired = true;
         if (feedback_ready) {
-            Feedback.onPairRightSucceededEvent();
+            const FeedbackSensorSet paired_sensors =
+                toFeedbackSensorSet(pair_context->left_paired,
+                                    pair_context->right_paired);
+            // PairRightSucceeded event：发生右侧配对成功事件。
+            Feedback.onPairRightSucceededEvent(paired_sensors);
             if (!Feedback.isBusy() && pair_context->pending_success_tones == 0) {
+                // PairSuccessTone event：发生单侧配对成功提示音事件。
                 Feedback.onPairSuccessToneEvent();
             } else {
                 ++pair_context->pending_success_tones;
@@ -163,6 +201,7 @@ static void pairFeedbackCallback(uint8_t slave_id,
 static void enterDeepSleepWithFeedback(FeedbackScene current_scene)
 {
     if (feedback_ready) {
+        // Shutdown event：发生系统关机事件。
         Feedback.onShutdownEvent(current_scene);
         waitFeedbackOrTimeout(FEEDBACK_DEFAULT_TIMEOUT_MS);
         Feedback.end();
@@ -259,12 +298,16 @@ static bool isRadarDistanceValid(uint16_t dist)
     return dist > 0 && dist <= DIST_MAX_CM;
 }
 
-static void updateSensorDataState(SensorLinkState& sensor,
-                                  const protocol_frame_t& data)
+static SensorChanges updateSensorDataState(
+    SensorLinkState& sensor,
+    const protocol_frame_t& data,
+    uint32_t now_ms)
 {
+    SensorChanges changes;
     const bool valid_distance = isRadarDistanceValid(data.dist);
-    sensor.last_data_ms = millis();
+    sensor.last_data_ms = now_ms;
     // 通过校验的雷达数据帧足以证明通信链路在线，即使其中的距离值无效。
+    changes.link_restored = sensor.lost_announced;
     sensor.lost_announced = false;
 
     if (!sensor.distance_fault) {
@@ -272,7 +315,7 @@ static void updateSensorDataState(SensorLinkState& sensor,
 
         if (valid_distance) {
             sensor.invalid_count = 0;
-            return;
+            return changes;
         }
 
         if (sensor.invalid_count < SENSOR_INVALID_MAX_COUNT) {
@@ -281,15 +324,16 @@ static void updateSensorDataState(SensorLinkState& sensor,
         if (sensor.invalid_count >= SENSOR_INVALID_MAX_COUNT) {
             sensor.distance_fault = true;
             sensor.recovery_valid_count = 0;
+            changes.fault_started = true;
         }
-        return;
+        return changes;
     }
 
     sensor.invalid_count = 0;
 
     if (!valid_distance) {
         sensor.recovery_valid_count = 0;
-        return;
+        return changes;
     }
 
     if (sensor.recovery_valid_count < SENSOR_INVALID_MAX_COUNT) {
@@ -298,31 +342,34 @@ static void updateSensorDataState(SensorLinkState& sensor,
     if (sensor.recovery_valid_count >= SENSOR_INVALID_MAX_COUNT) {
         sensor.distance_fault = false;
         sensor.recovery_valid_count = 0;
+        changes.fault_cleared = true;
     }
+
+    return changes;
 }
 
-static bool updateSensorConnectionLost(SensorLinkState& sensor)
+static SensorChanges updateSensorConnectionLost(
+    SensorLinkState& sensor,
+    uint32_t now_ms)
 {
+    SensorChanges changes;
     if (!sensor.woke || sensor.lost_announced || sensor.last_data_ms == 0) {
-        return false;
+        return changes;
     }
 
-    if (millis() - sensor.last_data_ms >= CONNECTION_LOST_TIMEOUT_MS) {
+    if (now_ms - sensor.last_data_ms >= CONNECTION_LOST_TIMEOUT_MS) {
         sensor.lost_announced = true;
         sensor.invalid_count = 0;
         sensor.recovery_valid_count = 0;
         sensor.distance_fault = false;
-        return true;
+        changes.link_lost = true;
     }
-    return false;
+    return changes;
 }
 
 static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
 {
     // 1) Lora 发送唤醒帧，等从机 ESP-NOW 回复 WAKE_ACK
-    bool slave_a_woke = false;
-    bool slave_b_wake = false;
-    bool woke = false;
     bool pending_wake_success_tone = false;
     bool pending_wake_ok_tone = false;
     espnow_msg_t msg;
@@ -332,26 +379,34 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
     // ================ 把循环里的电平切换放到外面来，加上100ms延时，之前的10ms延时不够会导致帧发送不完全 =================
     Lora.enable_ce();
     vTaskDelay(pdMS_TO_TICKS(100));
-    for (int retry = 0; retry < WAKE_MAX_RETRY && !woke; retry++) {
+    for (int retry = 0;
+         retry < WAKE_MAX_RETRY && !(sensor_a.woke && sensor_b.woke);
+         retry++) {
         Lora.sendWakeFrame();
         ESP_LOGI(MAIN_TAG, "Wake attempt %d/%d", retry + 1, WAKE_MAX_RETRY);
 
-        for (int t = 0; t < WAKE_POLL_ROUNDS && !woke; t++) {
+        for (int t = 0;
+             t < WAKE_POLL_ROUNDS && !(sensor_a.woke && sensor_b.woke);
+             t++) {
             vTaskDelay(pdMS_TO_TICKS(WAKE_POLL_INTERVAL_MS));
             while (Espnow.read(&msg)) {
                 if (frame_validate(msg.data, msg.len, SLAVE_FRAME_HEAD, FRAME_WAKE_ACK)) {
                     // 这里判断一下是哪个从机返回的消息
                     if(memcmp(msg.src_mac, a_mac, 6) == 0) {
-                        if (!slave_a_woke) {
-                            const bool second_wake = slave_b_wake;
-                            slave_a_woke = true;
+                        if (!sensor_a.woke) {
+                            const bool second_wake = sensor_b.woke;
                             sensor_a.woke = true;
                             if (feedback_ready) {
-                                Feedback.onWakeLeftSucceededEvent();
+                                const FeedbackSensorSet awake_sensors =
+                                    toFeedbackSensorSet(sensor_a.woke,
+                                                        sensor_b.woke);
+                                // WakeLeftSucceeded event：发生左侧唤醒成功事件。
+                                Feedback.onWakeLeftSucceededEvent(awake_sensors);
                                 if (second_wake) {
                                     pending_wake_success_tone = true;
                                     pending_wake_ok_tone = true;
                                 } else {
+                                    // WakeSuccessTone event：发生单侧唤醒成功提示音事件。
                                     Feedback.onWakeSuccessToneEvent();
                                 }
                             }
@@ -359,24 +414,27 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
                         }
                     }
                     else if(memcmp(msg.src_mac, b_mac, 6) == 0) {
-                        if (!slave_b_wake) {
-                            const bool second_wake = slave_a_woke;
-                            slave_b_wake = true;
+                        if (!sensor_b.woke) {
+                            const bool second_wake = sensor_a.woke;
                             sensor_b.woke = true;
                             if (feedback_ready) {
-                                Feedback.onWakeRightSucceededEvent();
+                                const FeedbackSensorSet awake_sensors =
+                                    toFeedbackSensorSet(sensor_a.woke,
+                                                        sensor_b.woke);
+                                // WakeRightSucceeded event：发生右侧唤醒成功事件。
+                                Feedback.onWakeRightSucceededEvent(awake_sensors);
                                 if (second_wake) {
                                     pending_wake_success_tone = true;
                                     pending_wake_ok_tone = true;
                                 } else {
+                                    // WakeSuccessTone event：发生单侧唤醒成功提示音事件。
                                     Feedback.onWakeSuccessToneEvent();
                                 }
                             }
                             ESP_LOGI(MAIN_TAG, "Slave B woke up");
                         }
                     }
-                    if (slave_a_woke && slave_b_wake) {
-                        woke = true;
+                    if (sensor_a.woke && sensor_b.woke) {
                         break;
                     }
                 }
@@ -387,11 +445,12 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
 
     // 唤醒失败处理
     // TODO：唤醒失败，可能是两个从机中其中一个醒来另一个出问题，还是要发送一下工作结束帧让醒来的从机停止工作
-    if (!woke) {
+    if (!(sensor_a.woke && sensor_b.woke)) {
         ESP_LOGE(MAIN_TAG, "Failed to wake slave after %d retries", WAKE_MAX_RETRY);
         if (feedback_ready) {
+            // WakeTimedOut event：发生唤醒超时事件。
             Feedback.onWakeTimedOutEvent(
-                toFeedbackSensorSet(slave_a_woke, slave_b_wake));
+                toFeedbackSensorSet(sensor_a.woke, sensor_b.woke));
         }
         
 
@@ -420,8 +479,6 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
     // 3) 工作循环：读最新雷达数据 → 蜂鸣器提示
     uint32_t work_start = millis();
 
-    protocol_frame_t slave_a_data = {0};
-    protocol_frame_t slave_b_data  = {0};
     bool exit_flag = false;
     bool wait_exit_feedback = false;
     bool distance_feedback_started = false;
@@ -436,9 +493,11 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
     while (true) {
         if (feedback_ready && !Feedback.isBusy()) {
             if (pending_wake_success_tone) {
+                // WakeSuccessTone event：发生延迟调度的单侧唤醒成功提示音事件。
                 Feedback.onWakeSuccessToneEvent();
                 pending_wake_success_tone = false;
             } else if (pending_wake_ok_tone) {
+                // WakeCompletedTone event：发生双侧唤醒完成提示音事件。
                 Feedback.onWakeCompletedToneEvent();
                 pending_wake_ok_tone = false;
             }
@@ -465,10 +524,8 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
         // ESP_LOGI(MAIN_TAG, "Queue depth: %d", Espnow.getQueueCount());
 
         // TODO：队列里读取雷达数据, 如果队列里一直有数据，会不会出现卡死的情况?
-        const bool left_was_lost = sensor_a.lost_announced;
-        const bool right_was_lost = sensor_b.lost_announced;
-        const bool left_was_fault = sensor_a.distance_fault;
-        const bool right_was_fault = sensor_b.distance_fault;
+        SensorChanges left_changes;
+        SensorChanges right_changes;
 
         while(Espnow.read(&msg))
         {
@@ -477,17 +534,29 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
                 // 判断哪个从机返回的数据
                 if(memcmp(msg.src_mac, a_mac, 6) == 0)
                 {
-                    memcpy(&slave_a_data, msg.data, sizeof(protocol_frame_t));
-                    updateSensorDataState(sensor_a, slave_a_data);
+                    memcpy(&sensor_a.latest_data,
+                           msg.data,
+                           sizeof(protocol_frame_t));
+                    left_changes.merge(updateSensorDataState(
+                        sensor_a,
+                        sensor_a.latest_data,
+                        millis()));
                     ESP_LOGI(SLAVE_A_TAG, "slave_A: dist=%d mm, angle=%.2f deg"
-                             , slave_a_data.dist, slave_a_data.angle * 0.01f);
+                             , sensor_a.latest_data.dist,
+                             sensor_a.latest_data.angle * 0.01f);
                 }
                 else if(memcmp(msg.src_mac, b_mac, 6) == 0)
                 {
-                    memcpy(&slave_b_data, msg.data, sizeof(protocol_frame_t));
-                    updateSensorDataState(sensor_b, slave_b_data);
+                    memcpy(&sensor_b.latest_data,
+                           msg.data,
+                           sizeof(protocol_frame_t));
+                    right_changes.merge(updateSensorDataState(
+                        sensor_b,
+                        sensor_b.latest_data,
+                        millis()));
                     ESP_LOGI(SLAVE_B_TAG, "slave_B: dist=%d mm, angle=%.2f deg"
-                             , slave_b_data.dist, slave_b_data.angle * 0.01f);
+                             , sensor_b.latest_data.dist,
+                             sensor_b.latest_data.angle * 0.01f);
                 }
             }
             else if(frame_validate(msg.data, msg.len, SLAVE_FRAME_HEAD, FRAME_END))
@@ -506,59 +575,50 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
 
         // 模式判断
         // TODO：如果从机数据很久没有更新了，是不是也应该认为它失联了？
-        updateSensorConnectionLost(sensor_a);
-        updateSensorConnectionLost(sensor_b);
+        const uint32_t now_ms = millis();
+        left_changes.merge(updateSensorConnectionLost(sensor_a, now_ms));
+        right_changes.merge(updateSensorConnectionLost(sensor_b, now_ms));
 
-        const bool left_just_lost =
-            !left_was_lost && sensor_a.lost_announced;
-        const bool right_just_lost =
-            !right_was_lost && sensor_b.lost_announced;
-        const bool left_just_restored =
-            left_was_lost &&
-            !sensor_a.lost_announced &&
-            !sensor_a.distance_fault;
-        const bool right_just_restored =
-            right_was_lost &&
-            !sensor_b.lost_announced &&
-            !sensor_b.distance_fault;
-        const bool left_just_fault =
-            !left_was_fault && sensor_a.distance_fault;
-        const bool right_just_fault =
-            !right_was_fault && sensor_b.distance_fault;
-        const bool left_fault_restored =
-            left_was_fault && !sensor_a.distance_fault &&
-            !sensor_a.lost_announced;
-        const bool right_fault_restored =
-            right_was_fault && !sensor_b.distance_fault &&
-            !sensor_b.lost_announced;
         const bool both_sensor_lost =
             sensor_a.lost_announced && sensor_b.lost_announced;
 
-        if (both_sensor_lost && (left_just_lost || right_just_lost)) {
+        const FeedbackSensorSet active_sensors =
+            toFeedbackSensorSet(sensor_a.isActive(),
+                                sensor_b.isActive());
+
+        if (both_sensor_lost &&
+            (left_changes.link_lost || right_changes.link_lost)) {
             if (feedback_ready) {
+                // BothLinksLost event：发生双侧链路失联事件。
                 Feedback.onBothLinksLostEvent();
             }
             wait_exit_feedback = true;
             exit_flag = true;
         } else if (feedback_ready) {
-            if (left_just_lost) {
-                Feedback.onLeftLinkLostEvent();
+            if (left_changes.link_lost) {
+                // LeftLinkLost event：发生左侧链路失联事件。
+                Feedback.onLeftLinkLostEvent(active_sensors);
             }
-            if (right_just_lost) {
-                Feedback.onRightLinkLostEvent();
+            if (right_changes.link_lost) {
+                // RightLinkLost event：发生右侧链路失联事件。
+                Feedback.onRightLinkLostEvent(active_sensors);
             }
             // 移除类事件优先于恢复事件，防止传感器在同一轮询周期内恢复在线
             // 并进入故障时，被 RGB 灯短暂显示为已恢复。
-            if (left_just_fault || right_just_fault) {
+            if (left_changes.fault_started || right_changes.fault_started) {
+                // DistanceSensorFault event：发生距离传感器故障事件。
                 Feedback.onDistanceSensorFaultEvent(
                     toFeedbackSensorSet(sensor_a.distance_fault,
-                                        sensor_b.distance_fault));
+                                        sensor_b.distance_fault),
+                    active_sensors);
             }
-            if (left_just_restored) {
-                Feedback.onLeftLinkRestoredEvent();
+            if (left_changes.link_restored && !sensor_a.distance_fault) {
+                // LeftLinkRestored event：发生左侧链路恢复事件。
+                Feedback.onLeftLinkRestoredEvent(active_sensors);
             }
-            if (right_just_restored) {
-                Feedback.onRightLinkRestoredEvent();
+            if (right_changes.link_restored && !sensor_b.distance_fault) {
+                // RightLinkRestored event：发生右侧链路恢复事件。
+                Feedback.onRightLinkRestoredEvent(active_sensors);
             }
         }
 
@@ -566,54 +626,22 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
             break;
         }
 
-        if (left_fault_restored || right_fault_restored) {
+        if (left_changes.fault_cleared || right_changes.fault_cleared) {
             // 只有确认达到设定数量的连续有效距离帧后，才恢复正常距离反馈。
             distance_feedback_started = false;
         }
 
-        const uint16_t dist_a = slave_a_data.dist;
-        const uint16_t dist_b = slave_b_data.dist;
-
-        const bool active_a = sensor_a.woke &&
-                              !sensor_a.lost_announced &&
-                              !sensor_a.distance_fault;
-        const bool active_b = sensor_b.woke &&
-                              !sensor_b.lost_announced &&
-                              !sensor_b.distance_fault;
-
-        // 判断数据是否有效
-        // TODO：需不需要加上最大值限制？
-        const bool valid_a = active_a && isRadarDistanceValid(dist_a);
-        const bool valid_b = active_b && isRadarDistanceValid(dist_b);
-
-        // 取判断值
         uint16_t min_dist = UINT16_MAX;
-        // BuzzerMode new_mode;
-
-        if(valid_a && valid_b)
-        {
-            // 如果两个都有效，取更近的那个
-            min_dist = (dist_a < dist_b) ? dist_a : dist_b;
+        if (sensor_a.hasValidDistance()) {
+            min_dist = sensor_a.latest_data.dist;
         }
-        else if(valid_a)
-        {
-            // 如果只有 A 有效，取 A
-            min_dist = dist_a;
-        }
-        else if(valid_b)
-        {
-            // 如果只有 B 有效，取 B
-            min_dist = dist_b;
-        }
-        else
-        {
-            // 如果两个都无效，保持初始值
+        if (sensor_b.hasValidDistance() &&
+            sensor_b.latest_data.dist < min_dist) {
+            min_dist = sensor_b.latest_data.dist;
         }
 
         // 加上迟滞区间，防止蜂鸣器模式频繁切换
 
-        const FeedbackSensorSet active_sensors =
-            toFeedbackSensorSet(active_a, active_b);
         FeedbackDistanceLevel distance_level =
             distanceToFeedbackLevel(min_dist);
         bool distance_level_confirmed = !distance_feedback_started;
@@ -650,6 +678,7 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
             !pending_wake_success_tone &&
             !pending_wake_ok_tone &&
             !Feedback.isBusy()) {
+            // DistanceLevelChanged event：发生距离等级变化事件。
             Feedback.onDistanceLevelChangedEvent(active_sensors, distance_level);
             last_active_sensors = active_sensors;
             last_distance_level = distance_level;
@@ -716,6 +745,7 @@ static void handleMode(SysMode mode)
     case UNPAIRED_MODE:
         ESP_LOGI(MAIN_TAG, "Mode: UNPAIRED");
         if (feedback_ready) {
+            // UnpairedDetected event：发生未配对状态检测事件。
             Feedback.onUnpairedDetectedEvent();
         }
         waitFeedbackOrTimeout(FEEDBACK_DEFAULT_TIMEOUT_MS);
@@ -725,6 +755,7 @@ static void handleMode(SysMode mode)
     {
         ESP_LOGI(MAIN_TAG, "Mode: PAIRING");
         if (feedback_ready) {
+            // PairingStarted event：发生开始配对事件。
             Feedback.onPairingStartedEvent();
         }
 
@@ -745,6 +776,7 @@ static void handleMode(SysMode mode)
         // 最后提交配对结果反馈。
         waitFeedbackOrTimeout(FEEDBACK_DEFAULT_TIMEOUT_MS);
         while (pair_context.pending_success_tones > 0) {
+            // PairSuccessTone event：发生延迟调度的单侧配对成功提示音事件。
             Feedback.onPairSuccessToneEvent();
             --pair_context.pending_success_tones;
             waitFeedbackOrTimeout(FEEDBACK_DEFAULT_TIMEOUT_MS);
@@ -753,10 +785,12 @@ static void handleMode(SysMode mode)
         if (!pair_ok && paired_sensors != FeedbackSensorSet::Both) {
             ESP_LOGE(MAIN_TAG, "Pair failed, going to sleep");
             if (feedback_ready) {
+                // PairingTimedOut event：发生配对超时事件。
                 Feedback.onPairingTimedOutEvent(paired_sensors);
             }
         } else {
             if (feedback_ready) {
+                // PairBothSucceeded event：发生双侧配对成功事件。
                 Feedback.onPairBothSucceededEvent();
             }
         }
@@ -869,6 +903,7 @@ void setup()
     SysMode mode = determineMode(wakeup, has_peer);
     FeedbackScene scene = modeToFeedbackScene(mode);
     if (feedback_ready) {
+        // SystemBoot event：发生系统启动事件。
         Feedback.onSystemBootEvent(scene);
     }
     handleMode(mode);
