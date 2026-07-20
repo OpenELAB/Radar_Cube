@@ -99,23 +99,29 @@ enum class FeedbackEvent : uint8_t {
     UnpairedDetected,
 
     PairingStarted,
-    PairLeftSucceeded,
-    PairRightSucceeded,
+    // PairLeftSucceeded,
+    // PairRightSucceeded,
     PairBothSucceeded,
     PairingTimedOut,
 
-    WakeLeftSucceeded,
-    WakeRightSucceeded,
+    // WakeLeftSucceeded,
+    // WakeRightSucceeded,
     WakeTimedOut,
 
     DistanceLevelChanged,
     DistanceSensorFault,
 
-    LeftLinkLost,
-    RightLinkLost,
+    // LeftLinkLost,
+    // RightLinkLost,
     BothLinksLost,
-    LeftLinkRestored,
-    RightLinkRestored
+    // LeftLinkRestored,
+    // RightLinkRestored,
+
+    // 统一事件 API 使用以下值
+    PairSucceeded,
+    WakeSucceeded,
+    LinkLost,
+    LinkRestored
 };
 
 class FeedbackController {
@@ -196,16 +202,11 @@ public:
     void onPairingStartedEvent();
 
     /*
-     * 左侧首先配对成功。
-     * 建议：左侧单灯绿色常亮，播放一次短上升音，继续等待右侧。
+     * 一个或多个模块配对成功。
+     * paired_sensors 表示本次状态更新后已经配对成功的模块集合。
+     * 对应侧灯绿色常亮；成功提示音由 main 单独调度。
      */
-    void onPairLeftSucceededEvent(FeedbackSensorSet paired_sensors);
-
-    /*
-     * 右侧首先配对成功。
-     * 建议：右侧单灯绿色常亮，播放一次短上升音，继续等待左侧。
-     */
-    void onPairRightSucceededEvent(FeedbackSensorSet paired_sensors);
+    void onPairSucceededEvent(FeedbackSensorSet paired_sensors);
 
     /*
      * 播放一次配对成功提示音，不改变配对状态和 LED 状态。
@@ -238,16 +239,10 @@ public:
     // ---------------------------------------------------------------------
 
     /*
-     * 左侧唤醒成功。
-     * awake_sensors 是本次唤醒成功后的已唤醒集合；成功提示音由 main 单独调度。
+     * 一个或多个模块唤醒成功。
+     * awake_sensors 表示本次状态更新后的已唤醒集合；成功提示音由 main 单独调度。
      */
-    void onWakeLeftSucceededEvent(FeedbackSensorSet awake_sensors);
-
-    /*
-     * 右侧唤醒成功。
-     * awake_sensors 是本次唤醒成功后的已唤醒集合；成功提示音由 main 单独调度。
-     */
-    void onWakeRightSucceededEvent(FeedbackSensorSet awake_sensors);
+    void onWakeSucceededEvent(FeedbackSensorSet awake_sensors);
 
     /*
      * 播放一次唤醒成功提示音，不改变唤醒状态和 LED 状态。
@@ -306,16 +301,11 @@ public:
                                     FeedbackSensorSet active_sensors);
 
     /*
-     * 左侧确认失联。
-     * 建议：左侧设备灯熄灭，剩余右侧继续距离反馈，播放一次短下降音。
+     * 单侧链路确认失联。
+     * active_sensors 表示失联后仍可参与距离反馈的模块集合。
+     * 剩余模块继续距离反馈，并播放一次短下降音。
      */
-    void onLeftLinkLostEvent(FeedbackSensorSet active_sensors);
-
-    /*
-     * 右侧确认失联。
-     * 建议：右侧设备灯熄灭，剩余左侧继续距离反馈，播放一次短下降音。
-     */
-    void onRightLinkLostEvent(FeedbackSensorSet active_sensors);
+    void onLinkLostEvent(FeedbackSensorSet active_sensors);
 
     /*
      * 双侧确认失联。
@@ -325,16 +315,10 @@ public:
     void onBothLinksLostEvent();
 
     /*
-     * 左侧恢复在线。
-     * 建议：左侧单灯绿色常亮，然后根据最新距离恢复距离反馈。
+     * 一个或多个模块恢复在线。
+     * active_sensors 表示恢复后可参与距离反馈的模块集合。
      */
-    void onLeftLinkRestoredEvent(FeedbackSensorSet active_sensors);
-
-    /*
-     * 右侧恢复在线。
-     * 建议：右侧单灯绿色常亮，然后根据最新距离恢复距离反馈。
-     */
-    void onRightLinkRestoredEvent(FeedbackSensorSet active_sensors);
+    void onLinkRestoredEvent(FeedbackSensorSet active_sensors);
 
 private:
     RgbLedController& _rgb;
@@ -354,7 +338,7 @@ private:
  *    需要顺序播放的场景由 main 通过 isBusy() 控制调用时机。
  *
  * 2. main 只调用事件 API，不直接写灯光和声音策略。
- *    例如 main 判断“左侧失联”后，只调用 onLeftLinkLostEvent()。
+ *    例如 main 判断链路失联后，只调用 onLinkLostEvent(active_sensors)。
  *
  * 3. 每个业务状态 onXxxEvent() 内部先直接更新 _last_event 和必要状态，
  *    再组合调用 RgbLedController 和 SpeakerController。
@@ -380,15 +364,16 @@ private:
  * - 直接把事件翻译成 RGB/Speaker 指令。
  * - 不在事件函数里等待音频或动画结束。
  *
- * 示例 1：左侧配对成功
+ * 示例 1：配对状态更新
  *
- * void FeedbackController::onPairLeftSucceededEvent()
+ * void FeedbackController::onPairSucceededEvent(
+ *     FeedbackSensorSet paired_sensors)
  * {
- *     _last_event = FeedbackEvent::PairLeftSucceeded;
+ *     _last_event = FeedbackEvent::PairSucceeded;
  *     _scene = FeedbackScene::Pairing;
- *     _active_sensors = FeedbackSensorSet::Left;
  *
- *     _rgb.solid(RGB_COLOR_GREEN, LED_ZONE_ONLY_LEFT);
+ *     _rgb.solid(RGB_COLOR_GREEN,
+ *                sideZoneFromSensorSet(paired_sensors));
  *
  *     const char *audio_path =
  *         audio_path_from_id(AUDIO_ID_TONE_SUCCESS_UP);
@@ -437,12 +422,12 @@ private:
  *         break;
  *
  *     case FeedbackDistanceLevel::Far:
- *         _rgb.blink(RGB_COLOR_GREEN, RGB_EFFECT_SPEED_MEDIUM, zone);
+ *         _rgb.blink(RGB_COLOR_YELLOW, RGB_EFFECT_SPEED_SLOW, zone);
  *         audio_id = AUDIO_ID_BEEP_MEDIUM_SLOW;
  *         break;
  *
  *     case FeedbackDistanceLevel::Medium:
- *         _rgb.blink(RGB_COLOR_YELLOW, RGB_EFFECT_SPEED_MEDIUM, zone);
+ *         _rgb.blink(RGB_COLOR_ORANGE, RGB_EFFECT_SPEED_MEDIUM, zone);
  *         audio_id = AUDIO_ID_BEEP_MEDIUM;
  *         break;
  *
@@ -484,7 +469,7 @@ private:
  * {
  *     // 示例：收到左侧配对成功 ACK。
  *     if (left_pair_ack_received) {
- *         feedback.onPairLeftSucceededEvent();
+ *         feedback.onPairSucceededEvent(FeedbackSensorSet::Left);
  *     }
  *
  *     // 示例：收到第一帧有效距离，或距离等级变化。

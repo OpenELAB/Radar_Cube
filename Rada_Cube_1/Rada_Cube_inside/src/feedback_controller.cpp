@@ -73,12 +73,12 @@ static void applyDistanceFeedback(RgbLedController& rgb,
         break;
 
     case FeedbackDistanceLevel::Far:
-        rgb.blink(RGB_COLOR_GREEN, RGB_EFFECT_SPEED_MEDIUM, zone);
+        rgb.blink(RGB_COLOR_YELLOW, RGB_EFFECT_SPEED_SLOW, zone);
         audio_id = AUDIO_ID_BEEP_MEDIUM_SLOW;
         break;
 
     case FeedbackDistanceLevel::Medium:
-        rgb.blink(RGB_COLOR_YELLOW, RGB_EFFECT_SPEED_MEDIUM, zone);
+        rgb.blink(RGB_COLOR_ORANGE, RGB_EFFECT_SPEED_MEDIUM, zone);
         audio_id = AUDIO_ID_BEEP_MEDIUM;
         break;
 
@@ -182,20 +182,10 @@ void FeedbackController::onPairingStartedEvent()
     playOnceAudio(_speaker, AUDIO_ID_PAIRING, false);
 }
 
-void FeedbackController::onPairLeftSucceededEvent(
+void FeedbackController::onPairSucceededEvent(
     FeedbackSensorSet paired_sensors)
 {
-    _last_event = FeedbackEvent::PairLeftSucceeded;
-    _scene = FeedbackScene::Pairing;
-
-    _rgb.solid(RGB_COLOR_GREEN,
-               sideZoneFromSensorSet(paired_sensors));
-}
-
-void FeedbackController::onPairRightSucceededEvent(
-    FeedbackSensorSet paired_sensors)
-{
-    _last_event = FeedbackEvent::PairRightSucceeded;
+    _last_event = FeedbackEvent::PairSucceeded;
     _scene = FeedbackScene::Pairing;
 
     _rgb.solid(RGB_COLOR_GREEN,
@@ -259,20 +249,10 @@ void FeedbackController::onPairingTimedOutEvent(
     playOnceAudio(_speaker, audio_id, false);
 }
 
-void FeedbackController::onWakeLeftSucceededEvent(
+void FeedbackController::onWakeSucceededEvent(
     FeedbackSensorSet awake_sensors)
 {
-    _last_event = FeedbackEvent::WakeLeftSucceeded;
-    _scene = FeedbackScene::Working;
-
-    _rgb.solid(RGB_COLOR_GREEN,
-               sideZoneFromSensorSet(awake_sensors));
-}
-
-void FeedbackController::onWakeRightSucceededEvent(
-    FeedbackSensorSet awake_sensors)
-{
-    _last_event = FeedbackEvent::WakeRightSucceeded;
+    _last_event = FeedbackEvent::WakeSucceeded;
     _scene = FeedbackScene::Working;
 
     _rgb.solid(RGB_COLOR_GREEN,
@@ -418,38 +398,10 @@ void FeedbackController::onDistanceSensorFaultEvent(
     }
 }
 
-void FeedbackController::onLeftLinkLostEvent(
+void FeedbackController::onLinkLostEvent(
     FeedbackSensorSet active_sensors)
 {
-    _last_event = FeedbackEvent::LeftLinkLost;
-    _scene = FeedbackScene::Working;
-
-    if (_distance_feedback_enabled) {
-        applyDistanceFeedback(_rgb,
-                              _speaker,
-                              active_sensors,
-                              _distance_level);
-        if (active_sensors == FeedbackSensorSet::None) {
-            _distance_feedback_enabled = false;
-        }
-    } else {
-        const LedZone zone = sideZoneFromSensorSet(active_sensors);
-        if (zone == LED_ZONE_NONE) {
-            _rgb.off();
-        } else {
-            _rgb.solid(RGB_COLOR_GREEN, zone);
-        }
-    }
-
-    playOnceAudio(_speaker,
-                  AUDIO_ID_TONE_WARNING_DOWN,
-                  _distance_feedback_enabled);
-}
-
-void FeedbackController::onRightLinkLostEvent(
-    FeedbackSensorSet active_sensors)
-{
-    _last_event = FeedbackEvent::RightLinkLost;
+    _last_event = FeedbackEvent::LinkLost;
     _scene = FeedbackScene::Working;
 
     if (_distance_feedback_enabled) {
@@ -487,31 +439,10 @@ void FeedbackController::onBothLinksLostEvent()
     playOnceAudio(_speaker, AUDIO_ID_CONNECTION_LOST, false);
 }
 
-void FeedbackController::onLeftLinkRestoredEvent(
+void FeedbackController::onLinkRestoredEvent(
     FeedbackSensorSet active_sensors)
 {
-    _last_event = FeedbackEvent::LeftLinkRestored;
-    _scene = FeedbackScene::Working;
-
-    if (_distance_feedback_enabled) {
-        applyDistanceFeedback(_rgb,
-                              _speaker,
-                              active_sensors,
-                              _distance_level);
-    } else {
-        _rgb.solid(RGB_COLOR_GREEN,
-                   sideZoneFromSensorSet(active_sensors));
-    }
-
-    playOnceAudio(_speaker,
-                  AUDIO_ID_TONE_SUCCESS_UP,
-                  _distance_feedback_enabled);
-}
-
-void FeedbackController::onRightLinkRestoredEvent(
-    FeedbackSensorSet active_sensors)
-{
-    _last_event = FeedbackEvent::RightLinkRestored;
+    _last_event = FeedbackEvent::LinkRestored;
     _scene = FeedbackScene::Working;
 
     if (_distance_feedback_enabled) {

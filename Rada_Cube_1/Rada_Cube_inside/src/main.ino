@@ -168,8 +168,8 @@ static void pairFeedbackCallback(uint8_t slave_id,
             const FeedbackSensorSet paired_sensors =
                 toFeedbackSensorSet(pair_context->left_paired,
                                     pair_context->right_paired);
-            // PairLeftSucceeded event：发生左侧配对成功事件。
-            Feedback.onPairLeftSucceededEvent(paired_sensors);
+            // PairSucceeded event：更新当前已配对成功的模块集合。
+            Feedback.onPairSucceededEvent(paired_sensors);
             if (!Feedback.isBusy() && pair_context->pending_success_tones == 0) {
                 // PairSuccessTone event：发生单侧配对成功提示音事件。
                 Feedback.onPairSuccessToneEvent();
@@ -186,8 +186,8 @@ static void pairFeedbackCallback(uint8_t slave_id,
             const FeedbackSensorSet paired_sensors =
                 toFeedbackSensorSet(pair_context->left_paired,
                                     pair_context->right_paired);
-            // PairRightSucceeded event：发生右侧配对成功事件。
-            Feedback.onPairRightSucceededEvent(paired_sensors);
+            // PairSucceeded event：更新当前已配对成功的模块集合。
+            Feedback.onPairSucceededEvent(paired_sensors);
             if (!Feedback.isBusy() && pair_context->pending_success_tones == 0) {
                 // PairSuccessTone event：发生单侧配对成功提示音事件。
                 Feedback.onPairSuccessToneEvent();
@@ -400,8 +400,8 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
                                 const FeedbackSensorSet awake_sensors =
                                     toFeedbackSensorSet(sensor_a.woke,
                                                         sensor_b.woke);
-                                // WakeLeftSucceeded event：发生左侧唤醒成功事件。
-                                Feedback.onWakeLeftSucceededEvent(awake_sensors);
+                                // WakeSucceeded event：更新当前已唤醒的模块集合。
+                                Feedback.onWakeSucceededEvent(awake_sensors);
                                 if (second_wake) {
                                     pending_wake_success_tone = true;
                                     pending_wake_ok_tone = true;
@@ -421,8 +421,8 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
                                 const FeedbackSensorSet awake_sensors =
                                     toFeedbackSensorSet(sensor_a.woke,
                                                         sensor_b.woke);
-                                // WakeRightSucceeded event：发生右侧唤醒成功事件。
-                                Feedback.onWakeRightSucceededEvent(awake_sensors);
+                                // WakeSucceeded event：更新当前已唤醒的模块集合。
+                                Feedback.onWakeSucceededEvent(awake_sensors);
                                 if (second_wake) {
                                     pending_wake_success_tone = true;
                                     pending_wake_ok_tone = true;
@@ -595,13 +595,9 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
             wait_exit_feedback = true;
             exit_flag = true;
         } else if (feedback_ready) {
-            if (left_changes.link_lost) {
-                // LeftLinkLost event：发生左侧链路失联事件。
-                Feedback.onLeftLinkLostEvent(active_sensors);
-            }
-            if (right_changes.link_lost) {
-                // RightLinkLost event：发生右侧链路失联事件。
-                Feedback.onRightLinkLostEvent(active_sensors);
+            if (left_changes.link_lost || right_changes.link_lost) {
+                // LinkLost event：根据失联后的活动模块集合更新反馈。
+                Feedback.onLinkLostEvent(active_sensors);
             }
             // 移除类事件优先于恢复事件，防止传感器在同一轮询周期内恢复在线
             // 并进入故障时，被 RGB 灯短暂显示为已恢复。
@@ -612,13 +608,12 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
                                         sensor_b.distance_fault),
                     active_sensors);
             }
-            if (left_changes.link_restored && !sensor_a.distance_fault) {
-                // LeftLinkRestored event：发生左侧链路恢复事件。
-                Feedback.onLeftLinkRestoredEvent(active_sensors);
-            }
-            if (right_changes.link_restored && !sensor_b.distance_fault) {
-                // RightLinkRestored event：发生右侧链路恢复事件。
-                Feedback.onRightLinkRestoredEvent(active_sensors);
+            const bool active_link_restored =
+                (left_changes.link_restored && !sensor_a.distance_fault) ||
+                (right_changes.link_restored && !sensor_b.distance_fault);
+            if (active_link_restored) {
+                // LinkRestored event：根据恢复后的活动模块集合更新反馈。
+                Feedback.onLinkRestoredEvent(active_sensors);
             }
         }
 
