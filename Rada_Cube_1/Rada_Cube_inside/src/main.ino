@@ -89,7 +89,6 @@ static bool feedback_ready = false;
 struct PairFeedbackContext {
     bool left_paired = false;
     bool right_paired = false;
-    uint8_t pending_success_tones = 0;
 };
 
 static FeedbackScene modeToFeedbackScene(SysMode mode)
@@ -164,37 +163,27 @@ static void pairFeedbackCallback(uint8_t slave_id,
             return;
         }
         pair_context->left_paired = true;
-        if (feedback_ready) {
-            const FeedbackSensorSet paired_sensors =
-                toFeedbackSensorSet(pair_context->left_paired,
-                                    pair_context->right_paired);
-            // PairSucceeded event：更新当前已配对成功的模块集合。
-            Feedback.onPairSucceededEvent(paired_sensors);
-            if (!Feedback.isBusy() && pair_context->pending_success_tones == 0) {
-                // PairSuccessTone event：发生单侧配对成功提示音事件。
-                Feedback.onPairSuccessToneEvent();
-            } else {
-                ++pair_context->pending_success_tones;
-            }
-        }
     } else if (slave_id == SLAVE_B_ID) {
         if (pair_context->right_paired) {
             return;
         }
         pair_context->right_paired = true;
-        if (feedback_ready) {
-            const FeedbackSensorSet paired_sensors =
-                toFeedbackSensorSet(pair_context->left_paired,
-                                    pair_context->right_paired);
-            // PairSucceeded event：更新当前已配对成功的模块集合。
-            Feedback.onPairSucceededEvent(paired_sensors);
-            if (!Feedback.isBusy() && pair_context->pending_success_tones == 0) {
-                // PairSuccessTone event：发生单侧配对成功提示音事件。
-                Feedback.onPairSuccessToneEvent();
-            } else {
-                ++pair_context->pending_success_tones;
-            }
-        }
+    } else {
+        return;
+    }
+
+    if (feedback_ready) {
+        const FeedbackSensorSet paired_sensors =
+            toFeedbackSensorSet(pair_context->left_paired,
+                                pair_context->right_paired);
+
+        // 等待上一段配对反馈结束，再播放本次从机的成功反馈。
+        waitFeedbackOrTimeout(FEEDBACK_DEFAULT_TIMEOUT_MS);
+
+        // PairSucceeded event：更新当前已配对成功的模块集合及对应灯效。
+        Feedback.onPairSucceededEvent(paired_sensors);
+        // PairSuccessTone event：播放本次从机配对成功提示音。
+        Feedback.onPairSuccessToneEvent();
     }
 }
 
@@ -767,15 +756,8 @@ static void handleMode(SysMode mode)
             toFeedbackSensorSet(pair_context.left_paired,
                                 pair_context.right_paired);
 
-        // 先等待当前提示音播放结束，再依次播放排队的单侧成功提示音，
-        // 最后提交配对结果反馈。
+        // 等待最后一个从机的成功反馈结束，再提交最终配对结果反馈。
         waitFeedbackOrTimeout(FEEDBACK_DEFAULT_TIMEOUT_MS);
-        while (pair_context.pending_success_tones > 0) {
-            // PairSuccessTone event：发生延迟调度的单侧配对成功提示音事件。
-            Feedback.onPairSuccessToneEvent();
-            --pair_context.pending_success_tones;
-            waitFeedbackOrTimeout(FEEDBACK_DEFAULT_TIMEOUT_MS);
-        }
 
         if (!pair_ok && paired_sensors != FeedbackSensorSet::Both) {
             ESP_LOGE(MAIN_TAG, "Pair failed, going to sleep");
