@@ -11,23 +11,23 @@
 
 // RTC_DATA_ATTR int bootCount = 0;
 
-// // 第一次上电配置普通模式、空中唤醒模式的参数、然后进入到无线唤醒模式
+// // When powering on for the first time, configure the parameters of normal mode and air wake-up mode, and then enter wireless wake-up mode.
 // const char* init_config[] = 
 // {
-//   "AT+MODE=0",    // 进入配置模式
-//   "AT+RFBR=6000", // 配置普通模式的空中传输速率6000bps
-//   "AT+LPWR=0",    // 关闭深度睡眠模式
-//   "AT+RFCH=18",   // 设置空中唤醒的频道433MHz
-//   "AT+PID=255",   // 设置PID255
-//   "AT+MAMP=2",    // 使能无线唤醒模式
-//   "AT+MLPWR=2",   // 使能无线唤醒模式2
-//   "AT+MID=17",    // 设置唤醒ID为17
-//   "AT+MODE=1"     // 退出配置模式
+//   "AT+MODE=0", // Enter configuration mode
+//   "AT+RFBR=6000", // Configure the air transmission rate in normal mode to 6000bps
+//   "AT+LPWR=0", // Turn off deep sleep mode
+//   "AT+RFCH=18", //Set the air wake-up channel 433MHz
+//   "AT+PID=255", // Set PID255
+//   "AT+MAMP=2", // Enable wireless wake-up mode
+//   "AT+MLPWR=2", // Enable wireless wake-up mode 2
+//   "AT+MID=17", //Set the wake-up ID to 17
+//   "AT+MODE=1" //Exit configuration mode
 // };
 // const int init_config_num = sizeof(init_config) / sizeof(init_config[0]);
 
 
-// // 后续进入普通模式，配置前CE引脚拉低，配置完发送端CE保持低电平，接收端CE拉高
+// // After entering the normal mode, the CE pin is pulled low before configuration, the sending end CE remains low after configuration, and the receiving end CE is pulled high.
 // const char* nomal_mode[] = 
 // {
 //   "AT+MODE=0",
@@ -36,7 +36,7 @@
 // };
 // const int nomal_mode_num = sizeof(nomal_mode) / sizeof(nomal_mode[0]);
 
-// // 后续进入无线唤醒模式，配置前CE引脚拉低，配置完发送端CE保持低电平，接收端CE拉高
+// // Subsequently enter the wireless wake-up mode, the CE pin is pulled low before configuration, the sender CE remains low after configuration, and the receiver CE is pulled high.
 // const char* wireless_wake_cmd[] =
 // {
 //   "AT+MODE=0",
@@ -45,21 +45,21 @@
 // };
 // const int wireless_wake_mum = sizeof(wireless_wake_cmd) / sizeof(wireless_wake_cmd[0]);
 
-// // 发送AT指令并等待返回值
+// //Send AT command and wait for return value
 // bool sendATAndWaitResponse(const char* cmd, int timeoutms = 500, uint8_t maxRetry = 3)
 // {
 //   for(uint8_t retry = 0; retry < maxRetry; retry++)
 //   {
-//     // 清除缓存区
+//     //Clear cache area
 //     while(LoraSerial.available()) LoraSerial.read();
 
-//     // 发送AT指令
+//     //Send AT command
 //     LoraSerial.println(cmd);
     
-//     // 开始计时
+//     // Start timing
 //     uint32_t t_start = millis();
     
-//     // 等待返回值
+//     // Wait for return value
 //     String line = "";
 //     while (millis() - t_start < timeoutms)
 //     {
@@ -95,7 +95,7 @@
 
 
 
-// // // 可以第一次上电进行初始化配置，然后在nvs里记录是否有保存过配置，如果没有保存过，则进行初始化配置
+// // // You can perform initialization configuration after powering on for the first time, and then record whether the configuration has been saved in nvs. If not, perform initialization configuration.
 // // void setup()
 // // {
 // //   Serial0.begin(115200);
@@ -115,7 +115,7 @@
 // //   Serial0.printf("Init consum time: %dms\r\n", millis() - init_time_start);
 // //   digitalWrite(LORA_CE_PIN, HIGH);
 
-// //   // 测试切换普通模式所需要的时间
+// // // Test the time required to switch to normal mode
 // //   delay(1000);
 // //   digitalWrite(LORA_CE_PIN, LOW);
 // //   uint32_t nomal_mode_time_start = millis();
@@ -130,7 +130,7 @@
 // //   Serial0.printf("Nomal mode consum time: %dms\r\n", millis() - nomal_mode_time_start);
 // //   digitalWrite(LORA_CE_PIN, HIGH);
 
-// //   // 测试切换无线唤醒模式所需要的时间
+// // // Test the time required to switch wireless wake-up mode
 // //   delay(1000);
 // //   digitalWrite(LORA_CE_PIN, LOW);
 // //   uint32_t wireless_wake_time_start = millis();
@@ -154,7 +154,7 @@
 // // }
 
 
-// // lora接收回调函数
+// // lora receives callback function
 // void Lora_onReceive()
 // {
 //   while(LoraSerial.available())
@@ -164,7 +164,7 @@
 // }
 
 
-// // 省略了判断是否配置过，用于测试，直接默认是配置好了的，可以直接无线唤醒模式和普通模式切换
+// // Omits the judgment of whether it has been configured. It is used for testing. The default is configured. You can directly switch between wireless wake-up mode and normal mode.
 // void setup()
 // {
 //   Serial0.begin(115200);
@@ -172,10 +172,10 @@
 //   LoraSerial.begin(9600, SERIAL_8N1, LORA_RX_PIN, LORA_TX_PIN);
 //   pinMode(LORA_CE_PIN, OUTPUT);
 
-//   // 记录唤醒次数
+//   //Record the number of wake-ups
 //   Serial0.println("Boot count: " + String(bootCount));
 
-//   // 检查唤醒原因
+//   // Check the reason for wake-up
 //   esp_sleep_wakeup_cause_t wakeup_reason;
 //   wakeup_reason = esp_sleep_get_wakeup_cause();
 //   switch(wakeup_reason)
@@ -194,7 +194,7 @@
 //       break;
 //   }
 
-//   // 切换到普通模式
+//   //Switch to normal mode
 //   digitalWrite(LORA_CE_PIN, LOW);
 //   for(int i = 0; i < nomal_mode_num; i++)
 //   {
@@ -204,16 +204,16 @@
 //     }
 //   }
 //   digitalWrite(LORA_CE_PIN, HIGH);
-//   // 切换完成后，发送总共醒来的次数
+//   // After the switch is completed, send the total number of wake-ups
 //   // LoraSerial.printf("%d\r\n", bootCount);
-//   // 发送端
+//   // Sender
 //   LoraSerial.write((uint8_t*)&bootCount, 4);
 //   Serial0.printf("send bootcount: %d\r\n", bootCount);
 
-//   // 消息间隔，这个延时一定要有，具体值未知，太短或者没有会把切换模式的第一条指令当作信息发出去
+//   // Message interval. This delay must be present. The specific value is unknown. If it is too short or does not exist, the first instruction to switch mode will be sent as a message.
 //   delay(50);
 
-//   // 切换到无线唤醒模式
+//   //Switch to wireless wake-up mode
 //   digitalWrite(LORA_CE_PIN, LOW);
 //   for(int i = 0; i < wireless_wake_mum; i++)
 //   {
@@ -224,12 +224,12 @@
 //   }
 //   digitalWrite(LORA_CE_PIN, HIGH);
 
-//   // 配置唤醒引脚
+//   //Configure wake-up pin
 //   esp_deep_sleep_enable_gpio_wakeup(BIT(LORA_WAKE_PIN), ESP_GPIO_WAKEUP_GPIO_LOW);
 
 //   bootCount++;
 
-//   // 进入睡眠模式
+//   //Enter sleep mode
 //   Serial0.println("Going to sleep now");
 //   esp_deep_sleep_start();
 

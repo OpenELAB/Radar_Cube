@@ -9,7 +9,7 @@
 #include "freertos/task.h"
 #include "pins.h"
 
-// RgbLedController 只负责物理灯效渲染，不理解上层业务事件。
+// RgbLedController is only responsible for physical lighting effect rendering and does not understand upper-layer business events.
 #define RGB_LED_COUNT                    4
 #define RGB_LED_DEFAULT_BRIGHTNESS       64
 #define RGB_LED_MAX_BRIGHTNESS           96
@@ -19,7 +19,7 @@
 #define RGB_LED_COMMAND_QUEUE_LENGTH     1
 #define RGB_LED_PIXEL_TYPE               (NEO_GRB + NEO_KHZ800)
 
-// 物理索引沿用当前接线顺序，最终方向需要通过上板测试确认。
+// The physical index follows the current wiring sequence, and the final direction needs to be confirmed through board testing.
 #define RGB_LED_INDEX_RIGHT              0
 #define RGB_LED_INDEX_TOP                1
 #define RGB_LED_INDEX_LEFT               2
@@ -49,29 +49,29 @@ struct RgbColor {
 #define RGB_COLOR_SOFT_AMBER  RgbColor{120, 42, 0}
 
 /*
- * 固定灯区只描述需要点亮的物理像素：
- * - ONLY_LEFT/ONLY_RIGHT：单颗侧灯。
- * - ONLY_SIDES：左右两颗侧灯，上下灯不参与。
- * - LEFT/RIGHT：对应侧灯与上下灯组成的工作区域。
+ * The fixed light area only describes the physical pixels that need to be lit:
+ * - ONLY_LEFT/ONLY_RIGHT: Single side light.
+ * - ONLY_SIDES: The left and right side lights, the upper and lower lights are not involved.
+ * - LEFT/RIGHT: Corresponds to the working area composed of side lights and upper and lower lights.
  */
 enum LedZone : uint8_t {
     LED_ZONE_NONE = 0,
-    LED_ZONE_ALL,          // 四灯
-    LED_ZONE_ONLY_LEFT,    // 仅左侧灯
-    LED_ZONE_ONLY_RIGHT,   // 仅右侧灯
-    LED_ZONE_ONLY_SIDES,   // 左右侧灯
-    LED_ZONE_LEFT,         // 左侧灯 + 上灯 + 下灯
-    LED_ZONE_RIGHT         // 右侧灯 + 上灯 + 下灯
+    LED_ZONE_ALL,          // four lights
+    LED_ZONE_ONLY_LEFT,    // Left light only
+    LED_ZONE_ONLY_RIGHT,   // Right light only
+    LED_ZONE_ONLY_SIDES,   // Left and right side lights
+    LED_ZONE_LEFT,         // Left light + upper light + lower light
+    LED_ZONE_RIGHT         // Right light + upper light + lower light
 };
 
-// 上层只选择速度档位，具体闪烁和呼吸周期由本模块定义。
+// The upper layer only selects the speed gear, and the specific flashing and breathing cycles are defined by this module.
 enum RgbEffectSpeed : uint8_t {
     RGB_EFFECT_SPEED_SLOW = 0,
     RGB_EFFECT_SPEED_MEDIUM,
     RGB_EFFECT_SPEED_FAST
 };
 
-// 有限时长的物理动画原语，业务事件到动画的映射属于 FeedbackController。
+// Limited-duration physical animation primitive, the mapping of business events to animation belongs to FeedbackController.
 enum RgbAnimation : uint8_t {
     RGB_ANIMATION_NONE = 0,
     RGB_ANIMATION_CHASE_CLOCKWISE,
@@ -81,68 +81,68 @@ enum RgbAnimation : uint8_t {
 };
 
 /*
- * RGB 硬件控制器。
+ * RGB hardware controller.
  *
- * 唯一的 RGB task 独占 NeoPixel；灯效 API 只投递最新命令，不直接写像素。
- * 命令队列长度为 1，新视觉状态覆盖旧状态，不做排队回放。
- * 返回 bool 的命令 API 仅表示命令是否成功提交，不表示灯效已经执行完成。
+ * The only RGB task is exclusive to NeoPixel; the lighting effect API only delivers the latest commands and does not write pixels directly.
+ * The command queue length is 1, the new visual state overwrites the old state, and no queue playback is performed.
+ * The command API that returns bool only indicates whether the command was successfully submitted, but does not indicate that the lighting effect has been completed.
  */
 class RgbLedController {
 public:
     RgbLedController();
     ~RgbLedController();
 
-    // 初始化供电、队列、同步对象和渲染 task；成功后默认关灯。
+    // Initialize power supply, queue, synchronization object and rendering task; turn off the lights by default after success.
     bool begin();
 
-    // 协作停止 task，清灯、关闭供电并释放资源；重复调用不产生额外效果。
+    // Collaborate to stop the task, clear the lights, turn off the power supply and release resources; repeated calls will not produce additional effects.
     void end();
 
     /*
-     * 设置后续和当前灯效使用的亮度，输入钳制到 RGB_LED_MAX_BRIGHTNESS。
-     * 若视觉命令尚未执行，只更新该命令携带的亮度，不覆盖其效果类型。
+     * Set the brightness used for subsequent and current lighting effects, and the input is clamped to RGB_LED_MAX_BRIGHTNESS.
+     * If the visual command has not been executed, only the brightness carried by the command will be updated, and its effect type will not be overwritten.
      */
     bool setBrightness(uint8_t brightness);
 
-    // 返回最近一次成功提交且已经钳制的亮度请求值。
+    // Returns the latest successfully submitted brightness request value that has been clamped.
     uint8_t brightness() const;
 
-    // 提交持续关灯状态。
+    // Submit the continuous lights-off state.
     bool off();
 
-    // 提交持续常亮状态。
+    // Submit remains on.
     bool solid(const RgbColor& color, LedZone zone = LED_ZONE_ALL);
 
-    // 提交持续闪烁状态，周期由 RgbEffectSpeed 映射决定。
+    // Submit a continuous flashing state, the period is determined by the RgbEffectSpeed ​​mapping.
     bool blink(const RgbColor& color,
                RgbEffectSpeed speed = RGB_EFFECT_SPEED_MEDIUM,
                LedZone zone = LED_ZONE_ALL);
 
-    // 提交持续呼吸状态，周期由 RgbEffectSpeed 映射决定。
+    // Submit the continuous breathing state, the period is determined by the RgbEffectSpeed ​​mapping.
     bool breathe(const RgbColor& color,
                  RgbEffectSpeed speed = RGB_EFFECT_SPEED_MEDIUM,
                  LedZone zone = LED_ZONE_ALL);
 
     /*
-     * 播放有限动画：
-     * - CHASE_CLOCKWISE：绿色，BOTTOM -> LEFT -> TOP -> RIGHT，约 1 秒。
-     * - CHASE_COUNTERCLOCKWISE：绿色，反向顺序，约 1 秒。
-     * - FLASH：四灯绿色快速闪烁 3 次，周期约 180 ms。
-     * - FADE_OUT：柔和琥珀色按 RIGHT -> TOP -> LEFT -> BOTTOM 渐暗，约 1 秒。
-     * - NONE：等效 off()。
+     * Play limited animation:
+     * - CHASE_CLOCKWISE: Green, BOTTOM -> LEFT -> TOP -> RIGHT, about 1 second.
+     * - CHASE_COUNTERCLOCKWISE: green, reverse order, about 1 second.
+     * - FLASH: The four lights flash green 3 times quickly, with a period of about 180 ms.
+     * - FADE_OUT: Soft amber press RIGHT -> TOP -> LEFT -> BOTTOM to fade, about 1 second.
+     * - NONE: Equivalent to off().
      *
-     * 新视觉命令立即抢占动画；亮度命令不重置节拍。动画完成后熄灭，
-     * 不恢复旧效果，也不保留最后一帧。
+     * New visual commands immediately preempt animation; brightness commands do not reset the beat. Turns off when the animation is complete,
+     * Do not restore old effects and do not retain the last frame.
      */
     bool playAnimation(RgbAnimation animation);
 
-    // 有限动画正在等待执行或运行时返回 true；持续灯效不算 busy。
+    // Returns true when the limited animation is waiting to be executed or running; continuous lighting effects are not considered busy.
     bool isBusy() const;
 
-    // begin() 成功且尚未进入 end() 时返回 true。
+    // Return true when begin() succeeds and has not yet entered end().
     bool isBegun() const;
 
-    // 渲染 task 已创建且尚未退出时返回 true。
+    // Return true when the rendering task has been created and has not exited.
     bool isTaskRunning() const;
 
 private:
@@ -164,11 +164,11 @@ private:
         RgbAnimation animation = RGB_ANIMATION_NONE;
     };
 
-    // _strip 只允许 RGB task 访问；每个 begin()/end() 周期独立创建和释放。
+    // _strip only allows RGB task access; each begin()/end() cycle is created and released independently.
     Adafruit_NeoPixel* _strip = nullptr;
     QueueHandle_t _command_queue = nullptr;
 
-    // 锁顺序固定为 api -> queue；RGB task 只获取 queue，避免强制退出遗留 api 锁。
+    // The lock sequence is fixed to api -> queue; RGB task only acquires queue to avoid forced exit of legacy api lock.
     SemaphoreHandle_t _api_mutex = nullptr;
     SemaphoreHandle_t _queue_mutex = nullptr;
     SemaphoreHandle_t _task_stopped = nullptr;
@@ -187,16 +187,16 @@ private:
 
     static void taskEntry(void* arg);
 
-    // 读取最新命令并按固定帧周期渲染；每个常规帧只调用一次 show()。
+    // Read the latest command and render according to a fixed frame cycle; show() is only called once per regular frame.
     void taskLoop();
 
-    // 按值接收命令，以便注入最新亮度或合并待执行的亮度更新。
+    // Receives commands by value to inject the latest brightness or merge pending brightness updates.
     bool sendCommand(Command command);
 
-    // 仅由 RGB task 调用，切换当前效果并维护动画 busy 状态。
+    // Called only by RGB task, switches the current effect and maintains animation busy state.
     void handleCommand(const Command& command);
 
-    // 根据当前效果计算四颗像素；不直接调用 NeoPixel API。
+    // Calculate four pixels based on the current effect; do not call NeoPixel API directly.
     void renderFrame(uint32_t now, RgbColor pixels[RGB_LED_COUNT]);
 
     void setAnimationBusy(bool busy);
@@ -204,7 +204,7 @@ private:
     void setTaskRunning(bool running);
     bool taskShouldRun() const;
 
-    // 熄灭灯珠并释放 NeoPixel 在 ESP32 上占用的 RMT 资源。
+    // Turn off the lamp beads and release the RMT resources occupied by NeoPixel on ESP32.
     void releaseStripHardware();
 };
 

@@ -3,8 +3,8 @@
 
 #include <Arduino.h>
 
-#define ECHO_PIN  3   // 输入回声信号引脚
-#define TRIG_PIN  4   // 输出触发信号引脚
+#define ECHO_PIN  3   // Input echo signal pin
+#define TRIG_PIN  4   // Output trigger signal pin
 
 
 class SR04

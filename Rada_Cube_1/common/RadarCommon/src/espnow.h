@@ -6,104 +6,104 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
 
-// ======================== 常量 ========================
+// ======================== Constant ========================
 extern const uint8_t ESPNOW_BROADCAST[6];
 
-// 接收消息最大负载
+// Maximum load of received messages
 #define ESPNOW_MAX_DATA     32
 
-// ======================== 队列 ========================
+// ======================== Queue ========================
 #define ESPNOW_QUEUE_DEPTH        16
 
-// ======================== 接收消息结构 ========================
+// ======================== Receive message structure ========================
 typedef struct {
-    uint8_t  src_mac[6];            // 发送方 MAC
-    uint8_t  data[ESPNOW_MAX_DATA]; // 负载
-    uint8_t  len;                   // 实际负载长度
+    uint8_t  src_mac[6];            // Sender MAC
+    uint8_t  data[ESPNOW_MAX_DATA]; // Load
+    uint8_t  len;                   // Actual load length
 } espnow_msg_t;
 
 /**
- * ESP-NOW 通信管理（纯通信层，不含业务逻辑）
+ * ESP-NOW communication management (pure communication layer, excluding business logic)
  *
- * 接收原理：
- *   回调 → 把最新一帧写入 buffer + 置标志位
- *   主循环 → 检查标志位 → 读走数据 → 清标志位
- *   只保留最新一帧，旧的自动被覆盖（对雷达场景刚好合适）
+ * Receiving principle:
+ *   Callback → write the latest frame into the buffer + set the flag
+ *   Main loop → Check flag bit → Read data → Clear flag bit
+ *   Only the latest frame is retained, the old one is automatically overwritten (just right for radar scenes)
  *
- * 使用示例：
+ * Usage example:
  *
  *   EspNowManager Espnow;
  *
- *   // 1. 初始化（幂等，重复调用自动跳过）
+ *   // 1. Initialization (idempotent, repeated calls will be automatically skipped)
  *   Espnow.init();
  *
- *   // 2. 添加对方地址 + 发送
+ *   // 2. Add the other party’s address + send
  *   Espnow.addPeer(peer_mac);
  *   Espnow.send(peer_mac, data, len);
  *
- *   // 3. 接收
+ *   // 3. Receive
  *   Espnow.recvStart();
  *   espnow_msg_t msg;
  *   if (Espnow.read(&msg)) {
- *       // 处理 msg.data, msg.len, msg.src_mac
+ *       // Process msg.data, msg.len, msg.src_mac
  *   }
  *   Espnow.recvStop();
  *
- *   // 4. 反初始化
+ *   // 4. Deinitialization
  *   Espnow.deinit();
  */
 class EspNowManager
 {
 public:
 
-    // 默认构造函数
+    // Default constructor
     EspNowManager() = default;
 
-    // 禁止拷贝
+    // Copying prohibited
     EspNowManager(const EspNowManager&) = delete;
     EspNowManager& operator=(const EspNowManager&) = delete;
 
-    // 初始化 WiFi STA + ESP-NOW（幂等，重复调用自动跳过）
+    // Initialize WiFi STA + ESP-NOW (idempotent, repeated calls will be automatically skipped)
     void init();
 
-    // 反初始化 ESP-NOW
+    // Deinitialization ESP-NOW
     void deinit();
 
-    // 获取本机 MAC
+    // Get the local MAC
     void getMac(uint8_t mac_out[6]);
 
-    // 添加 / 删除 peer
+    // Add/delete peer
     bool addPeer(const uint8_t mac[6]);
     bool delPeer(const uint8_t mac[6]);
 
-    // 发送数据
+    // Send data
     esp_err_t send(const uint8_t* peer_mac, const uint8_t* data, size_t len);
 
-    // 开启接收（注册回调）
+    // Enable reception (register callback)
     void recvStart();
 
-    // 是否有新数据到达
+    // Is there any new data arriving?
     bool hasNewData();
 
-    // 非堵塞读取
+    // Non-blocking read
     bool read(espnow_msg_t* msg_out);
 
-    // 堵塞读取
+    // Blocked reading
     bool readBlocking(espnow_msg_t* msg_out, TickType_t wait_ticks);
 
-    // 停止接收（注销回调）
+    // Stop receiving (logout callback)
     void recvStop();
 
-    // 获取队列当前的积压数量
+    // Get the current backlog of the queue
     UBaseType_t getQueueCount();
 
 private:
     bool _inited = false;
 
-    // ---- 队列 ----
+    // ---- Queue ----
     QueueHandle_t    _rx_queue = nullptr;
 
-    // ---- 串口回调转发 ----
+    // ---- Serial port callback forwarding ----
     static EspNowManager* _instance;
     static void _onRecvStatic(const esp_now_recv_info_t* info, const uint8_t* data, int len);
     void _onRecv(const esp_now_recv_info_t* info, const uint8_t* data, int len);

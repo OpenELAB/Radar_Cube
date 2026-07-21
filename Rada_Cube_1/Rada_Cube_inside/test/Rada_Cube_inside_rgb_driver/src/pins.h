@@ -1,16 +1,16 @@
-// 硬件引脚定义 & 硬件相关常量
-// 通过 INSIDE / OUTSIDE 宏来区分车内模块和车外模块
-// 在 platformio.ini 的 build_flags 中定义，不需要手动修改
+// Hardware pin definition & hardware related constants
+// Distinguish between in-car modules and out-of-vehicle modules through INSIDE / OUTSIDE macros
+// Defined in build_flags of platformio.ini, no manual modification is required.
 #ifndef __PINS_H__
 #define __PINS_H__
 
-// // 编译检查：必须且只能定义 INSIDE 或 OUTSIDE 其中一个
+// // Compilation check: must and can only define one of INSIDE or OUTSIDE
 
-// ======================== 串口声明 ========================
+// ======================== Serial port declaration ========================
 extern HardwareSerial& LoraSerial;
 
 // ============================================================
-//  车内模块 (INSIDE) 引脚定义
+//  In-vehicle module (INSIDE) pin definition
 // ============================================================
     #define RGB_LED_PIN             GPIO_NUM_4
     #define RGB_LED_PWR_PIN         GPIO_NUM_2
@@ -27,15 +27,15 @@ extern HardwareSerial& LoraSerial;
     #define LORA_POWER_PIN          GPIO_NUM_18
 
 
-// ======================== Lora 电平 ========================
+// ======================== Lora Level ========================
 #define LORA_POWER_ON               HIGH
 #define LORA_POWER_OFF              LOW
-#define LORA_CE_ACTIVE              HIGH    // CE 拉高 = 正常工作
-#define LORA_CE_INACTIVE            LOW     // CE 拉低 = 进入配置模式
-#define LORA_WAKE_ACTIVE            HIGH    // WAKE 拉高 = 有数据，唤醒 MCU
-#define LORA_WAKE_INACTIVE          LOW     // WAKE 拉低 = 空闲
+#define LORA_CE_ACTIVE              HIGH    // CE pulled high = normal operation
+#define LORA_CE_INACTIVE            LOW     // CE pulled low = enter configuration mode
+#define LORA_WAKE_ACTIVE            HIGH    // WAKE pulled high = there is data, wake up MCU
+#define LORA_WAKE_INACTIVE          LOW     // WAKE pulled low = idle
 
-// ======================== 按键电平 ========================
+// ======================== Key level ========================
 #define BUTTON_PRESSED              HIGH
 #define BUTTON_RELEASED             LOW
 

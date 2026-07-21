@@ -1,12 +1,12 @@
 #include "mac_match.h"
 #include "config.h"
 
-// NVS 键名
+// NVS key name
 static const char* NVS_NAMESPACE = "mac";
 // static const char* NVS_KEY_FLAG  = "peer_saved";
 // static const char* NVS_KEY_MAC   = "peer_mac";
 
-// 修改键名，主机有两个从机键名，从机只有一个主机键名
+// Modify the key name. The master has two slave key names, and the slave has only one master key name.
 // #ifdef INSIDE
 //     static const char* SLAVE_A_FLAG = "slave_a_saved";
 //     static const char* SLAVE_A_MAC  = "slave_a_mac";
@@ -20,11 +20,11 @@ static const char* NVS_NAMESPACE = "mac";
     static const char* MASTER_MAC  = "master_mac";
 // #endif
 
-// ======================== NVS 操作 ========================
+// ======================== NVS operations ========================
 
-// ====================== 主机NVS操作 ======================
+// ====================== Host NVS operation ======================
 // #ifdef INSIDE
-//     // 判断从机A是否存在
+//     // Determine whether slave A exists
 //     bool MacMatch::has_slave_a_mac()
 //     {
 //         _prefs.begin(NVS_NAMESPACE, true);
@@ -32,7 +32,7 @@ static const char* NVS_NAMESPACE = "mac";
 //         _prefs.end();
 //         return saved;
 //     }
-//     // 判断从机B是否存在
+//     // Determine whether slave B exists
 //     bool MacMatch::has_slave_b_mac()
 //     {
 //         _prefs.begin(NVS_NAMESPACE, true);
@@ -40,7 +40,7 @@ static const char* NVS_NAMESPACE = "mac";
 //         _prefs.end();
 //         return saved;
 //     }
-//     // 读取从机的MAC地址
+//     //Read the MAC address of the slave
 //     bool MacMatch::load_slave_mac(uint8_t mac_out[6], uint8_t slave_id)
 //     {
 //         _prefs.begin(NVS_NAMESPACE, true);
@@ -59,7 +59,7 @@ static const char* NVS_NAMESPACE = "mac";
 //         }
 //         return ok;
 //     }
-//     // 保存从机的MAC地址
+//     //Save the MAC address of the slave machine
 //     void MacMatch::save_slave_mac(const uint8_t mac[6], uint8_t slave_id)
 //     {
 //         _prefs.begin(NVS_NAMESPACE, false);
@@ -90,7 +90,7 @@ static const char* NVS_NAMESPACE = "mac";
 
 // #endif
 
-// ====================== 从机NVS操作 ======================
+// ====================== Slave NVS operation ======================
 // #ifdef OUTSIDE
     bool MacMatch::has_master_mac()
     {
@@ -128,12 +128,12 @@ static const char* NVS_NAMESPACE = "mac";
     }
 // #endif
 
-// ======================== 配对流程 ========================
+// ======================== Matching process ========================
 
 bool MacMatch::pair(uint8_t max_retry)
 {
-    // 配对的前提应该是NVS里没有保存地址才能进行下一步，所以是先判断还是直接清除配对
-    // 这里的逻辑我先改成的判断，如果NVS里有，直接跳过配对，返回false
+    // The prerequisite for pairing is that there is no saved address in NVS before proceeding to the next step, so whether to judge first or clear the pairing directly
+    // I will first change the logic here to judgment. If there is one in NVS, skip the pairing directly and return false.
 // #ifdef INSIDE
 //     bool has_slave_a = has_slave_a_mac();
 //     bool has_slave_b = has_slave_b_mac();
@@ -142,13 +142,13 @@ bool MacMatch::pair(uint8_t max_retry)
 //         return false;
 //     }
 //     else if(has_slave_a){
-//         // 这种情况是从机A配对上了，但是从机B没有配对上，从NVS里读取处A的mac地址用于下面配对从机B
+//         // In this case, slave A is paired, but slave B is not paired. The mac address of A is read from NVS and used to pair slave B below.
 //         load_slave_mac(_slave_a_mac, SLAVE_A_ID);
 //         ESP_LOGI(MAC_TAG, "Slave A MAC loaded: %02X:%02X:%02X:%02X:%02X:%02X"
 //              , _slave_a_mac[0], _slave_a_mac[1], _slave_a_mac[2], _slave_a_mac[3], _slave_a_mac[4], _slave_a_mac[5]);
 //     }
 //     else if(has_slave_b){
-//         // 这种情况应该可以省略，逻辑上应该不存在这种情况
+//         // This situation should be omitted, logically this situation should not exist
 //         load_slave_mac(_slave_b_mac, SLAVE_B_ID);
 //         ESP_LOGI(MAC_TAG, "Slave B MAC loaded: %02X:%02X:%02X:%02X:%02X:%02X"
 //              , _slave_b_mac[0], _slave_b_mac[1], _slave_b_mac[2], _slave_b_mac[3], _slave_b_mac[4], _slave_b_mac[5]);
@@ -170,7 +170,7 @@ bool MacMatch::pair(uint8_t max_retry)
     espnow_msg_t msg;
 
 // #ifdef INSIDE
-//     // 主机：广播配对请求，等从机回复
+//     // Host: Broadcast pairing request, wait for slave reply
 //     _espnow.addPeer(ESPNOW_BROADCAST);
 
 //     protocol_frame_t req;
@@ -184,12 +184,12 @@ bool MacMatch::pair(uint8_t max_retry)
 //             vTaskDelay(pdMS_TO_TICKS(PAIR_POLL_INTERVAL_MS));
 //             if (_espnow.read(&msg)) {
 //                 if (frame_validate(msg.data, msg.len, SLAVE_FRAME_HEAD, FRAME_SLAVE_MATCH)) {
-//                     /* 先判断A槽是不是空的，如果是空的就视为从机A放入A槽保存mac地址
-//                     如果A槽不空，判断一下B槽是不是空的，如果空的在判断一下收到的mac地址和A槽的
-//                     是不是同一个去重，不是同一个就放入B槽视为从机B保存mac，结束配对流程 
+//                     /* First determine whether slot A is empty. If it is empty, it is regarded as slave A and placed in slot A to save the mac address.
+//                     If slot A is not empty, check whether slot B is empty. If it is empty, check the received mac address and slot A.
+//                     Deduplicate whether it is the same one. If not, put it into slot B and treat it as slave B to save the mac and end the pairing process.
 //                     */
                     
-//                     // 判断A槽是否为空
+//                     // Determine whether slot A is empty
 //                     if (!has_slave_a_mac()) {
 //                         memcpy(_slave_a_mac, msg.src_mac, 6);
 //                         save_slave_mac(_slave_a_mac, SLAVE_A_ID);
@@ -197,7 +197,7 @@ bool MacMatch::pair(uint8_t max_retry)
 //                         ESP_LOGI(MAC_TAG, "Slave A MAC saved: %02X:%02X:%02X:%02X:%02X:%02X"
 //                              , _slave_a_mac[0], _slave_a_mac[1], _slave_a_mac[2], _slave_a_mac[3], _slave_a_mac[4], _slave_a_mac[5]);
 //                     }
-//                     // 判断B槽是否为空和是否与A槽地址一样
+//                     // Determine whether slot B is empty and has the same address as slot A
 //                     else if (!has_slave_b_mac() && memcmp(_slave_a_mac, msg.src_mac, 6) != 0) {
 //                         memcpy(_slave_b_mac, msg.src_mac, 6);
 //                         save_slave_mac(_slave_b_mac, SLAVE_B_ID);
@@ -219,7 +219,7 @@ bool MacMatch::pair(uint8_t max_retry)
 // #endif
 
 // #ifdef OUTSIDE
-    // 从机：等主机广播，收到后回复
+    // Slave: wait for the host to broadcast and reply after receiving it
     for (uint8_t i = 0; i < max_retry && !matched; i++) {
         vTaskDelay(pdMS_TO_TICKS(PAIR_POLL_INTERVAL_MS));
         if (_espnow.read(&msg)) {
@@ -227,7 +227,7 @@ bool MacMatch::pair(uint8_t max_retry)
                 memcpy(_peer_mac, msg.src_mac, 6);
                 save_master_mac(_peer_mac);
 
-                // 回复配对应答
+                // Reply to pairing response
                 _espnow.addPeer(_peer_mac);
                 protocol_frame_t ack;
                 frame_build(&ack, SLAVE_FRAME_HEAD, FRAME_SLAVE_MATCH);

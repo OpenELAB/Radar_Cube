@@ -1,11 +1,11 @@
-// 这里定义硬件相关，主要是gpio引脚的宏
+// Here you define hardware-related macros, mainly gpio pin macros
 #ifndef __PINS_H__
 #define __PINS_H__
 
 #define INSIDE
 // #define OUTSIDE
 
-// 定义车内模块引脚
+// Define the in-car module pins
 #ifdef INSIDE
     #define BEEPER_PIN
     #define LED_PIN
@@ -14,7 +14,7 @@
     #define BUTTON_PIN
     #define BATTERY_PIN
 #endif
-// 定义车外模块引脚
+// Define the external module pins
 #ifdef OUTSIDE
     #define LED_PIN
     #define LORA_TX_PIN

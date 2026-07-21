@@ -1,10 +1,10 @@
-// 硬件引脚定义 & 硬件相关常量
-// 通过 INSIDE / OUTSIDE 宏来区分车内模块和车外模块
-// 在 platformio.ini 的 build_flags 中定义，不需要手动修改
+// Hardware pin definition & hardware related constants
+// Distinguish between in-car modules and out-of-vehicle modules through INSIDE / OUTSIDE macros
+// Defined in build_flags of platformio.ini, no manual modification is required.
 #ifndef __PINS_H__
 #define __PINS_H__
 
-// 编译检查：必须且只能定义 INSIDE 或 OUTSIDE 其中一个
+// Compilation check: must and can only define one of INSIDE or OUTSIDE
 // #if !defined(INSIDE) && !defined(OUTSIDE)
 //     #error "Please define INSIDE or OUTSIDE in platformio.ini build_flags"
 // #endif
@@ -12,14 +12,14 @@
 //     #error "Cannot define both INSIDE and OUTSIDE"
 // #endif
 
-// ======================== 串口声明 ========================
+// ======================== Serial port declaration ========================
 extern HardwareSerial& LoraSerial;
 // #ifdef OUTSIDE
 extern HardwareSerial& RadarSerial;
 // #endif
 
 // ============================================================
-//  车外模块 (OUTSIDE) 引脚定义
+//  Outboard module (OUTSIDE) pin definition
 // ============================================================
 // #ifdef OUTSIDE
     #define LED_PIN                 GPIO_NUM_21
@@ -35,23 +35,23 @@ extern HardwareSerial& RadarSerial;
     #define LORA_WAKE_PIN           GPIO_NUM_4
     #define USER_BUTTON_PIN         GPIO_NUM_2
     #define DEV_BUTTON_PIN          GPIO_NUM_0
-    // EXT1 唤醒需要的位掩码
+    // EXT1 bit mask required for wake-up
     #define BUTTON_WAKEUP_BITMASK   ((1ULL << USER_BUTTON_PIN) | (1ULL << DEV_BUTTON_PIN))
 // #endif
 
-// ======================== Lora 电平 ========================
+// ======================== Lora Level ========================
 #define LORA_POWER_ON               HIGH
 #define LORA_POWER_OFF              LOW
-#define LORA_CE_ACTIVE              HIGH    // CE 拉高 = 正常工作
-#define LORA_CE_INACTIVE            LOW     // CE 拉低 = 进入配置模式
-#define LORA_WAKE_ACTIVE            HIGH    // WAKE 拉高 = 有数据，唤醒 MCU
-#define LORA_WAKE_INACTIVE          LOW     // WAKE 拉低 = 空闲
+#define LORA_CE_ACTIVE              HIGH    // CE pulled high = normal operation
+#define LORA_CE_INACTIVE            LOW     // CE pulled low = enter configuration mode
+#define LORA_WAKE_ACTIVE            HIGH    // WAKE pulled high = there is data, wake up MCU
+#define LORA_WAKE_INACTIVE          LOW     // WAKE pulled low = idle
 
-// ======================== 按键电平 ========================
+// ======================== Key level ========================
 #define BUTTON_PRESSED              HIGH
 #define BUTTON_RELEASED             LOW
 
-// ======================== 雷达电源 ========================
+// ======================== Radar power supply ========================
 #define RADAR_POWER_ON              HIGH
 #define RADAR_POWER_OFF             LOW
 

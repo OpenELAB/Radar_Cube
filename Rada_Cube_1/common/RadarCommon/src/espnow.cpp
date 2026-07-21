@@ -2,13 +2,13 @@
 #include "espnow.h"
 #include "config.h"
 
-// ======================== 常量 ========================
+// ======================== Constant ========================
 
 const uint8_t ESPNOW_BROADCAST[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 
 static const char* TAG = "ESPNOW";
 
-// ======================== 回调转发 ========================
+// ======================== Callback forwarding ========================
 
 EspNowManager* EspNowManager::_instance = nullptr;
 
@@ -20,28 +20,28 @@ void EspNowManager::_onRecvStatic(const esp_now_recv_info_t* info, const uint8_t
 void EspNowManager::_onRecv(const esp_now_recv_info_t* info, const uint8_t* data, int len)
 {
     if (len <= 0 || !_rx_queue) return;
-    // TODO: 可以考虑加个锁来保护 buffer，但目前主循环里读得足够慢，不存在竞争问题
+    // TODO: You can consider adding a lock to protect the buffer, but the current reading in the main loop is slow enough and there is no competition problem.
 
-    // 整理数据
+    // Organize data
     espnow_msg_t msg;
     memcpy(msg.src_mac, info->src_addr, 6);
     msg.len = (len > ESPNOW_MAX_DATA) ? ESPNOW_MAX_DATA : len;
     memcpy(msg.data, data, msg.len);
 
-    // 放入队列
-    // TODO：队列如果容易满的话，可能需要手动处理队列，不然默认机制容易把新数据丢失
+    // Put in queue
+    // TODO: If the queue is easily full, you may need to manually process the queue, otherwise the default mechanism will easily lose new data.
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
     xQueueSendToBackFromISR(_rx_queue, &msg, &xHigherPriorityTaskWoken);
     portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 }
 
-// ======================== 初始化 / 反初始化 ========================
+// ======================== Initialization / De-initialization ========================
 
 void EspNowManager::init()
 {
-    if (_inited) return;   // 幂等，重复调用不会出错
+    if (_inited) return;   // Idempotent, repeated calls will not cause errors
 
-    // 创建队列
+    // Create queue
     if(_rx_queue == nullptr){
         _rx_queue = xQueueCreate(ESPNOW_QUEUE_DEPTH, sizeof(espnow_msg_t));
         if (_rx_queue == nullptr)
@@ -73,7 +73,7 @@ void EspNowManager::deinit()
     recvStop();
     esp_now_deinit();
 
-    // 删除队列，释放内存
+    // Delete the queue and release memory
     if(_rx_queue)
     {
         vQueueDelete(_rx_queue);
@@ -84,7 +84,7 @@ void EspNowManager::deinit()
     ESP_LOGI(TAG, "deinited");
 }
 
-// ======================== 基础 API ========================
+// ======================== Basic API ========================
 
 void EspNowManager::getMac(uint8_t mac_out[6])
 {
@@ -116,13 +116,13 @@ esp_err_t EspNowManager::send(const uint8_t* peer_mac, const uint8_t* data, size
     return err;
 }
 
-// ======================== 接收 API ========================
+// ======================== Receiving API ========================
 
 void EspNowManager::recvStart()
 {
     if(!_rx_queue) return;
 
-    // 清空旧数据
+    // Clear old data
     xQueueReset(_rx_queue);
     esp_now_register_recv_cb(_onRecvStatic);
     ESP_LOGI(TAG, "rece started, queue depth=%d", ESPNOW_QUEUE_DEPTH);
@@ -130,20 +130,20 @@ void EspNowManager::recvStart()
 
 bool EspNowManager::hasNewData()
 {
-    // 队列中存储的消息数量
+    // Number of messages stored in the queue
     return uxQueueMessagesWaiting(_rx_queue) > 0;
 }
 
-// 非堵塞读取
+// Non-blocking read
 bool EspNowManager::read(espnow_msg_t* msg_out)
 {
     if (!_rx_queue || !msg_out) return false;
 
-    // 非堵塞读取
+    // Non-blocking read
     return xQueueReceive(_rx_queue, msg_out, 0) == pdTRUE;
 }
 
-// 堵塞读取
+// Blocked reading
 bool EspNowManager::readBlocking(espnow_msg_t* msg_out, TickType_t wait_ticks)
 {
     if(!_rx_queue || !msg_out) return false;
@@ -151,7 +151,7 @@ bool EspNowManager::readBlocking(espnow_msg_t* msg_out, TickType_t wait_ticks)
     return xQueueReceive(_rx_queue, msg_out, wait_ticks) == pdTRUE;
 }
 
-// 获取队列中消息数量
+// Get the number of messages in the queue
 UBaseType_t EspNowManager::getQueueCount()
 {
     return uxQueueMessagesWaiting(_rx_queue);

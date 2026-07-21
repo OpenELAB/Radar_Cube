@@ -9,7 +9,7 @@ constexpr uint8_t RGB_LED_POWER_DISABLE_LEVEL = LOW;
 constexpr uint32_t RGB_LED_POWER_SETTLE_DELAY_MS = 5;
 constexpr uint32_t RGB_LED_TASK_STOP_TIMEOUT_MS = 500;
 
-// 有限动画使用固定颜色、顺序和时长，不接受业务层参数。
+// Limited animation uses fixed color, order and duration, and does not accept business layer parameters.
 constexpr uint32_t RGB_LED_CHASE_DURATION_MS = 1000;
 constexpr uint16_t RGB_LED_FLASH_PERIOD_MS = 180;
 constexpr uint8_t RGB_LED_FLASH_COUNT = 3;
@@ -305,7 +305,7 @@ void RgbLedController::end()
     }
 
     if (!stopped_cleanly) {
-        // 与 task 原子争用退出所有权，只有取得 handle 的一方负责删除 task。
+        // Atomic competition with the task to exit ownership. Only the party that obtains the handle is responsible for deleting the task.
         taskENTER_CRITICAL(&_state_mux);
         TaskHandle_t task_handle = _task_handle;
         _task_handle = nullptr;
@@ -479,7 +479,7 @@ void RgbLedController::taskLoop()
 
     while (taskShouldRun()) {
         Command command;
-        // task 只获取队列锁，避免强制删除时遗留已锁住的 API 生命周期锁。
+        // The task only acquires the queue lock to avoid leaving locked API life cycle locks when forced deletion.
         SemaphoreHandle_t queue_mutex = _queue_mutex;
         if (queue_mutex != nullptr &&
             xSemaphoreTake(queue_mutex, portMAX_DELAY) == pdTRUE) {
@@ -507,7 +507,7 @@ void RgbLedController::taskLoop()
     setAnimationBusy(false);
     setTaskRunning(false);
 
-    // task 先取得退出所有权再通知 end()；若 end() 已接管，则等待被强制删除。
+    // The task first obtains exit ownership and then notifies end(); if end() has taken over, it waits to be forcibly deleted.
     taskENTER_CRITICAL(&_state_mux);
     const bool owns_task_exit = _task_handle != nullptr;
     if (owns_task_exit) {
@@ -551,7 +551,7 @@ bool RgbLedController::sendCommand(Command command)
 
     Command queued_command = command;
     if (command.type == COMMAND_SET_BRIGHTNESS) {
-        // 亮度更新合并进待执行视觉命令，不能把该视觉命令覆盖掉。
+        // The brightness update is merged into the visual command to be executed, and the visual command cannot be overwritten.
         Command pending_command;
         if (xQueuePeek(_command_queue, &pending_command, 0) == pdTRUE) {
             pending_command.brightness = command.brightness;
@@ -751,7 +751,7 @@ void RgbLedController::releaseStripHardware()
         _strip->clear();
         _strip->show();
 
-        // 析构函数按 Adafruit NeoPixel 的 ESP32 实现释放 RMT 和像素缓冲区。
+        // The destructor releases the RMT and pixel buffer as per Adafruit NeoPixel's ESP32 implementation.
         delete _strip;
         _strip = nullptr;
     }

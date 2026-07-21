@@ -10,11 +10,11 @@
 #include "freertos/task.h"
 #include "pins.h"
 
-// 软件音量范围为 0..100，默认值在每次 begin() 时恢复。
+// The software volume range is 0..100, and the default value is restored every time begin() is called.
 #define SPEAKER_DEFAULT_VOLUME 50
 #define SPEAKER_MAX_VOLUME 100
 
-// task 已实际应用的物理播放模式，不表示尚未消费的排队命令。
+// The physical play mode that the task has actually applied does not represent the queued commands that have not yet been consumed.
 enum SpeakerMode : uint8_t {
     SPEAKER_MODE_SILENT = 0,
     SPEAKER_MODE_PLAY_ONCE,
@@ -22,16 +22,16 @@ enum SpeakerMode : uint8_t {
 };
 
 /*
- * Speaker 音频硬件控制器。
+ * Speaker audio hardware controller.
  *
- * SpeakerController 只执行调用方指定路径的物理音频播放，不理解业务事件、
- * AudioId、路径映射或业务优先级。唯一的 speaker task 独占 LittleFS 文件读取、
- * I2S 写入、功放控制和实际播放状态。
+ * SpeakerController only performs physical audio playback of the path specified by the caller and does not understand business events.
+ * AudioId, path mapping or business priority. The only speaker task exclusively reads LittleFS files,
+ * I2S writing, amplifier control and actual playback status.
  *
- * 播放命令队列长度为 1，新命令覆盖尚未执行的旧命令，不实现提示音排队。
- * playOnce() 可以临时打断 playLoop()，一次播放正常结束且期间没有更新命令时，
- * 自动恢复仍然有效的最新 loop。返回 bool 的播放 API 只表示命令是否被接受，
- * 不表示声音已经开始或播放完成。
+ * The length of the playback command queue is 1, the new command overwrites the old command that has not been executed, and the prompt tone queuing is not implemented.
+ * playOnce() can temporarily interrupt playLoop(). When a playback ends normally and there is no update command during the period,
+ * Automatically restore the latest loop that is still valid. The playback API that returns bool only indicates whether the command is accepted.
+ * Does not mean that the sound has started or finished playing.
  */
 class SpeakerController {
 public:
@@ -39,66 +39,66 @@ public:
     ~SpeakerController();
 
     /*
-     * 初始化 LittleFS、同步对象、长度为 1 的命令队列和 speaker task。
-     * 成功后处于静音模式并使用默认音量；重复调用保持幂等。
+     * Initialize LittleFS, synchronization object, command queue of length 1 and speaker task.
+     * After success, it is in silent mode and uses the default volume; repeated calls remain idempotent.
      */
     bool begin();
 
     /*
-     * 停止接收新命令，协作退出 speaker task，关闭 I2S 和功放并释放资源。
-     * task 超时未退出时才执行强制清理；重复调用不产生额外效果。
+     * Stop receiving new commands, exit the speaker task collaboratively, close I2S and power amplifier, and release resources.
+     * Forced cleanup is only performed when the task times out and does not exit; repeated calls will not produce additional effects.
      */
     void end();
 
     /*
-     * 设置目标软件音量，输入钳制到 SPEAKER_MAX_VOLUME。
-     * 音量不占用播放队列，当前播放会从下一个音频 chunk 开始使用新值。
+     * Set target software volume, input clamped to SPEAKER_MAX_VOLUME.
+     * The volume does not occupy the playback queue, and the current playback will use the new value starting from the next audio chunk.
      */
     bool setVolume(uint8_t volume);
 
-    // 返回最近一次成功设置且已经钳制的目标音量。
+    // Returns the last successfully set and clamped target volume.
     uint8_t volume() const;
 
     /*
-     * 非阻塞投递一次性播放。audio_path 是借用指针，必须在播放及可能的 loop
-     * 恢复期间保持有效，SpeakerController 不复制也不释放该字符串。
+     * Non-blocking delivery and one-time playback. audio_path is a borrowed pointer that must be used during playback and possibly loop
+     * Remains valid during recovery, SpeakerController does not copy or release the string.
      *
-     * 新的 playOnce() 会替换尚未完成的旧 once；如果存在有效的最新 loop，
-     * 最后一个 once 正常结束后恢复该 loop。命令被接受不代表播放已经完成。
+     * The new playOnce() will replace the old once that has not been completed; if there is a valid latest loop,
+     * Restore the loop after the last once ends normally. Acceptance of the command does not mean playback is complete.
      */
     bool playOnce(const char* audio_path);
 
     /*
-     * 非阻塞替换并尽快开始最新 loop。audio_path 使用与 playOnce() 相同的借用语义。
-     * 新 loop 会取消当前 once 的 busy 和旧恢复意图；loop 本身不计入 busy。
+     * Non-blocking replacement and starting the latest loop as soon as possible. audio_path uses the same borrowing semantics as playOnce().
+     * The new loop will cancel the busy and old recovery intention of the current once; the loop itself is not counted as busy.
      */
     bool playLoop(const char* audio_path);
 
     /*
-     * 非阻塞停止当前声音，并在命令被接受时同步清除最新 loop、恢复意图和 busy。
-     * stop() 不清除 lastPlaybackFailed() 保存的历史失败状态。
+     * Non-blocking stops the current sound and synchronously clears the latest loop, resume intent and busy when the command is accepted.
+     * stop() does not clear the historical failure status saved by lastPlaybackFailed().
      */
     bool stop();
 
-    // 一次性播放已入队或正在执行时返回 true；持续 loop 不算 busy。
+    // Returns true when the one-time playback has been queued or is being executed; continuous loop is not considered busy.
     bool isBusy() const;
 
-    // begin() 成功且尚未进入 end() 时返回 true。
+    // Return true when begin() succeeds and has not yet entered end().
     bool isBegun() const;
 
-    // speaker task 已创建且尚未退出时返回 true。
+    // Returns true if the speaker task has been created and has not yet exited.
     bool isTaskRunning() const;
 
     /*
-     * 返回 speaker task 已实际应用的模式和路径，不返回尚未消费的排队命令。
-     * 静音或 end() 完成后 currentAudioPath() 返回 nullptr。
+     * Returns the mode and path actually applied by the speaker task, and does not return unconsumed queued commands.
+     * currentAudioPath() returns nullptr after mute or end() completes.
      */
     SpeakerMode currentMode() const;
     const char* currentAudioPath() const;
 
     /*
-     * 最新播放命令发生文件、WAV 或 I2S 错误时返回 true。
-     * 该状态在 begin() 或新的播放命令被接受时清除；stop() 和音量更新不清除。
+     * The latest playback command returns true when a file, WAV or I2S error occurs.
+     * This status is cleared when begin() or a new playback command is accepted; stop() and volume update are not cleared.
      */
     bool lastPlaybackFailed() const;
 
@@ -111,14 +111,14 @@ private:
         COMMAND_PLAY_LOOP
     };
 
-    // 路径是借用指针；sequence 用于阻止过期命令修改最新状态。
+    // The path is a borrowed pointer; sequence is used to prevent expired commands from modifying the latest status.
     struct Command {
         CommandType type = COMMAND_STOP;
         const char* audio_path = nullptr;
         uint32_t sequence = 0;
     };
 
-    // 第一版只接受 16-bit PCM 单声道或双声道 WAV。
+    // The first version only accepts 16-bit PCM mono or binaural WAV.
     struct WavInfo {
         uint16_t audio_format = 0;
         uint16_t channels = 0;
@@ -138,17 +138,17 @@ private:
 
     I2SClass _i2s;
 
-    // 队列只保存 stop/playOnce/playLoop 中的最新命令，音量不占用该队列。
+    // The queue only saves the latest commands in stop/playOnce/playLoop, and the volume does not occupy the queue.
     QueueHandle_t _command_queue = nullptr;
 
-    // 锁顺序固定为 api -> queue -> state；speaker task 永不获取 api 锁。
+    // The lock sequence is fixed to api -> queue -> state; the speaker task never acquires the api lock.
     SemaphoreHandle_t _api_mutex = nullptr;
     SemaphoreHandle_t _queue_mutex = nullptr;
     SemaphoreHandle_t _task_stopped = nullptr;
     TaskHandle_t _task_handle = nullptr;
     mutable portMUX_TYPE _state_mux = portMUX_INITIALIZER_UNLOCKED;
 
-    // 以下跨 task 状态统一由 _state_mux 保护。
+    // The following cross-task states are uniformly protected by _state_mux.
     SpeakerMode _current_mode = SPEAKER_MODE_SILENT;
     const char* _current_path = nullptr;
     const char* _latest_loop_path = nullptr;
@@ -162,7 +162,7 @@ private:
     bool _stopping = false;
     bool _last_playback_failed = false;
 
-    // 以下播放和硬件状态由 speaker task 独占；end() 强制清理兜底除外。
+    // The following playback and hardware status are exclusively owned by the speaker task; except for forced cleanup by end().
     bool _i2s_started = false;
     bool _speaker_enabled = false;
     bool _fade_in_next_playback = false;
@@ -173,35 +173,35 @@ private:
     uint32_t _i2s_sample_rate = 0;
     uint32_t _last_output_ms = 0;
 
-    // WAV 数据会按 int16_t 访问，显式保证缓冲区满足采样类型的对齐要求。
+    // WAV data will be accessed as int16_t, explicitly ensuring that the buffer meets the alignment requirements of the sampling type.
     alignas(int16_t) uint8_t _audio_buffer[AUDIO_BUFFER_BYTES];
     int16_t _stereo_buffer[AUDIO_BUFFER_BYTES];
 
     static void taskEntry(void* arg);
 
-    // 消费最新命令并执行当前模式；循环播放按文件结束点重新开始。
+    // Consume the latest command and execute the current mode; loop playback restarts at the end of the file.
     void taskLoop();
 
-    // 非阻塞提交播放命令，并同步维护 sequence、loop 恢复意图和 busy。
+    // Non-blocking submission of playback commands, and synchronous maintenance of sequence, loop recovery intention and busy.
     bool sendPlaybackCommand(CommandType type, const char* audio_path);
 
-    // speaker task 非阻塞读取队列；未取得队列锁时留到下一轮处理。
+    // Speaker task non-blocking read queue; if the queue lock is not obtained, it will be left to the next round of processing.
     bool receiveCommand(Command& command);
 
-    // 仅应用仍为最新 sequence 的命令，过期命令直接丢弃。
+    // Only the commands that are still in the latest sequence are applied, and expired commands are directly discarded.
     bool handleCommand(const Command& command);
 
-    // once 仅在 sequence 未变化时结束或恢复最新 loop。
+    // once only ends or resumes the latest loop when the sequence has not changed.
     void finishOnce(uint32_t finished_sequence);
 
-    // 播放失败仅能修改仍为最新且正在执行的命令状态。
+    // If playback fails, only the status of the latest and executing command can be modified.
     void failPlayback(uint32_t failed_sequence);
 
     bool taskShouldRun() const;
     void setTaskRunning(bool running);
     void setTaskHandle(TaskHandle_t task_handle);
 
-    // 解析并校验 RIFF/WAVE、fmt 和 data 块边界及 PCM 格式。
+    // Parse and verify RIFF/WAVE, fmt and data block boundaries and PCM format.
     bool readWavInfo(File& file, WavInfo& info);
     bool startI2S(const WavInfo& info);
     void stopI2S();
@@ -214,8 +214,8 @@ private:
     void shutdownAudioOutput();
 
     /*
-     * 播放一个 WAV 文件，并在每个音频 chunk 前检查最新命令。
-     * append_end_silence 仅用于 once 正常结束时的淡出和尾部静音。
+     * Play a WAV file and check the latest command before each audio chunk.
+     * append_end_silence is only used for fade-out and tail silence at the normal end of once.
      */
     PlaybackResult playWav(const char* audio_path, bool append_end_silence);
     bool writeAudioChunk(uint8_t* data,

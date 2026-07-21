@@ -1,4 +1,4 @@
-// 定义LED、蜂鸣器的类
+// Define the classes of LED and buzzer
 #include <Arduino.h>
 #include <esp_log.h>
 #include "freertos/FreeRTOS.h"
@@ -7,7 +7,7 @@
 #include "config.h"
 #include "driver/rtc_io.h"
 
-// 初始化LED引脚
+// Initialize LED pin
 // void LEDControler::led_init()
 // {
 //     pinMode(LED_PIN, OUTPUT);
@@ -23,10 +23,10 @@
 // }
 
 
-// // period 传入延时时间，单位毫秒
+// // period incoming delay time, unit milliseconds
 // void LEDControler::blink(LED_PERIOD period)
 // {
-//     // 解绑LEDC通道，重新设置为输出模式
+//     // Unbind the LEDC channel and reset it to output mode
 //     pinMode(LED_PIN, OUTPUT);
 
 //     const uint32_t led_period = period / 2;
@@ -36,7 +36,7 @@
 //     vTaskDelay(pdMS_TO_TICKS(led_period));
 // }
 
-// // 传入延时速度，单位ms, 数值越小速度越快
+// //Incoming delay speed, unit ms, the smaller the value, the faster the speed
 // void LEDControler::breath(LED_SPEED speed)
 // {
 //     ledcAttach(LED_PIN, LED_FREQ, LEDC_TIMER_8_BIT);
@@ -54,45 +54,45 @@
 // }
 
 
-// // 初始化蜂鸣器周期
+// //Initialize the buzzer cycle
 // const uint16_t BeeperControler::PERIODS[] = {
-//     0,           // 静音
-//     1,           // 长鸣
-//     250,         // 蜂鸣周期250ms
-//     500,         // 蜂鸣周期500ms
-//     1000         // 蜂鸣周期1000ms
+//     0, // mute
+//     1, // long call
+//     250, // Buzzer period 250ms
+//     500, // Buzzer period 500ms
+//     1000 // Buzzer period 1000ms
 // };
 
-// // 查蜂鸣器周期表
+// // Check the buzzer periodic table
 // uint16_t BeeperControler::get_period(uint8_t mode)
 // {
 //     if(mode > sizeof(PERIODS)/sizeof(PERIODS[0]))
 //     {
-//         return 0; // 默认静音
+//         return 0; //default mute
 //     }
 //     return PERIODS[mode];
 // }
 
-// // 初始化蜂鸣器引脚
+// //Initialize buzzer pin
 // void BeeperControler::beeper_init()
 // {
 //     pinMode(BEEPER_PIN, OUTPUT);
-//     // ESP32 Arduino v3.0+ 推荐使用 ledcAttach 来初始化固定频率，但是它的参数并不是第三个作为占空比位宽
-//     // 如果用 ledcWriteTone，它底层会自动配置通道
-//     ledcAttach(BEEPER_PIN, BEEPER_FREQ, 8); // 设置为 8-bit 分辨率
+//     // ESP32 Arduino v3.0+ recommends using ledcAttach to initialize the fixed frequency, but its parameter is not the third one as the duty cycle bit width
+//     // If ledcWriteTone is used, it will automatically configure the channel at the bottom
+//     ledcAttach(BEEPER_PIN, BEEPER_FREQ, 8); // Set to 8-bit resolution
 // }
 
-// // 蜂鸣器控制
+// //Buzzer control
 // void BeeperControler::beep()
 // {
-//     // 这里如果用原来的 ledcWrite(BEEPER_PIN, BEEPER_DUTY);
-//     // 可能会因为经历了 ledcWriteTone 后硬件占空比计算方式改变导致声音极大变小。
-//     // 为了最大化响度 (50% 占空比)，8-bit 分辨率下 50% = 127。
-//     // 如果想要更响的声音，我们应该给 127。原代码中 BEEPER_DUTY = 4，这是一个极小的占空比，会导致声音很轻。
+//     // If you use the original ledcWrite(BEEPER_PIN, BEEPER_DUTY);
+//     // The sound may be greatly reduced due to changes in the hardware duty cycle calculation method after experiencing ledcWriteTone.
+//     // To maximize loudness (50% duty cycle), 50% = 127 at 8-bit resolution.
+//     // If we want a louder sound, we should give 127. In the original code, BEEPER_DUTY = 4, which is a very small duty cycle, which will cause the sound to be very soft.
     
-//     // 直接使用更稳定的 ledcWriteTone 来产生恒定频率，最大化响度
+//     // Directly use the more stable ledcWriteTone to generate constant frequency and maximize loudness
 
-//     // 重构蜂鸣器响应,改成非阻塞式的，周期性鸣叫需要外部定时
+//     // Reconstruct the buzzer response and change it to non-blocking. Periodic beeping requires external timing.
 
 //     ledcWriteTone(BEEPER_PIN, BEEPER_FREQ);
 // }
@@ -101,19 +101,19 @@
 //     ledcWriteTone(BEEPER_PIN, 0);
 // }
 
-// // 播放上升调的成功提示音
+// // Play a rising success tone
 // void BeeperControler::play_success_tone()
 // {
 //     uint32_t tones[] = {1046, 1318, 1568};
 //     for(int i = 0; i < 3; i++) {
 //         ledcWriteTone(BEEPER_PIN, tones[i]);
 //         vTaskDelay(pdMS_TO_TICKS(100));
-//         ledcWriteTone(BEEPER_PIN, 0); // 停音
+//         ledcWriteTone(BEEPER_PIN, 0); //Stop tone
 //         vTaskDelay(pdMS_TO_TICKS(50));
 //     }
 // }
 
-// // 播放下降调的失败提示音
+// // Play a falling tone failure tone
 // void BeeperControler::play_fail_tone()
 // {
 //     uint32_t tones[] = {1568, 1318, 1046, 784};
@@ -125,24 +125,24 @@
 //     ledcWriteTone(BEEPER_PIN, 0); 
 // }
 
-// 电池电量采样初始化
+// Battery power sampling initialization
 void PowerManager::power_init()
 {
-    // 配置电池电量采样引脚
+    // Configure battery power sampling pin
     pinMode(BATTERY_PIN, INPUT);
 }
 
-// 读取电池电量值
+// Read battery power value
 uint8_t PowerManager::get_battery_value()
 {
     uint32_t Vbatt = 0;
 
-    // 采样32次，取平均值
+    // Sampling 32 times, taking the average
     for(int i = 0; i < 32; i++)
     {
         Vbatt += analogReadMilliVolts(BATTERY_PIN);
     }
-    // 1：2 分压，计算实际电压值
+    // 1:2 voltage divider, calculate the actual voltage value
     float Vbattf = (Vbatt * 2) / 32.0 / 1000.0;
     if (Vbattf < BATTERY_LOW_THRESHOLD)
     {
@@ -152,27 +152,27 @@ uint8_t PowerManager::get_battery_value()
     {
         Vbattf = BATTERY_HIGH_THRESHOLD;
     }
-    // 输出电压值
+    // Output voltage value
     ESP_LOGI(POWER_TAG, "battery voltage: %.3f", Vbattf);
-    // 计算电池电量百分比
+    // Calculate battery percentage
     uint8_t bat_perc = (Vbattf - BATTERY_LOW_THRESHOLD) * 100.0f / (BATTERY_HIGH_THRESHOLD - BATTERY_LOW_THRESHOLD) + 0.5f;
     ESP_LOGI(POWER_TAG, "battery percentage: %d%%", bat_perc);
     return bat_perc;
 }
 
-// 检测唤醒源：ESP-IDF API + 读按钮电平
+// Detect wake-up source: ESP-IDF API + read button level
 void PowerManager::detectWakeupSource()
 {
     esp_sleep_wakeup_cause_t reason = esp_sleep_get_wakeup_cause();
 
-    // 等一小段时间让 GPIO 电平稳定后再读
+    // Wait for a short period of time for the GPIO level to stabilize before reading again
     vTaskDelay(pdMS_TO_TICKS(20));
     bool user_pressed = (digitalRead(USER_BUTTON_PIN) == BUTTON_PRESSED);
     bool dev_pressed  = (digitalRead(DEV_BUTTON_PIN)  == BUTTON_PRESSED);
 
     switch (reason)
     {
-    // C3 的 GPIO 唤醒无法区分哪个引脚，靠读电平判断
+    // C3’s GPIO wake-up cannot distinguish which pin, and it depends on reading the level.
     case ESP_SLEEP_WAKEUP_GPIO:
         if (user_pressed && dev_pressed) {
             _wakeup_src = WAKEUP_BOTH_BUTTONS;
@@ -184,7 +184,7 @@ void PowerManager::detectWakeupSource()
             _wakeup_src = WAKEUP_DEV_BUTTON;
             ESP_LOGI(POWER_TAG, "Wakeup: DEV button");
         } else {
-            // 按键已松开，无法确定是哪个，默认 USER
+            // The button has been released and cannot be determined which one it is. The default is USER.
             _wakeup_src = WAKEUP_USER_BUTTON;
             ESP_LOGW(POWER_TAG, "Wakeup: GPIO but no button held, default USER");
         }
@@ -197,7 +197,7 @@ void PowerManager::detectWakeupSource()
     }
 }
 
-// 等待唤醒按键电平复位
+// Waiting for wake-up button level reset
 void PowerManager::wait_wakeup_button_intend()
 {
 
@@ -208,27 +208,27 @@ void PowerManager::wait_wakeup_button_intend()
 
 }
 
-// 进入睡眠模式
+// Enter sleep mode
 void PowerManager::deep_sleep()
 {
-    // 等待唤醒引脚电平复位
+    // Waiting for wake-up pin level reset
     wait_wakeup_button_intend();
-    // 配置按键唤醒引脚
-// 车内模块的唤醒引脚配置
+    // Configure key wake-up pin
+// Wake-up pin configuration of in-vehicle module
     esp_deep_sleep_enable_gpio_wakeup(
         BIT(USER_BUTTON_PIN) | BIT(DEV_BUTTON_PIN),
         BUTTON_PRESSED ? ESP_GPIO_WAKEUP_GPIO_HIGH : ESP_GPIO_WAKEUP_GPIO_LOW);
 
-    // 进入睡眠
+    // Go to sleep
     ESP_LOGI(POWER_TAG, "Going to sleep now");
     esp_deep_sleep_start();
-    // 不会执行到这里
+    // It will not be executed till here.
 }
 
-// 按键唤醒引脚初始化为输入模式
+// Key wake-up pin initialized to input mode
 void PowerManager::wakeup_gpio_init()
 {
-// 配置按键唤醒引脚
+// Configure key wake-up pin
 
     pinMode(USER_BUTTON_PIN, INPUT);
     pinMode(DEV_BUTTON_PIN, INPUT);

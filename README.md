@@ -1,10 +1,10 @@
-# ESP-NOW文件夹
+# ESP-NOW folder
 ```
-代码里只有普通的esp-now没有增加睡眠低功耗
+The code uses standard ESP-NOW only; sleep and low-power features have not been added.
 ```
 ## Lora+ESP-NOW
 ```
-lora_recv_test用作接收数据，唤醒睡眠的ESP32
-lora_send_test用作发送数据，按键唤醒ESP32通过串口发送数据给Lora模组
-Rada_inside车内主机模块，用于按键唤醒ESP32，在通过Lora的空中唤醒模式来唤醒车尾的两个深度睡眠的从机
+lora_recv_test receives data and wakes a sleeping ESP32.
+lora_send_test sends data; a button wakes the ESP32, which sends data to the LoRa module over serial.
+Rada_inside is the in-vehicle controller module. A button wakes its ESP32, which then uses LoRa over-the-air wake-up mode to wake the two deeply sleeping sensor nodes at the rear of the vehicle.
 ```

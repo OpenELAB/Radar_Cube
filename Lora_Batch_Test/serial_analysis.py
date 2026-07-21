@@ -11,7 +11,7 @@ CSV_FILE = 'esp-now-lora-log.csv'
 
 
 
-# 预编译正则
+# Precompiled regular expressions
 SEND_RE = re.compile(r"send_count: (\d+)", re.I)
 RECV_RE = re.compile(r"ESP-NOW Received: (\d+)", re.I)
 CONSUM_RE = re.compile(r"consum time: (\d+)", re.I)
@@ -60,9 +60,9 @@ def main():
 
     try:
         ser = serial.Serial(PORT, BAUD, timeout=None)
-        print(f"已打开{PORT}@{BAUD}, 开始打印日志 ......\n")
+        print(f"Opened {PORT}@{BAUD}; printing logs...\n")
     except serial.SerialException as e:
-        print("串口打开失败：", e)
+        print("Failed to open serial port:", e)
         sys.exit(1)
     
     try:
@@ -72,7 +72,7 @@ def main():
                 print(line)
                 parser.feed(line)
     except KeyboardInterrupt:
-        print("用户中断")
+        print("Interrupted by user")
     finally:
         csv_f.close()
         ser.close()

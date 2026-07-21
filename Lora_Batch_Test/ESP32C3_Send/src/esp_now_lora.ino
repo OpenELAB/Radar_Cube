@@ -4,35 +4,35 @@
 #include <WiFi.h>
 
 HardwareSerial LoraSerial(1);
-// AT指令发送和检测返回状态
+// AT command sending and detection return status
 bool send_at_wait_response(const char* cmd, int timeout = 1000);
-// ESP-NOW接收回调函数
+// ESP-NOW receives callback function
 void esp_now_receive_cb(const esp_now_recv_info_t* info, const uint8_t* data, int len);
 
 #define LORA_RX_PIN         6
 #define LORA_TX_PIN         7
 #define LORA_CE_PIN         0
 
-// 发送端的mac地址
+// The mac address of the sender
 const uint8_t send_mac[] = {0x58, 0x8C, 0x81, 0x9C, 0xD0, 0x00}; // 58:8C:81:9C:D0:00
 
-// 第一次上电参数配置
+// First power-on parameter configuration
 const char* init_config_cmd[] = 
 {
-  "AT+MODE=0",    // 进入配置模式
-  "AT+RFBR=6000", // 配置普通模式的空中传输速率6000bps
-  "AT+LPWR=0",    // 关闭深度睡眠模式
-  "AT+RFCH=18",   // 设置空中唤醒的频道433MHz
-  "AT+PID=255",   // 设置PID255
-  "AT+MAMP=2",    // 使能无线唤醒模式
-  "AT+MLPWR=2",   // 使能无线唤醒模式2
-  "AT+MID=17",    // 设置唤醒ID为17
-  "AT+MODE=1",    // 退出配置模式
+  "AT+MODE=0",    // Enter configuration mode
+  "AT+RFBR=6000", // Configure the air transmission rate in normal mode to 6000bps
+  "AT+LPWR=0",    // Turn off deep sleep mode
+  "AT+RFCH=18",   // Set the channel for air wake-up to 433MHz
+  "AT+PID=255",   // Set PID255
+  "AT+MAMP=2",    // Enable wireless wake-up mode
+  "AT+MLPWR=2",   // Enable wireless wake-up mode 2
+  "AT+MID=17",    // Set wakeup ID to 17
+  "AT+MODE=1",    // Exit configuration mode
 };
 const int init_config_len = sizeof(init_config_cmd) / sizeof(init_config_cmd[0]);
 
 
-// 普通模式配置
+// Normal mode configuration
 const char* nomal_mode_cmd[] = 
 {
   "AT+MODE=0",
@@ -41,7 +41,7 @@ const char* nomal_mode_cmd[] =
 };
 const int nomal_mode_len = sizeof(nomal_mode_cmd) / sizeof(nomal_mode_cmd[0]);
 
-// 无线唤醒模式配置
+// Wireless wake-up mode configuration
 const char* wireless_wake_cmd[] = 
 {
   "AT+MODE=0",
@@ -50,13 +50,13 @@ const char* wireless_wake_cmd[] =
 };
 const int wireless_wake_len = sizeof(wireless_wake_cmd) / sizeof(wireless_wake_cmd[0]);
 
-// 接收标志位
+// receive flag bit
 volatile bool flag = false;
-// 发送信息次数
+// Number of messages sent
 int send_count = 0;
-// 记录超时次数
+// Record the number of timeouts
 int timeout_count = 0;
-// 测试次数
+// Number of tests
 int test_count = 0;
 void setup()
 {
@@ -70,9 +70,9 @@ void setup()
         send_at_wait_response(wireless_wake_cmd[i]);
     }
 
-    // 初始化ESP-NOW，设置接收监听函数
+    // Initialize ESP-NOW and set up the receiving listening function
     WiFi.mode(WIFI_STA);
-    // 打印自身的mac地址
+    // Print your own mac address
     // Serial0.print("myself mac is:");
     // Serial0.println(WiFi.macAddress());
 
@@ -104,7 +104,7 @@ void loop()
         flag = false;
         uint32_t send_start = millis();
         LoraSerial.printf("%d\r\n", send_count);
-        // 等待espnow的接收标志位和判断超时时间
+        // Waiting for espnow’s reception flag and judgment timeout
         while(!flag && millis() - send_start < 3000);
         if(millis() - send_start >= 3000)
         {
@@ -120,22 +120,22 @@ void loop()
     delay(1000);
 }
 
-// 发送AT指令，等待响应
+// Send AT command and wait for response
 bool send_at_wait_response(const char* cmd, int timeout)
 {
     uint8_t resend_count = 0;
     while(true)
     {
         resend_count++;
-        // 清除缓存区
+        // Clear cache area
         while(LoraSerial.available()) LoraSerial.read();
 
-        // 发送AT指令
+        // Send AT command
         LoraSerial.println(cmd);
 
-        // 开始计时
+        // Start timing
         uint32_t t_start = millis();
-        //等待返回值
+        //Wait for return value
         String response = "";
         while (millis() - t_start < timeout)
         {

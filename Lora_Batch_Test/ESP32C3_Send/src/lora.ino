@@ -8,18 +8,18 @@
 // HardwareSerial LoraSerial(1);
 
 
-// // 第一次上电参数配置
+// // First power-on parameter configuration
 // const char* init_config_cmd[] = 
 // {
-//   "AT+MODE=0",    // 进入配置模式
-//   "AT+RFBR=6000", // 配置普通模式的空中传输速率6000bps
-//   "AT+LPWR=0",    // 关闭深度睡眠模式
-//   "AT+RFCH=18",   // 设置空中唤醒的频道433MHz
-//   "AT+PID=255",   // 设置PID255
-//   "AT+MAMP=2",    // 使能无线唤醒模式
-//   "AT+MLPWR=2",   // 使能无线唤醒模式2
-//   "AT+MID=17",    // 设置唤醒ID为17
-//   "AT+MODE=1",    // 退出配置模式
+//   "AT+MODE=0", // Enter configuration mode
+//   "AT+RFBR=6000", // Configure the air transmission rate in normal mode to 6000bps
+//   "AT+LPWR=0", // Turn off deep sleep mode
+//   "AT+RFCH=18", //Set the air wake-up channel 433MHz
+//   "AT+PID=255", // Set PID255
+//   "AT+MAMP=2", // Enable wireless wake-up mode
+//   "AT+MLPWR=2", // Enable wireless wake-up mode 2
+//   "AT+MID=17", //Set the wake-up ID to 17
+//   "AT+MODE=1", // Exit configuration mode
 // };
 // const int init_config_len = sizeof(init_config_cmd) / sizeof(init_config_cmd[0]);
 
@@ -39,21 +39,21 @@
 // };
 // const int wireless_wake_len = sizeof(wireless_wake_cmd) / sizeof(wireless_wake_cmd[0]);
 
-// // 发送AT指令并等待返回值
+// //Send AT command and wait for return value
 // bool sendATAndWaitResponse(const char* cmd, int timeoutms = 500, uint8_t maxRetry = 3)
 // {
 //   for(uint8_t retry = 0; retry < maxRetry; retry++)
 //   {
-//     // 清除缓存区
+//     //Clear cache area
 //     while(LoraSerial.available()) LoraSerial.read();
 
-//     // 发送AT指令
+//     //Send AT command
 //     LoraSerial.println(cmd);
     
-//     // 开始计时
+//     // Start timing
 //     uint32_t t_start = millis();
     
-//     // 等待返回值
+//     // Wait for return value
 //     String line = "";
 //     while (millis() - t_start < timeoutms)
 //     {
@@ -88,7 +88,7 @@
 // }
 
 
-// 测试代码
+// Test code
 // int time_out = 5000;
 // int send_count = 0;
 // void setup()
@@ -97,7 +97,7 @@
 //   LoraSerial.begin(9600, SERIAL_8N1, LORA_RX_PIN, LORA_TX_PIN);
 //   pinMode(LORA_CE_PIN, OUTPUT);
 
-//   // 初始化无线唤醒模式和普通模式
+//   //Initialize wireless wake-up mode and normal mode
 //   // for(int i = 0; i < init_config_len; i++)
 //   // {
 //   //   if(!sendATAndWaitResponse(init_config_cmd[i]))
@@ -106,7 +106,7 @@
 //   //   }
 //   // }
 
-//   // 切换到无限唤醒模式
+//   //Switch to infinite wake mode
 //   for(int i = 0; i < wireless_wake_len; i++)
 //   {
 //     if(!sendATAndWaitResponse(wireless_wake_cmd[i]))
@@ -119,17 +119,17 @@
 // void loop()
 // {
 
-//   // 计算发送消息开始的时间
+//   // Calculate the time when sending the message starts
 //   uint32_t send_start = millis();
 //   send_count++;
 //   Serial0.printf("send_count: %d\r\n", send_count);
 
-//   // 发送信息的次数
+//   //Number of times to send messages
 //   LoraSerial.printf("%d\r\n", send_count);
 
 //   delay(2100);
   
-//   //切换到普通模式
+//   //Switch to normal mode
 //   for(int i = 0; i < nomal_mode_len; i++)
 //   {
 //     if(!sendATAndWaitResponse(nomal_mode_cmd[i]))
@@ -138,10 +138,10 @@
 //     }
 //   }
 
-//   // 清空缓存区
+//   //Clear the cache area
 //   while(LoraSerial.available()) LoraSerial.read();
 
-//   // 接收返回的ack
+//   //Receive the returned ack
 //   int received_int = 0;
 //   uint32_t wait_ack_start = millis();
 //   while(millis() - wait_ack_start < time_out)
@@ -151,7 +151,7 @@
 //       received_int = 0;
 //       for (int i = 0; i < 4; i++)
 //       {
-//         // 小端序接收
+//         // receive in little endian order
 //         received_int |= ((uint32_t)LoraSerial.read()) << (8 * i); 
 //       }
 //       Serial0.printf("Received: %d\r\n", received_int);
@@ -169,7 +169,7 @@
 //     Serial0.printf("================ consum %dms =================\r\n", millis() - send_start);
 //   }
 
-//   // 切换到无线唤醒模式
+//   //Switch to wireless wake-up mode
 //   for(int i = 0; i < wireless_wake_len; i++)
 //   {
 //     if(!sendATAndWaitResponse(wireless_wake_cmd[i]))

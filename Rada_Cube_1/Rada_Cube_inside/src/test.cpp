@@ -12,7 +12,7 @@
 // RadarModule Radar;
 // LoraManager Lora;
 
-// // Lora模块和雷达模块的串口
+// //Serial port of Lora module and radar module
 // HardwareSerial& LoraSerial = Serial1;
 // #ifdef OUTSIDE
 //     HardwareSerial& RadarSerial = Serial1;
@@ -39,17 +39,17 @@
 
 // void setup()
 // {
-//     // 获取唤醒原因
+//     // Get the wake-up reason
 //     Power.get_wakeup_reason();
-//     // 初始化唤醒引脚为输入模式
+//     //Initialize the wake-up pin to input mode
 //     Power.wakeup_gpio_init();
-//     // 初始化lora串口和CE控制引脚
+//     //Initialize lora serial port and CE control pin
 //     Lora.lora_init();
-//     // 进行lora无线唤醒模式配置
+//     // Configure lora wireless wake-up mode
 //     Lora.lora_config();
-//     // lora模块配置为睡眠模式
+//     // The lora module is configured in sleep mode
 //     Lora.lora_sleep_mode();
-//     // ESP32进入睡眠模式
+//     // ESP32 enters sleep mode
 //     Power.deep_sleep();
 // }
 
@@ -63,7 +63,7 @@
 
 // // PowerManager Power;
 
-// // // 唤醒原因打印测试
+// // // Wake-up reason printing test
 // // void setup()
 // // {
 // //     Power.get_wakeup_reason();
@@ -84,7 +84,7 @@
 
 
 
-// // // 电池电量采集
+// // // Battery power collection
 // // PowerManager power;
 // // void setup()
 // // {
@@ -100,7 +100,7 @@
 
 
 
-// // // LED灯代码测试程序
+// // // LED light code test program
 // // LEDControler LED;
 // // BeeperControler BEEPER;
 
@@ -147,12 +147,12 @@
 // //   while(true)
 // //   {
 // //     vTaskDelay(xDelay);
-// //     // 任务列表打印
+// // // Task list printing
 // //     Serial.println("\n========== Task List ==========");
 // //     vTaskList(pcBuffer);
 // //     Serial.print(pcBuffer);
 
-// //     // 各任务剩余栈
+// // // Remaining stack of each task
 // //     Serial.println("\n========== Stack HighWaterMark(words / bytes) ==========");
 // //     TaskStatus_t xStatus;
 // //     volatile UBaseType_t uxArraySize = uxTaskGetNumberOfTasks();
@@ -168,7 +168,7 @@
 // //       vPortFree(pxStatusArray);
 // //     }
 
-// //     // 堆信息
+// // // Heap information
 // //     Serial.println("\n========== Heap Information ==========");
 // //     Serial.printf("Free Heap now       : %u bytes\r\n", xPortGetFreeHeapSize());
 // //     Serial.printf("Min ever Free Heap  : %u bytes\r\n", xPortGetMinimumEverFreeHeapSize());
@@ -199,7 +199,7 @@
 // // void setup()
 // // {
 // //   Serial.begin(115200);
-// //   // ---------------------------- 检测按键唤醒原因 ---------------------------------
+// // // ------------------------------- Detect key wake-up reasons ----------------------------------
 // //   esp_sleep_wakeup_cause_t wakeup_reason;
 // //   wakeup_reason = esp_sleep_get_wakeup_cause();
 // //   switch(wakeup_reason)
