@@ -14,7 +14,7 @@ typedef struct __attribute__((packed)) {
     uint16_t head;          // 帧头 0xAA55
     uint16_t cmd;           // 命令
     uint16_t len;           // 数据长度
-    uint16_t dist;          // 距离 (mm)
+    uint16_t dist_cm;       // 距离 (cm)
     int16_t  angle;         // 角度 (x0.01°)
     uint16_t reserve;       // 预留
     uint16_t checksum;      // 校验
@@ -22,7 +22,7 @@ typedef struct __attribute__((packed)) {
 
 // 解析后的雷达数据（方便上层使用）
 struct RadarData {
-    uint16_t dist_mm;       // 距离 mm
+    uint16_t dist_cm;       // 距离 cm
     float    angle_deg;     // 角度 度
 };
 
@@ -39,7 +39,7 @@ struct RadarData {
  *       Radar.loop();       // 从 FIFO 取数据并解析（非阻塞）
  *       RadarData rd;
  *       if (Radar.getData(&rd)) {
- *           // rd.dist_mm, rd.angle_deg 即为最新数据
+ *           // rd.dist_cm, rd.angle_deg 即为最新数据
  *       }
  *   }
  *   Radar.shutdown();       // 关闭雷达

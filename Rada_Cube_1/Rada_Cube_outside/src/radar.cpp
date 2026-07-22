@@ -125,11 +125,9 @@ void RadarModule::loop()
             {
                 RadarFrame_t fr;
                 if (parseFrame(_rxBuf, &fr)) {
-                    _latest.dist_mm   = fr.dist;
+                    _latest.dist_cm   = fr.dist_cm;
                     _latest.angle_deg = fr.angle * 0.01f;
                     _data_ready = true;
-                    ESP_LOGI(RADAR_TAG, "dist: %d mm, angle: %.2f deg",
-                             _latest.dist_mm, _latest.angle_deg);
                 }
                 _state = WAIT_AA;
             }
@@ -147,4 +145,3 @@ bool RadarModule::getData(RadarData* out)
 }
 
 // #endif
-

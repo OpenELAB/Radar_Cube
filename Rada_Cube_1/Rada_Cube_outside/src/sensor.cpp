@@ -43,6 +43,24 @@ void PowerManager::power_init()
     pinMode(BATTERY_PIN, INPUT);
 }
 
+void PowerManager::prepareSafePins()
+{
+    // GPIO holds survive deep sleep on ESP32-C6. Release them before changing
+    // the restored pin configuration, then force every high-current load off.
+    gpio_hold_dis(static_cast<gpio_num_t>(RADAR_POWER_PIN));
+    gpio_hold_dis(static_cast<gpio_num_t>(LED_PIN));
+
+    pinMode(RADAR_POWER_PIN, OUTPUT);
+    digitalWrite(RADAR_POWER_PIN, RADAR_POWER_OFF);
+    pinMode(LED_PIN, OUTPUT);
+    digitalWrite(LED_PIN, LED_INACTIVE_LEVEL);
+
+    pinMode(RADAR_RX_PIN, INPUT);
+    pinMode(RADAR_TX_PIN, INPUT);
+    pinMode(USER_BUTTON_PIN, INPUT);
+    pinMode(DEV_BUTTON_PIN, INPUT);
+}
+
 uint8_t PowerManager::get_battery_value()
 {
     uint32_t sum_mv = 0;
@@ -58,100 +76,60 @@ uint8_t PowerManager::get_battery_value()
     return percent;
 }
 
-bool PowerManager::wakeup_gpio_init()
+WakeupSource PowerManager::getWakeupSource()
 {
-    if (!_button_queue) _button_queue = xQueueCreate(4, sizeof(uint8_t));
-    if (!_button_queue) return false;
+    pinMode(USER_BUTTON_PIN, INPUT);
+    pinMode(DEV_BUTTON_PIN, INPUT);
+    const esp_sleep_wakeup_cause_t cause = esp_sleep_get_wakeup_cause();
+    if (cause == ESP_SLEEP_WAKEUP_TIMER) return WAKEUP_TIMER;
+    if (cause == ESP_SLEEP_WAKEUP_GPIO) {
+        _gpio_wakeup_status = esp_sleep_get_gpio_wakeup_status();
+        return classifyWakeButtons();
+    }
+    if (cause == ESP_SLEEP_WAKEUP_UNDEFINED) return WAKEUP_POWER_ON;
+    return WAKEUP_UNKNOWN;
+}
 
+WakeupSource PowerManager::classifyWakeButtons()
+{
+    // Capture a nearly simultaneous second button and tolerate contact bounce.
+    vTaskDelay(pdMS_TO_TICKS(30));
+    const bool user = digitalRead(USER_BUTTON_PIN) == BUTTON_PRESSED ||
+                      (_gpio_wakeup_status & BIT64(USER_BUTTON_PIN)) ||
+                      (_runtime_button_status & BIT(USER_BUTTON_PIN));
+    const bool dev = digitalRead(DEV_BUTTON_PIN) == BUTTON_PRESSED ||
+                     (_gpio_wakeup_status & BIT64(DEV_BUTTON_PIN)) ||
+                     (_runtime_button_status & BIT(DEV_BUTTON_PIN));
+    _button_activity_observed = _button_activity_observed || user || dev;
+    if (user && dev) return WAKEUP_BOTH_BUTTONS;
+    if (user) return WAKEUP_USER_BUTTON;
+    if (dev) return WAKEUP_DEV_BUTTON;
+    return WAKEUP_UNKNOWN;
+}
+
+void PowerManager::beginButtonMonitoring()
+{
     _instance = this;
     pinMode(USER_BUTTON_PIN, INPUT);
     pinMode(DEV_BUTTON_PIN, INPUT);
-    attachInterrupt(USER_BUTTON_PIN, buttonIsr, RISING);
-    attachInterrupt(DEV_BUTTON_PIN, buttonIsr, RISING);
+    attachInterrupt(USER_BUTTON_PIN, userButtonIsr, RISING);
+    attachInterrupt(DEV_BUTTON_PIN, devButtonIsr, RISING);
+}
 
-    const esp_err_t user_err = gpio_wakeup_enable(
-        static_cast<gpio_num_t>(USER_BUTTON_PIN), GPIO_INTR_HIGH_LEVEL);
-    const esp_err_t dev_err = gpio_wakeup_enable(
-        static_cast<gpio_num_t>(DEV_BUTTON_PIN), GPIO_INTR_HIGH_LEVEL);
-    const esp_err_t wake_err = esp_sleep_enable_gpio_wakeup();
-    if (user_err != ESP_OK || dev_err != ESP_OK || wake_err != ESP_OK) {
-        ESP_LOGE(POWER_TAG, "Button GPIO wake setup failed: user=%d dev=%d wake=%d",
-                 user_err, dev_err, wake_err);
-        return false;
+void ARDUINO_ISR_ATTR PowerManager::userButtonIsr()
+{
+    if (_instance) {
+        _instance->_runtime_button_status |= BIT(USER_BUTTON_PIN);
+        _instance->_button_activity_observed = true;
     }
-
-    armButtonWakeup();
-    return true;
 }
 
-void ARDUINO_ISR_ATTR PowerManager::buttonIsr()
+void ARDUINO_ISR_ATTR PowerManager::devButtonIsr()
 {
-    PowerManager* instance = _instance;
-    if (!instance || !instance->_button_queue || !instance->_button_irq_armed) return;
-
-    // gpio_wakeup_enable() changes these lines to level-triggered interrupts.
-    // Latch the first edge/level and disable both IRQs until both buttons have
-    // been released, otherwise a held HIGH level continuously re-enters here.
-    instance->_button_irq_armed = false;
-    gpio_intr_disable(static_cast<gpio_num_t>(USER_BUTTON_PIN));
-    gpio_intr_disable(static_cast<gpio_num_t>(DEV_BUTTON_PIN));
-
-    uint8_t event = 1;
-    BaseType_t task_woken = pdFALSE;
-    xQueueSendFromISR(instance->_button_queue, &event, &task_woken);
-    if (task_woken) portYIELD_FROM_ISR();
-}
-
-bool PowerManager::readButtonEvent(WakeupSource* source)
-{
-    if (!_button_queue || !source) return false;
-    uint8_t event = 0;
-    if (xQueueReceive(_button_queue, &event, 0) != pdTRUE) return false;
-
-    // Allow contact bounce and a nearly simultaneous second contact to settle.
-    // IRQs stay disabled until clearButtonEvents() rearms them after release.
-    vTaskDelay(pdMS_TO_TICKS(30));
-    const bool user = digitalRead(USER_BUTTON_PIN) == BUTTON_PRESSED;
-    const bool dev = digitalRead(DEV_BUTTON_PIN) == BUTTON_PRESSED;
-    if (user && dev) {
-        *source = WAKEUP_BOTH_BUTTONS;
-    } else if (dev) {
-        *source = WAKEUP_DEV_BUTTON;
-    } else if (user) {
-        *source = WAKEUP_USER_BUTTON;
-    } else {
-        // A very short bounce can disappear before classification. Do not
-        // manufacture a USER event; safely rearm and let the caller wait again.
-        clearButtonEvents();
-        return false;
+    if (_instance) {
+        _instance->_runtime_button_status |= BIT(DEV_BUTTON_PIN);
+        _instance->_button_activity_observed = true;
     }
-    return true;
-}
-
-void PowerManager::clearButtonEvents()
-{
-    disarmButtonWakeup();
-    waitForButtonsReleased();
-    if (_button_queue) {
-        uint8_t discarded = 0;
-        while (xQueueReceive(_button_queue, &discarded, 0) == pdTRUE) {}
-    }
-    armButtonWakeup();
-}
-
-void PowerManager::armButtonWakeup()
-{
-    if (!_button_queue) return;
-    _button_irq_armed = true;
-    gpio_intr_enable(static_cast<gpio_num_t>(USER_BUTTON_PIN));
-    gpio_intr_enable(static_cast<gpio_num_t>(DEV_BUTTON_PIN));
-}
-
-void PowerManager::disarmButtonWakeup()
-{
-    _button_irq_armed = false;
-    gpio_intr_disable(static_cast<gpio_num_t>(USER_BUTTON_PIN));
-    gpio_intr_disable(static_cast<gpio_num_t>(DEV_BUTTON_PIN));
 }
 
 void PowerManager::waitForButtonsReleased()
@@ -160,39 +138,48 @@ void PowerManager::waitForButtonsReleased()
            digitalRead(DEV_BUTTON_PIN) == BUTTON_PRESSED) {
         vTaskDelay(pdMS_TO_TICKS(10));
     }
-
-    // Require a stable release before enabling the HIGH-level wake interrupt.
     vTaskDelay(pdMS_TO_TICKS(30));
 }
 
-bool PowerManager::enableAutoLightSleep()
+[[noreturn]] void PowerManager::enterDeepSleep(uint32_t sleep_ms,
+                                               bool enable_timer)
 {
-    esp_pm_config_t config{};
-    config.max_freq_mhz = 160;
-    config.min_freq_mhz = 40;
-    config.light_sleep_enable = true;
-    const esp_err_t err = esp_pm_configure(&config);
-    if (err != ESP_OK) {
-        ESP_LOGE(POWER_TAG, "Auto Light-sleep unavailable, err=%d", err);
-        return false;
+    // A pure RTC wake normally has no button activity, so do not spend a fixed
+    // 30 ms awake on release debounce. Button-related paths retain the full
+    // release wait and debounce through this sticky activity flag.
+    const bool button_guard_required =
+        _button_activity_observed ||
+        buttonEventPending() ||
+        digitalRead(USER_BUTTON_PIN) == BUTTON_PRESSED ||
+        digitalRead(DEV_BUTTON_PIN) == BUTTON_PRESSED;
+    if (button_guard_required) waitForButtonsReleased();
+
+    detachInterrupt(USER_BUTTON_PIN);
+    detachInterrupt(DEV_BUTTON_PIN);
+    clearButtonEvents();
+
+    RadarSerial.end();
+    prepareSafePins();
+
+    // Keep the active-high load enables low while the digital GPIO domain is off.
+    gpio_hold_en(static_cast<gpio_num_t>(RADAR_POWER_PIN));
+    gpio_hold_en(static_cast<gpio_num_t>(LED_PIN));
+
+    esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);
+    const uint64_t button_mask = BIT64(USER_BUTTON_PIN) | BIT64(DEV_BUTTON_PIN);
+    const esp_err_t gpio_err = esp_deep_sleep_enable_gpio_wakeup(
+        button_mask, ESP_GPIO_WAKEUP_GPIO_HIGH);
+    if (gpio_err != ESP_OK) {
+        ESP_LOGE(POWER_TAG, "Deep-sleep button wake setup failed: %d", gpio_err);
     }
 
-    if (!_no_light_sleep_lock) {
-        const esp_err_t lock_err = esp_pm_lock_create(
-            ESP_PM_NO_LIGHT_SLEEP, 0, "outside_work", &_no_light_sleep_lock);
-        if (lock_err != ESP_OK) {
-            ESP_LOGE(POWER_TAG, "PM lock creation failed, err=%d", lock_err);
-            return false;
-        }
+    if (enable_timer) {
+        esp_sleep_enable_timer_wakeup(static_cast<uint64_t>(sleep_ms) * 1000ULL);
     }
-    ESP_LOGI(POWER_TAG, "Auto Light-sleep enabled");
-    return true;
-}
-
-void PowerManager::setWorkActive(bool active)
-{
-    if (!_no_light_sleep_lock || active == _work_active) return;
-    if (active) esp_pm_lock_acquire(_no_light_sleep_lock);
-    else esp_pm_lock_release(_no_light_sleep_lock);
-    _work_active = active;
+    ESP_LOGI(POWER_TAG, "Deep-sleep: timer=%s, interval=%lu ms",
+             enable_timer ? "on" : "off",
+             static_cast<unsigned long>(sleep_ms));
+    Serial.flush();
+    esp_deep_sleep_start();
+    __builtin_unreachable();
 }

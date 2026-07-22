@@ -345,6 +345,15 @@ static SensorChanges updateSensorDataState(
     changes.link_restored = sensor.lost_announced && had_received_data;
     sensor.lost_announced = false;
 
+    // A zero distance is a valid, received radar frame meaning that there is
+    // currently no usable target. It keeps the link alive, does not take part
+    // in proximity feedback, and must not contribute to a sensor fault.
+    if (data.dist == 0) {
+        sensor.invalid_count = 0;
+        sensor.recovery_valid_count = 0;
+        return changes;
+    }
+
     if (!sensor.distance_fault) {
         sensor.recovery_valid_count = 0;
 

@@ -23,15 +23,18 @@
 #define STANDBY_ACK_TIMEOUT_MS  1200
 #define STANDBY_MAX_RETRY       3
 #define STANDBY_RETRY_INTERVAL_MS 200
-#define STANDBY_ACK_GRACE_MS    800
+#define STANDBY_ACK_GRACE_MS    300
 #define WAKE_ACK_INTERVAL_MS    200
 #define WAKE_CONFIRM_TIMEOUT_MS 5000
 
 // ======================== BLE wake ========================
-#define BLE_WAKE_ADV_INTERVAL_MIN   160   // 100 ms, unit: 0.625 ms
-#define BLE_WAKE_ADV_INTERVAL_MAX   240   // 150 ms, unit: 0.625 ms
-#define BLE_SCAN_INTERVAL_MS        500
-#define BLE_SCAN_WINDOW_MS          20
+#define BLE_WAKE_ADV_INTERVAL_MIN   32    // 20 ms, unit: 0.625 ms
+#define BLE_WAKE_ADV_INTERVAL_MAX   32    // 20 ms, unit: 0.625 ms
+#define BLE_SCAN_INTERVAL_MS        60
+#define BLE_SCAN_WINDOW_MS          60
+#define BLE_SCAN_BURST_MS           60
+#define OUTSIDE_DEEP_SLEEP_MS       2900
+#define OUTSIDE_SLEEP_JITTER_MS     200
 
 // ======================== 按键 ========================
 #define BUTTON_LONG_PRESS_MS    3000    // 长按阈值 (ms)，>3s 判定为长按
