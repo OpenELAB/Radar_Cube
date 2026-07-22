@@ -1,7 +1,7 @@
 #include <Arduino.h>
 #include "config.h"
 #include "pins.h"
-#include "lora.h"
+#include "ble_wake_broadcaster.h"
 #include "sensor.h"
 #include "mac_match.h"
 #include "protocol.h"
@@ -16,6 +16,9 @@
 #ifndef CONNECTION_LOST_TIMEOUT_MS
 #define CONNECTION_LOST_TIMEOUT_MS      1500
 #endif
+#ifndef FIRST_RADAR_DATA_TIMEOUT_MS
+#define FIRST_RADAR_DATA_TIMEOUT_MS      5000
+#endif
 #ifndef SENSOR_INVALID_MAX_COUNT
 #define SENSOR_INVALID_MAX_COUNT        15
 #endif
@@ -28,6 +31,7 @@
 struct SensorLinkState {
     bool woke = false;
     bool lost_announced = false;
+    bool received_data = false;
     uint32_t last_data_ms = 0;
     uint8_t invalid_count = 0;
     uint8_t recovery_valid_count = 0;
@@ -76,9 +80,8 @@ enum SysMode {
 // ======================== 全局实例 ========================
 
 // 串口实例（pins.h 里 extern 声明，这里定义）
-HardwareSerial& LoraSerial = Serial1;
 PowerManager Power;
-LoraManager Lora;
+BleWakeBroadcaster BleWake;
 EspNowManager Espnow;
 MacMatch Matcher(Espnow);
 SpeakerController Speaker;
@@ -211,26 +214,65 @@ static void enterDeepSleepWithFeedback(FeedbackScene current_scene)
 // ======================== 辅助函数 ========================
 
 // 发送结束帧（重发 END_SEND_COUNT 次确保对方收到）
-static void sendEndFrame(const uint8_t* peer_mac, uint8_t head)
+static void sendSessionControlFrame(const uint8_t* peer_mac,
+                                    frame_type_t type,
+                                    uint32_t session_id,
+                                    int repeat_count = 1)
 {
-    protocol_frame_t frame;
-    frame_build(&frame, head, FRAME_END);
-    for (int i = 0; i < END_SEND_COUNT; i++) {
+    protocol_frame_t frame{};
+    frame_build_session(&frame, MASTER_FRAME_HEAD, type, session_id);
+    for (int i = 0; i < repeat_count; ++i) {
         Espnow.send(peer_mac, (uint8_t*)&frame, sizeof(frame));
-        vTaskDelay(pdMS_TO_TICKS(50));
+        if (i + 1 < repeat_count) vTaskDelay(pdMS_TO_TICKS(20));
     }
 }
 
-// 检查是否收到结束帧
-static bool checkEndFrame(uint8_t expect_head)
+static bool requestOutsideStandby(const uint8_t* a_mac,
+                                  const uint8_t* b_mac,
+                                  uint32_t session_id,
+                                  bool a_already_standby = false,
+                                  bool b_already_standby = false)
 {
+    bool a_ack = a_already_standby;
+    bool b_ack = b_already_standby;
     espnow_msg_t msg;
-    if (Espnow.read(&msg)) {
-        if (frame_validate(msg.data, msg.len, expect_head, FRAME_END)) {
-            return true;
+
+    for (int retry = 0;
+         retry < STANDBY_MAX_RETRY && !(a_ack && b_ack);
+         ++retry) {
+        const uint32_t started = millis();
+        uint32_t last_send = 0;
+        while (millis() - started < STANDBY_ACK_TIMEOUT_MS && !(a_ack && b_ack)) {
+            if (last_send == 0 || millis() - last_send >= STANDBY_RETRY_INTERVAL_MS) {
+                if (!a_ack) {
+                    sendSessionControlFrame(a_mac, FRAME_STANDBY, session_id);
+                }
+                if (!b_ack) {
+                    sendSessionControlFrame(b_mac, FRAME_STANDBY, session_id);
+                }
+                last_send = millis();
+            }
+
+            if (Espnow.readBlocking(&msg, pdMS_TO_TICKS(50)) &&
+                frame_validate(msg.data, msg.len,
+                               SLAVE_FRAME_HEAD, FRAME_STANDBY_ACK)) {
+                protocol_frame_t ack{};
+                memcpy(&ack, msg.data, sizeof(ack));
+                if (frame_get_session(&ack) != session_id) continue;
+                if (memcmp(msg.src_mac, a_mac, 6) == 0) a_ack = true;
+                if (memcmp(msg.src_mac, b_mac, 6) == 0) b_ack = true;
+            }
         }
     }
-    return false;
+
+    // Compatibility fallback: a unit that missed the acknowledged command can
+    // still leave work mode through the legacy END path and its own timeout.
+    if (!a_ack) sendSessionControlFrame(a_mac, FRAME_END, session_id, END_SEND_COUNT);
+    if (!b_ack) sendSessionControlFrame(b_mac, FRAME_END, session_id, END_SEND_COUNT);
+
+    ESP_LOGI(MAIN_TAG, "Standby ACK: A=%s, B=%s",
+             a_ack ? "yes" : "no", b_ack ? "yes" : "no");
+    return a_ack && b_ack;
 }
 
 // 等待按键释放并返回持续时间（ms）
@@ -294,9 +336,13 @@ static SensorChanges updateSensorDataState(
 {
     SensorChanges changes;
     const bool valid_distance = isRadarDistanceValid(data.dist);
+    const bool had_received_data = sensor.received_data;
+    sensor.received_data = true;
     sensor.last_data_ms = now_ms;
     // 通过校验的雷达数据帧足以证明通信链路在线，即使其中的距离值无效。
-    changes.link_restored = sensor.lost_announced;
+    // 首次雷达数据晚到只表示链路刚开始工作，不属于“掉线后恢复”，避免
+    // 在唤醒完成提示之后误播放一次链路恢复上升音。
+    changes.link_restored = sensor.lost_announced && had_received_data;
     sensor.lost_announced = false;
 
     if (!sensor.distance_fault) {
@@ -346,7 +392,10 @@ static SensorChanges updateSensorConnectionLost(
         return changes;
     }
 
-    if (now_ms - sensor.last_data_ms >= CONNECTION_LOST_TIMEOUT_MS) {
+    const uint32_t timeout_ms = sensor.received_data
+        ? CONNECTION_LOST_TIMEOUT_MS
+        : FIRST_RADAR_DATA_TIMEOUT_MS;
+    if (now_ms - sensor.last_data_ms >= timeout_ms) {
         sensor.lost_announced = true;
         sensor.invalid_count = 0;
         sensor.recovery_valid_count = 0;
@@ -356,9 +405,11 @@ static SensorChanges updateSensorConnectionLost(
     return changes;
 }
 
-static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
+static void inside_work_mode(uint8_t* a_mac,
+                             uint8_t* b_mac,
+                             const uint8_t master_mac[6])
 {
-    // 1) Lora 发送唤醒帧，等从机 ESP-NOW 回复 WAKE_ACK
+    // BLE 广播唤醒，ESP-NOW 返回 WAKE_ACK。
     bool pending_wake_success_tone = false;
     bool pending_wake_ok_tone = false;
     espnow_msg_t msg;
@@ -366,25 +417,44 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
     SensorLinkState sensor_b;
 
     // ================ 把循环里的电平切换放到外面来，加上100ms延时，之前的10ms延时不够会导致帧发送不完全 =================
-    Lora.enable_ce();
-    vTaskDelay(pdMS_TO_TICKS(100));
+    if (!BleWake.start(master_mac)) {
+        ESP_LOGE(MAIN_TAG, "Unable to start BLE wake advertising");
+        if (feedback_ready) Feedback.onWakeTimedOutEvent(FeedbackSensorSet::None);
+        BleWake.stop();
+        return;
+    }
+    const uint32_t wake_session = BleWake.sessionId();
     for (int retry = 0;
          retry < WAKE_MAX_RETRY && !(sensor_a.woke && sensor_b.woke);
          retry++) {
-        Lora.sendWakeFrame();
-        ESP_LOGI(MAIN_TAG, "Wake attempt %d/%d", retry + 1, WAKE_MAX_RETRY);
+        ESP_LOGI(MAIN_TAG, "BLE wake wait %d/%d", retry + 1, WAKE_MAX_RETRY);
 
         for (int t = 0;
              t < WAKE_POLL_ROUNDS && !(sensor_a.woke && sensor_b.woke);
              t++) {
             vTaskDelay(pdMS_TO_TICKS(WAKE_POLL_INTERVAL_MS));
+            if (digitalRead(USER_BUTTON_PIN) == BUTTON_PRESSED ||
+                digitalRead(DEV_BUTTON_PIN) == BUTTON_PRESSED) {
+                ESP_LOGI(MAIN_TAG, "Wake cancelled by button");
+                retry = WAKE_MAX_RETRY;
+                break;
+            }
             while (Espnow.read(&msg)) {
                 if (frame_validate(msg.data, msg.len, SLAVE_FRAME_HEAD, FRAME_WAKE_ACK)) {
+                    protocol_frame_t wake_ack{};
+                    memcpy(&wake_ack, msg.data, sizeof(wake_ack));
+                    if (frame_get_session(&wake_ack) != wake_session) continue;
+
+                    // Reply to every repeated ACK so a lost confirmation does
+                    // not strand the outside unit in its handshake window.
+                    sendSessionControlFrame(msg.src_mac, FRAME_WAKE_CONFIRM,
+                                            wake_session, 2);
                     // 这里判断一下是哪个从机返回的消息
                     if(memcmp(msg.src_mac, a_mac, 6) == 0) {
                         if (!sensor_a.woke) {
                             const bool second_wake = sensor_b.woke;
                             sensor_a.woke = true;
+                            sensor_a.last_data_ms = millis();
                             if (feedback_ready) {
                                 const FeedbackSensorSet awake_sensors =
                                     toFeedbackSensorSet(sensor_a.woke,
@@ -406,6 +476,7 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
                         if (!sensor_b.woke) {
                             const bool second_wake = sensor_a.woke;
                             sensor_b.woke = true;
+                            sensor_b.last_data_ms = millis();
                             if (feedback_ready) {
                                 const FeedbackSensorSet awake_sensors =
                                     toFeedbackSensorSet(sensor_a.woke,
@@ -430,7 +501,14 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
             }
         }
     }
-    Lora.disable_ce();
+    if (sensor_a.woke && sensor_b.woke) {
+        // Final confirmation burst after both ACKs reduces the chance that an
+        // outside unit times out while the inside unit already entered WORK.
+        sendSessionControlFrame(a_mac, FRAME_WAKE_CONFIRM, wake_session, 3);
+        sendSessionControlFrame(b_mac, FRAME_WAKE_CONFIRM, wake_session, 3);
+        vTaskDelay(pdMS_TO_TICKS(80));
+    }
+    BleWake.stop();
 
     // 唤醒失败处理
     // TODO：唤醒失败，可能是两个从机中其中一个醒来另一个出问题，还是要发送一下工作结束帧让醒来的从机停止工作
@@ -444,8 +522,8 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
         
 
         // 唤醒失败发送停止工作帧，确保从机全部关闭
-        sendEndFrame(a_mac, MASTER_FRAME_HEAD);
-        sendEndFrame(b_mac, MASTER_FRAME_HEAD);
+        requestOutsideStandby(a_mac, b_mac, wake_session,
+                              !sensor_a.woke, !sensor_b.woke);
         waitFeedbackOrTimeout(FEEDBACK_DEFAULT_TIMEOUT_MS);
         
         return;
@@ -458,8 +536,6 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
     // 播放一段上升音调，向用户发出 "Active Positive" 信号，代表雷达已启动
 
 
-    // 唤醒成功后可以关 Lora 省电
-    Lora.shutdown();
 
     // 2) 创建蜂鸣器任务
     // 初始化互斥锁
@@ -469,6 +545,8 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
     uint32_t work_start = millis();
 
     bool exit_flag = false;
+    bool sensor_a_already_standby = false;
+    bool sensor_b_already_standby = false;
     bool wait_exit_feedback = false;
     bool distance_feedback_started = false;
     FeedbackSensorSet last_active_sensors = FeedbackSensorSet::None;
@@ -482,11 +560,11 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
     while (true) {
         if (feedback_ready && !Feedback.isBusy()) {
             if (pending_wake_success_tone) {
-                // WakeSuccessTone event：发生延迟调度的单侧唤醒成功提示音事件。
+                // 第二个模块唤醒成功：先播放第二次上升音。
                 Feedback.onWakeSuccessToneEvent();
                 pending_wake_success_tone = false;
             } else if (pending_wake_ok_tone) {
-                // WakeCompletedTone event：发生双侧唤醒完成提示音事件。
+                // 第二次上升音结束后，再播放双侧唤醒完成提示音。
                 Feedback.onWakeCompletedToneEvent();
                 pending_wake_ok_tone = false;
             }
@@ -530,7 +608,7 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
                         sensor_a,
                         sensor_a.latest_data,
                         millis()));
-                    ESP_LOGI(SLAVE_A_TAG, "slave_A: dist=%d mm, angle=%.2f deg"
+                    ESP_LOGI(SLAVE_A_TAG, "slave_A: dist=%d cm, angle=%.2f deg"
                              , sensor_a.latest_data.dist,
                              sensor_a.latest_data.angle * 0.01f);
                 }
@@ -543,7 +621,7 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
                         sensor_b,
                         sensor_b.latest_data,
                         millis()));
-                    ESP_LOGI(SLAVE_B_TAG, "slave_B: dist=%d mm, angle=%.2f deg"
+                    ESP_LOGI(SLAVE_B_TAG, "slave_B: dist=%d cm, angle=%.2f deg"
                              , sensor_b.latest_data.dist,
                              sensor_b.latest_data.angle * 0.01f);
                 }
@@ -551,6 +629,11 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
             else if(frame_validate(msg.data, msg.len, SLAVE_FRAME_HEAD, FRAME_END))
             {
                 ESP_LOGI(MAIN_TAG, "Received END frame from slave");
+                if (memcmp(msg.src_mac, a_mac, 6) == 0) {
+                    sensor_a_already_standby = true;
+                } else if (memcmp(msg.src_mac, b_mac, 6) == 0) {
+                    sensor_b_already_standby = true;
+                }
                 exit_flag = true;
                 break;
             }
@@ -675,8 +758,13 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
         vTaskDelay(pdMS_TO_TICKS(WORK_POLL_INTERVAL_MS));
     }
     // 4) 退出：通知从机结束。距离反馈由后续 shutdown 事件统一停止。
-    sendEndFrame(a_mac, MASTER_FRAME_HEAD);
-    sendEndFrame(b_mac, MASTER_FRAME_HEAD);
+    const bool standby_ok = requestOutsideStandby(
+        a_mac, b_mac, wake_session,
+        sensor_a_already_standby, sensor_b_already_standby);
+    if (!standby_ok) {
+        ESP_LOGE(MAIN_TAG,
+                 "Standby was not acknowledged by every active outside unit; END fallback sent");
+    }
     if (wait_exit_feedback) {
         waitFeedbackOrTimeout(FEEDBACK_DEFAULT_TIMEOUT_MS);
     }
@@ -720,9 +808,6 @@ static void handleMode(SysMode mode)
         ESP_LOGI(MAIN_TAG, "Mode: FACTORY_RESET");
         // 第一版 Feedback API 暂未定义恢复出厂反馈，只处理业务动作。
         Matcher.clear_slave_mac();
-        Lora.setup();               // 需要先初始化 Lora 才能清配置
-        Lora.clearConfigFlag();
-        Lora.shutdown();
         break;
     
     // TODO：unpair模式要不要直接开始配对？
@@ -793,11 +878,12 @@ static void handleMode(SysMode mode)
         ESP_LOGI(MAIN_TAG, "Mode: WORK");
 
         // ---- 车内模块工作流程 ----
-        // 1) Lora 初始化 + 发唤醒帧
-        Lora.setup();
+        // BLE 广播唤醒，ESP-NOW 保持原数据链路。
 
         // 2) ESP-NOW 初始化
         Espnow.init();
+        uint8_t master_mac[6]{};
+        Espnow.getMac(master_mac);
         uint8_t a_mac[6]{};
         Matcher.load_slave_mac(a_mac, SLAVE_A_ID);
         uint8_t b_mac[6]{};
@@ -807,12 +893,11 @@ static void handleMode(SysMode mode)
         Espnow.recvStart();
 
         // 3) 唤醒从机 → 工作循环
-        inside_work_mode(a_mac, b_mac);
+        inside_work_mode(a_mac, b_mac, master_mac);
 
         // 4) 清理
         Espnow.recvStop();
         Espnow.deinit();
-        Lora.shutdown();
         // Led.led_off();
         break;
     }
@@ -832,9 +917,6 @@ void setup()
     // Led.led_init();
     Power.power_init();
 
-    // 加上打开Lora电源，第一次上电发现不加上打开电源，功率开关的使能引脚会卡在加上上拉电阻后也是0.7V左右不是3.3V导致Lora无法工作
-    pinMode(LORA_POWER_PIN, OUTPUT);
-    digitalWrite(LORA_POWER_PIN, LORA_POWER_ON);
 
     const bool rgb_ready = RgbLed.begin();
     if (rgb_ready) {

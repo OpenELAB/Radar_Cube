@@ -7,7 +7,6 @@
 // // 编译检查：必须且只能定义 INSIDE 或 OUTSIDE 其中一个
 
 // ======================== 串口声明 ========================
-extern HardwareSerial& LoraSerial;
 
 // ============================================================
 //  车内模块 (INSIDE) 引脚定义
@@ -21,19 +20,6 @@ extern HardwareSerial& LoraSerial;
 #define BATTERY_PIN             GPIO_NUM_3
 #define USER_BUTTON_PIN         GPIO_NUM_6
 #define DEV_BUTTON_PIN          GPIO_NUM_1
-#define LORA_RX_PIN             GPIO_NUM_10
-#define LORA_TX_PIN             GPIO_NUM_11
-#define LORA_CE_PIN             GPIO_NUM_0
-#define LORA_POWER_PIN          GPIO_NUM_18
-
-
-// ======================== Lora 电平 ========================
-#define LORA_POWER_ON               HIGH
-#define LORA_POWER_OFF              LOW
-#define LORA_CE_ACTIVE              HIGH    // CE 拉高 = 正常工作
-#define LORA_CE_INACTIVE            LOW     // CE 拉低 = 进入配置模式
-#define LORA_WAKE_ACTIVE            HIGH    // WAKE 拉高 = 有数据，唤醒 MCU
-#define LORA_WAKE_INACTIVE          LOW     // WAKE 拉低 = 空闲
 
 // ======================== 按键电平 ========================
 #define BUTTON_PRESSED              HIGH

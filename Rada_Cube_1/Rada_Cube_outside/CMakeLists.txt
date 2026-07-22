@@ -1,3 +1,5 @@
 cmake_minimum_required(VERSION 3.16.0)
+set(ENV{IDF_COMPONENT_MANAGER} 0)
+set(COMPONENTS src framework-arduinoespressif32 __pio_env)
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 project(Rada_Cube)

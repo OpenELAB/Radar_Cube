@@ -15,6 +15,9 @@ enum frame_type_t : uint8_t {
     FRAME_WAKE_ACK      = 0x04,     // 从机唤醒应答
     FRAME_RADAR_DATA    = 0x05,     // 雷达数据帧
     FRAME_END           = 0x06,     // 结束帧
+    FRAME_STANDBY       = 0x07,     // Return outside unit to BLE standby
+    FRAME_STANDBY_ACK   = 0x08,     // Standby command acknowledged
+    FRAME_WAKE_CONFIRM  = 0x09,     // Master confirms matching wake session
 };
 
 // ======================== 协议帧（8 字节，4 字节对齐）========================
@@ -37,7 +40,7 @@ static_assert(sizeof(protocol_frame_t) == 8, "protocol_frame_t must be 8 bytes")
 //   // 构建帧
 //   protocol_frame_t frame;
 //   frame_build(&frame, MASTER_FRAME_HEAD, FRAME_WAKE);
-//   frame_build(&frame, SLAVE_FRAME_HEAD, FRAME_RADAR_DATA, dist_mm, angle);
+//   frame_build(&frame, SLAVE_FRAME_HEAD, FRAME_RADAR_DATA, dist_cm, angle);
 //
 //   // 校验帧
 //   if (frame_validate(data, len, SLAVE_FRAME_HEAD, FRAME_WAKE_ACK)) {
@@ -51,6 +54,11 @@ uint8_t frame_calc_checksum(const protocol_frame_t* frame);
 // 构建帧（自动填充 reserve + checksum）
 void frame_build(protocol_frame_t* frame, uint8_t head, frame_type_t type,
                  uint16_t dist = 0, int16_t angle = 0);
+
+// Control frames reuse the 32-bit dist/angle payload for the BLE wake session.
+void frame_build_session(protocol_frame_t* frame, uint8_t head,
+                         frame_type_t type, uint32_t session_id);
+uint32_t frame_get_session(const protocol_frame_t* frame);
 
 // 校验帧合法性
 bool frame_validate(const uint8_t* data, int len,

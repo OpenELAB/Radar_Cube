@@ -19,7 +19,6 @@ enum WakeupSource {
     WAKEUP_USER_BUTTON,     // 用户按键唤醒
     WAKEUP_DEV_BUTTON,      // 开发按键唤醒
     WAKEUP_BOTH_BUTTONS,    // 两个按键同时按下（取决于硬件接线，可能出现）
-    WAKEUP_LORA,            // Lora 唤醒（仅 OUTSIDE）
 };
 
 

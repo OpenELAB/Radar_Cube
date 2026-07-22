@@ -30,9 +30,13 @@ void EspNowManager::_onRecv(const esp_now_recv_info_t* info, const uint8_t* data
 
     // 放入队列
     // TODO：队列如果容易满的话，可能需要手动处理队列，不然默认机制容易把新数据丢失
-    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-    xQueueSendToBackFromISR(_rx_queue, &msg, &xHigherPriorityTaskWoken);
-    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+    // ESP-NOW receive callbacks run in the Wi-Fi task, not in a hardware ISR.
+    // Never block that high-priority task; drop only when the application queue
+    // is full and let the protocol retry its control frames.
+    if (xQueueSendToBack(_rx_queue, &msg, 0) != pdTRUE) {
+        ESP_LOGW(TAG, "Receive queue full, dropping frame type=%u",
+                 msg.len > 1 ? msg.data[1] : 0);
+    }
 }
 
 // ======================== 初始化 / 反初始化 ========================

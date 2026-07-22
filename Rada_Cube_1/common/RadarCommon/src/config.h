@@ -12,10 +12,6 @@
 #define BATTERY_LOW_THRESHOLD   3.0f    // 电池最低电压 (V)
 #define BATTERY_HIGH_THRESHOLD  4.2f    // 电池最高电压 (V)
 
-// ======================== Lora ========================
-#define LORA_AT_TIMEOUT         2000    // AT 指令超时 (ms)
-#define LORA_AT_RETRY           3       // AT 指令重试次数
-
 // ======================== 工作模式 ========================
 #define WAKE_POLL_INTERVAL_MS   100     // 唤醒轮询间隔 (ms)
 #define WAKE_POLL_ROUNDS        30      // 每次发唤醒帧后检查次数（总等 WAKE_POLL_ROUNDS * WAKE_POLL_INTERVAL_MS）
@@ -24,11 +20,23 @@
 #define RADAR_SEND_INTERVAL_MS  200     // 雷达数据发送间隔 (ms)
 #define WORK_TIMEOUT_MS         (60000 * 3) // 工作模式超时 (ms)，超时自动退出 (目前设为 3 分钟)
 #define END_SEND_COUNT          3       // 结束帧重发次数（确保对方收到）
+#define STANDBY_ACK_TIMEOUT_MS  1200
+#define STANDBY_MAX_RETRY       3
+#define STANDBY_RETRY_INTERVAL_MS 200
+#define STANDBY_ACK_GRACE_MS    800
+#define WAKE_ACK_INTERVAL_MS    200
+#define WAKE_CONFIRM_TIMEOUT_MS 5000
+
+// ======================== BLE wake ========================
+#define BLE_WAKE_ADV_INTERVAL_MIN   160   // 100 ms, unit: 0.625 ms
+#define BLE_WAKE_ADV_INTERVAL_MAX   240   // 150 ms, unit: 0.625 ms
+#define BLE_SCAN_INTERVAL_MS        500
+#define BLE_SCAN_WINDOW_MS          20
 
 // ======================== 按键 ========================
 #define BUTTON_LONG_PRESS_MS    3000    // 长按阈值 (ms)，>3s 判定为长按
 
-// 距离报警阈值 (mm)
+// 距离报警阈值 (cm)
 #define DIST_DANGER_CM          30      // <= 30 cm
 #define DIST_CLOSE_CM           60      // 31..60 cm
 #define DIST_MID_CM             90      // 61..90 cm
@@ -45,7 +53,7 @@
 // 每个模块一个标签，用于 ESP_LOGI / ESP_LOGE 的 tag 参数
 #define MAIN_TAG                "MAIN"
 #define POWER_TAG               "POWER"
-#define LORA_TAG                "LORA"
+#define BLE_WAKE_TAG            "BLE_WAKE"
 #define MAC_TAG                 "MAC"
 #define RADAR_TAG               "RADAR"
 #define SLAVE_A_TAG             "SLAVE_A"
@@ -56,12 +64,8 @@
 #define SLAVE_B_ID              1
 
 
-#define GPIO_CE_ACTIVE_LEVEL       1   // High
-#define GPIO_CE_INACTIVE_LEVEL     0   // Low
-
 // 日志输出标签
 #define POWER_TAG         "POWER"
-#define LORA_TAG          "LORA"
 #define MAC_TAG            "MAC"
 
 

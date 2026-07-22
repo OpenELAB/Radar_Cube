@@ -23,6 +23,21 @@ void frame_build(protocol_frame_t* frame, uint8_t head, frame_type_t type,
     frame->checksum = frame_calc_checksum(frame);
 }
 
+void frame_build_session(protocol_frame_t* frame, uint8_t head,
+                         frame_type_t type, uint32_t session_id)
+{
+    frame_build(frame, head, type,
+                static_cast<uint16_t>(session_id & 0xFFFFU),
+                static_cast<int16_t>((session_id >> 16) & 0xFFFFU));
+}
+
+uint32_t frame_get_session(const protocol_frame_t* frame)
+{
+    if (!frame) return 0;
+    return static_cast<uint32_t>(frame->dist) |
+           (static_cast<uint32_t>(static_cast<uint16_t>(frame->angle)) << 16);
+}
+
 // 校验帧合法性
 bool frame_validate(const uint8_t* data, int len,
                     uint8_t expect_head, frame_type_t expect_type)
