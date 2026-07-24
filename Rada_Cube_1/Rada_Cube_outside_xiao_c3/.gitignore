@@ -1,0 +1,7 @@
+.pio/
+.vscode/
+managed_components/
+dependencies.lock
+sdkconfig.*
+!sdkconfig.defaults
+src/main.ino.cpp
