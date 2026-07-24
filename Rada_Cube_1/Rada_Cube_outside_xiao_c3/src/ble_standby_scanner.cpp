@@ -11,6 +11,7 @@
 #include <nimble/nimble_port.h>
 #include <nimble/nimble_port_freertos.h>
 
+#include "app_config.h"
 #include "ble_wake_protocol.h"
 
 namespace {
@@ -313,9 +314,29 @@ void BleStandbyScanner::onAdvertisement(const uint8_t* manufacturer_data,
     uint8_t master_mac[BLE_WAKE_MAC_LENGTH]{};
     if (!bleWakeValidate(manufacturer_data, manufacturer_data_length,
                          &session_id, master_mac)) {
+        // Avoid flooding the diagnostic port with unrelated BLE devices.
+        // Only a payload with our exact size is close enough to be useful.
+        if constexpr (POWER_TEST_LOG_ENABLED) {
+            if (manufacturer_data_length == sizeof(BleWakePayload)) {
+                ESP_LOGW(TAG,
+                         "Wake payload rejected: manufacturer length=%u",
+                         static_cast<unsigned>(manufacturer_data_length));
+            }
+        }
         return;
     }
     if (memcmp(master_mac, _expected_master_mac, BLE_WAKE_MAC_LENGTH) != 0) {
+        if constexpr (POWER_TEST_LOG_ENABLED) {
+            ESP_LOGW(
+                TAG,
+                "Wake MAC mismatch: received=%02X:%02X:%02X:%02X:%02X:%02X "
+                "expected=%02X:%02X:%02X:%02X:%02X:%02X",
+                master_mac[0], master_mac[1], master_mac[2],
+                master_mac[3], master_mac[4], master_mac[5],
+                _expected_master_mac[0], _expected_master_mac[1],
+                _expected_master_mac[2], _expected_master_mac[3],
+                _expected_master_mac[4], _expected_master_mac[5]);
+        }
         return;
     }
     if (_has_last_session && session_id == _last_session_id &&
@@ -331,6 +352,16 @@ void BleStandbyScanner::onAdvertisement(const uint8_t* manufacturer_data,
     memcpy(event.master_mac, master_mac, sizeof(event.master_mac));
     event.session_id = session_id;
     event.rssi = rssi;
+
+    if constexpr (POWER_TEST_LOG_ENABLED) {
+        ESP_LOGI(
+            TAG,
+            "Wake accepted: master=%02X:%02X:%02X:%02X:%02X:%02X "
+            "session=%08lX RSSI=%d",
+            master_mac[0], master_mac[1], master_mac[2],
+            master_mac[3], master_mac[4], master_mac[5],
+            static_cast<unsigned long>(session_id), rssi);
+    }
 
     // NimBLE invokes this from its host task, not an ISR. Queue overwrite keeps
     // the callback non-blocking while preserving the newest valid session.

@@ -12,7 +12,10 @@ CONFIG_BT_NIMBLE_ROLE_OBSERVER=y
 CONFIG_BT_CTRL_MODEM_SLEEP=y
 CONFIG_BT_CTRL_MODEM_SLEEP_MODE_1=y
 CONFIG_BT_CTRL_LPCLK_SEL_EXT_32K_XTAL=y
-# CONFIG_BT_CTRL_MAIN_XTAL_PU_DURING_LIGHT_SLEEP is not set
+# Keep the main XTAL available as a fallback if the board's 32.768 kHz
+# crystal is missing or fails to start. With a healthy 32 kHz crystal this
+# does not change the selected BLE low-power clock.
+CONFIG_BT_CTRL_MAIN_XTAL_PU_DURING_LIGHT_SLEEP=y
 
 # XIAO ESP32-C3 board-mounted 32.768 kHz crystal.
 CONFIG_RTC_CLK_SRC_EXT_CRYS=y
@@ -25,6 +28,11 @@ CONFIG_FREERTOS_IDLE_TIME_BEFORE_SLEEP=3
 CONFIG_FREERTOS_HZ=1000
 CONFIG_ESP_PHY_MAC_BB_PD=y
 CONFIG_ESP_SLEEP_POWER_DOWN_FLASH=y
+
+# Native USB Serial/JTAG is unresponsive in automatic light sleep. Keep the
+# chip awake only while a USB host is connected so diagnostics and reflashing
+# remain possible; battery operation without USB can still enter light sleep.
+CONFIG_USJ_NO_AUTO_LS_ON_CONNECTION=y
 
 # Keep measurement builds quiet unless the PlatformIO log macro is enabled.
 CONFIG_BOOTLOADER_LOG_LEVEL_WARN=y

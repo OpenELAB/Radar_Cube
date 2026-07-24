@@ -1,6 +1,8 @@
 #include <Arduino.h>
 #include <cstring>
 
+#include <esp_log.h>
+
 #include "app_config.h"
 #include "ble_standby_scanner.h"
 #include "espnow.h"
@@ -19,7 +21,15 @@ bool standby_ready = false;
 
 bool ensurePaired()
 {
-    if (peers.loadMaster(master_mac)) return true;
+    if (peers.loadMaster(master_mac)) {
+        if constexpr (POWER_TEST_LOG_ENABLED) {
+            ESP_LOGI("XIAO_MAIN",
+                     "Loaded inside MAC %02X:%02X:%02X:%02X:%02X:%02X",
+                     master_mac[0], master_mac[1], master_mac[2],
+                     master_mac[3], master_mac[4], master_mac[5]);
+        }
+        return true;
+    }
 
     if constexpr (POWER_TEST_LOG_ENABLED) {
         ESP_LOGI("XIAO_MAIN",
@@ -57,7 +67,7 @@ bool startStandby()
         if constexpr (POWER_TEST_LOG_ENABLED) {
             ESP_LOGE("XIAO_MAIN", "BLE scan start failed");
         }
-        scanner.shutdown();
+        scanner.pauseScan();
         return false;
     }
 
@@ -75,7 +85,11 @@ void setup()
 {
 #if POWER_TEST_LOG_ENABLED
     Serial.begin(115200);
-    delay(30);
+    delay(100);
+    esp_log_level_set("XIAO_MAIN", ESP_LOG_INFO);
+    esp_log_level_set("BLE_STANDBY", ESP_LOG_INFO);
+    esp_log_level_set("XIAO_SESSION", ESP_LOG_INFO);
+    esp_log_level_set("ESPNOW", ESP_LOG_INFO);
 #endif
 
     LowPowerPolicy::begin(POWER_TEST_LOG_ENABLED != 0);
@@ -101,16 +115,29 @@ void loop()
         if constexpr (POWER_TEST_LOG_ENABLED) {
             ESP_LOGE("XIAO_MAIN", "BLE standby wait ended unexpectedly");
         }
-        scanner.shutdown();
+        scanner.pauseScan();
         standby_ready = false;
         return;
     }
 
-    // BLE and ESP-NOW can coexist, but shutting the BLE stack down on a real
-    // wake keeps the test deterministic. This cost is paid only on a user
-    // wake, never once per scan interval.
-    scanner.shutdown();
+    if constexpr (POWER_TEST_LOG_ENABLED) {
+        ESP_LOGI("XIAO_MAIN",
+                 "Wake event dequeued, session=%08lX, pausing BLE scan",
+                 static_cast<unsigned long>(wake_event.session_id));
+    }
+
+    // Keep the resident NimBLE host/controller initialized and stop only the
+    // scan procedure. Observer-only NimBLE builds do not initialize connection
+    // queues, and this ESP-IDF version asserts while deinitializing those
+    // absent queues. A paused BLE controller can coexist with ESP-NOW and is
+    // resumed by startStandby() after the session.
+    scanner.pauseScan();
     standby_ready = false;
+
+    if constexpr (POWER_TEST_LOG_ENABLED) {
+        ESP_LOGI("XIAO_MAIN",
+                 "BLE scan paused, starting ESP-NOW session");
+    }
 
     const WakeSessionResult result = session.run(wake_event, master_mac);
     if constexpr (POWER_TEST_LOG_ENABLED) {

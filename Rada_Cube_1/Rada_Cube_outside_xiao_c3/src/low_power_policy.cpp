@@ -4,6 +4,10 @@
 #include <esp_pm.h>
 #include <esp_wifi.h>
 
+#ifndef WAKE_DEBUG_DISABLE_LIGHT_SLEEP
+#define WAKE_DEBUG_DISABLE_LIGHT_SLEEP 0
+#endif
+
 bool LowPowerPolicy::logsEnabled_ = false;
 
 namespace {
@@ -34,13 +38,15 @@ bool LowPowerPolicy::begin(bool enableLogs) {
   esp_pm_config_t config{};
   config.max_freq_mhz = 160;
   config.min_freq_mhz = 40;
-  config.light_sleep_enable = true;
+  config.light_sleep_enable = (WAKE_DEBUG_DISABLE_LIGHT_SLEEP == 0);
 
   const esp_err_t result = esp_pm_configure(&config);
   logResult(logsEnabled_, "esp_pm_configure", result);
 
 #if POWER_TEST_LOG_ENABLED
   if (logsEnabled_) {
+    Serial.printf("[power] automatic light sleep: %s\r\n",
+                  config.light_sleep_enable ? "enabled" : "disabled");
     Serial.printf("[power] external 32.768 kHz clock: %s\r\n",
                   external32kConfigured() ? "configured" : "NOT configured");
   }

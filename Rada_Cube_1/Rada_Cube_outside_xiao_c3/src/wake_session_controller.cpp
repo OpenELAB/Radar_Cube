@@ -95,14 +95,19 @@ WakeSessionResult WakeSessionController::run(
     if (!master_mac ||
         memcmp(wake_event.master_mac, master_mac, 6) != 0 ||
         wake_event.session_id == 0) {
+        TEST_LOGW("Rejected wake event before ESP-NOW start");
         return WakeSessionResult::WirelessError;
     }
 
+    TEST_LOGI("Starting ESP-NOW wake session=%08lX",
+              static_cast<unsigned long>(wake_event.session_id));
     _espnow.init();
     if (!_espnow.addPeer(master_mac)) {
+        TEST_LOGW("ESP-NOW addPeer failed");
         stopWireless();
         return WakeSessionResult::WirelessError;
     }
+    TEST_LOGI("ESP-NOW peer added");
     _espnow.recvStart();
 
     const uint32_t session_id = wake_event.session_id;
@@ -114,6 +119,9 @@ WakeSessionResult WakeSessionController::run(
            millis() - handshake_started_ms < WAKE_CONFIRM_TIMEOUT_TEST_MS) {
         const uint32_t now_ms = millis();
         if (last_ack_ms == 0 || now_ms - last_ack_ms >= WAKE_ACK_PERIOD_MS) {
+            if (last_ack_ms == 0) {
+                TEST_LOGI("Sending first WAKE_ACK");
+            }
             sendSessionFrame(master_mac, FRAME_WAKE_ACK, session_id, 2);
             last_ack_ms = millis();
         }
@@ -123,6 +131,7 @@ WakeSessionResult WakeSessionController::run(
         if (isMatchingControl(message, master_mac, FRAME_WAKE_CONFIRM,
                               session_id)) {
             confirmed = true;
+            TEST_LOGI("WAKE_CONFIRM received");
         } else if (isMatchingControl(message, master_mac, FRAME_STANDBY,
                                      session_id)) {
             acknowledgeStandby(master_mac, session_id);
