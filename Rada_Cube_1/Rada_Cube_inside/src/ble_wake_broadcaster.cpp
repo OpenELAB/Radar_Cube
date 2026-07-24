@@ -4,6 +4,7 @@
 #include <host/ble_hs.h>
 #include <nimble/nimble_port.h>
 #include <nimble/nimble_port_freertos.h>
+#include <esp_bt.h>
 #include <esp_system.h>
 
 #include "ble_wake_protocol.h"
@@ -49,6 +50,28 @@ bool BleWakeBroadcaster::start(const uint8_t master_mac[6])
             nimble_port_deinit();
             broadcaster_instance = nullptr;
             return false;
+        }
+
+        const esp_err_t tx_power_result =
+            esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_ADV, ESP_PWR_LVL_P20);
+        if (tx_power_result != ESP_OK) {
+            ESP_LOGE(BLE_WAKE_TAG, "Unable to set BLE advertising TX power to +20 dBm: %d",
+                     static_cast<int>(tx_power_result));
+            nimble_port_stop();
+            nimble_port_deinit();
+            broadcaster_instance = nullptr;
+            return false;
+        }
+
+        const esp_power_level_t actual_tx_power =
+            esp_ble_tx_power_get(ESP_BLE_PWR_TYPE_ADV);
+        if (actual_tx_power != ESP_PWR_LVL_P20) {
+            ESP_LOGW(BLE_WAKE_TAG,
+                     "BLE advertising TX power readback mismatch: requested=%d, actual=%d",
+                     static_cast<int>(ESP_PWR_LVL_P20),
+                     static_cast<int>(actual_tx_power));
+        } else {
+            ESP_LOGI(BLE_WAKE_TAG, "BLE advertising TX power set to +20 dBm");
         }
         _ble_initialized = true;
     }
