@@ -52,26 +52,13 @@ bool BleWakeBroadcaster::start(const uint8_t master_mac[6])
             return false;
         }
 
-        const esp_err_t tx_power_result =
-            esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_ADV, ESP_PWR_LVL_P20);
-        if (tx_power_result != ESP_OK) {
-            ESP_LOGE(BLE_WAKE_TAG, "Unable to set BLE advertising TX power to +20 dBm: %d",
-                     static_cast<int>(tx_power_result));
-            nimble_port_stop();
-            nimble_port_deinit();
-            broadcaster_instance = nullptr;
-            return false;
-        }
-
-        const esp_power_level_t actual_tx_power =
-            esp_ble_tx_power_get(ESP_BLE_PWR_TYPE_ADV);
-        if (actual_tx_power != ESP_PWR_LVL_P20) {
+        const esp_err_t default_power_result =
+            esp_ble_tx_power_set_enhanced(
+                ESP_BLE_ENHANCED_PWR_TYPE_DEFAULT, 0, ESP_PWR_LVL_P20);
+        if (default_power_result != ESP_OK) {
             ESP_LOGW(BLE_WAKE_TAG,
-                     "BLE advertising TX power readback mismatch: requested=%d, actual=%d",
-                     static_cast<int>(ESP_PWR_LVL_P20),
-                     static_cast<int>(actual_tx_power));
-        } else {
-            ESP_LOGI(BLE_WAKE_TAG, "BLE advertising TX power set to +20 dBm");
+                     "Unable to set BLE default TX power to +20 dBm: %d",
+                     static_cast<int>(default_power_result));
         }
         _ble_initialized = true;
     }
@@ -104,6 +91,31 @@ bool BleWakeBroadcaster::start(const uint8_t master_mac[6])
     _running = result == 0;
     if (!_running) {
         ESP_LOGE(BLE_WAKE_TAG, "Unable to start wake advertising: %d", result);
+    } else {
+        // NimBLE legacy advertising uses advertising handle 0 on ESP32-C6.
+        const esp_err_t adv_power_result =
+            esp_ble_tx_power_set_enhanced(
+                ESP_BLE_ENHANCED_PWR_TYPE_ADV, 0, ESP_PWR_LVL_P20);
+        if (adv_power_result != ESP_OK) {
+            ESP_LOGW(BLE_WAKE_TAG,
+                     "Unable to set BLE advertising handle 0 TX power to +20 dBm: %d",
+                     static_cast<int>(adv_power_result));
+        } else {
+            const esp_power_level_t actual_tx_power =
+                esp_ble_tx_power_get_enhanced(
+                    ESP_BLE_ENHANCED_PWR_TYPE_ADV, 0);
+            if (actual_tx_power != ESP_PWR_LVL_P20) {
+                ESP_LOGW(
+                    BLE_WAKE_TAG,
+                    "BLE advertising TX power readback mismatch: requested=%d, actual=%d",
+                    static_cast<int>(ESP_PWR_LVL_P20),
+                    static_cast<int>(actual_tx_power));
+            } else {
+                ESP_LOGI(
+                    BLE_WAKE_TAG,
+                    "BLE advertising handle 0 TX power set to +20 dBm");
+            }
+        }
     }
     ESP_LOGI(BLE_WAKE_TAG,
              "Wake advertising %s, master=%02X:%02X:%02X:%02X:%02X:%02X, session=%08lX",
