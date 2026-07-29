@@ -18,6 +18,17 @@ WakeSessionController session(espnow);
 
 uint8_t master_mac[6]{};
 bool standby_ready = false;
+uint8_t standby_recovery_failures = 0;
+
+constexpr TickType_t STANDBY_HEALTH_CHECK_TICKS = pdMS_TO_TICKS(1000);
+constexpr uint8_t STANDBY_RECOVERY_MAX_FAILURES = 3;
+
+void restartAfterRecoveryFailure(const char* reason)
+{
+    ESP_LOGE("XIAO_MAIN", "%s; restarting to recover wireless state", reason);
+    delay(50);
+    ESP.restart();
+}
 
 bool ensurePaired()
 {
@@ -55,7 +66,12 @@ bool ensurePaired()
 
 bool startStandby()
 {
-    LowPowerPolicy::enterBleStandby();
+    if (!LowPowerPolicy::enterBleStandby()) {
+        if constexpr (POWER_TEST_LOG_ENABLED) {
+            ESP_LOGE("XIAO_MAIN", "Unable to stop Wi-Fi before BLE standby");
+        }
+        return false;
+    }
     if (!scanner.begin(master_mac)) {
         if constexpr (POWER_TEST_LOG_ENABLED) {
             ESP_LOGE("XIAO_MAIN", "BLE scanner initialization failed");
@@ -107,18 +123,40 @@ void loop()
     if (!standby_ready) {
         LowPowerPolicy::idle(pdMS_TO_TICKS(1000));
         standby_ready = startStandby();
+        if (standby_ready) {
+            standby_recovery_failures = 0;
+        } else if (++standby_recovery_failures >=
+                   STANDBY_RECOVERY_MAX_FAILURES) {
+            restartAfterRecoveryFailure("BLE standby recovery failed");
+        }
         return;
     }
 
     BleWakeEvent wake_event{};
-    if (!scanner.waitForWake(&wake_event, portMAX_DELAY)) {
-        if constexpr (POWER_TEST_LOG_ENABLED) {
-            ESP_LOGE("XIAO_MAIN", "BLE standby wait ended unexpectedly");
+    if (!scanner.waitForWake(&wake_event, STANDBY_HEALTH_CHECK_TICKS)) {
+        // A timeout is expected while no wake advertisement is present. It is
+        // also the periodic health check that prevents the application task
+        // from sleeping forever after a NimBLE reset or unexpected scan stop.
+        if (scanner.isScanning() && scanner.isHostSynced()) {
+            standby_recovery_failures = 0;
+            return;
         }
-        scanner.pauseScan();
+
+        if constexpr (POWER_TEST_LOG_ENABLED) {
+            ESP_LOGW("XIAO_MAIN",
+                     "BLE standby unhealthy: initialized=%s synced=%s scanning=%s",
+                     scanner.isInitialized() ? "yes" : "no",
+                     scanner.isHostSynced() ? "yes" : "no",
+                     scanner.isScanning() ? "yes" : "no");
+        }
         standby_ready = false;
+        if (++standby_recovery_failures >=
+            STANDBY_RECOVERY_MAX_FAILURES) {
+            restartAfterRecoveryFailure("BLE standby health check failed");
+        }
         return;
     }
+    standby_recovery_failures = 0;
 
     if constexpr (POWER_TEST_LOG_ENABLED) {
         ESP_LOGI("XIAO_MAIN",
@@ -131,7 +169,10 @@ void loop()
     // queues, and this ESP-IDF version asserts while deinitializing those
     // absent queues. A paused BLE controller can coexist with ESP-NOW and is
     // resumed by startStandby() after the session.
-    scanner.pauseScan();
+    if (!scanner.pauseScan()) {
+        restartAfterRecoveryFailure("Unable to pause BLE scan");
+        return;
+    }
     standby_ready = false;
 
     if constexpr (POWER_TEST_LOG_ENABLED) {

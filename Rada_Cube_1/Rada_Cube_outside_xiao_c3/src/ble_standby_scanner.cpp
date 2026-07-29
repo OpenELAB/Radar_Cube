@@ -17,9 +17,7 @@
 namespace {
 constexpr char TAG[] = "BLE_STANDBY";
 constexpr EventBits_t HOST_SYNCED_BIT = BIT0;
-constexpr EventBits_t SCAN_STOPPED_BIT = BIT1;
 constexpr TickType_t HOST_SYNC_TIMEOUT = pdMS_TO_TICKS(2000);
-constexpr TickType_t SCAN_STOP_TIMEOUT = pdMS_TO_TICKS(250);
 constexpr uint32_t BLE_SCAN_UNIT_US = 625;
 constexpr uint16_t BLE_SCAN_UNITS_MIN = 0x0004;
 constexpr uint16_t BLE_SCAN_UNITS_MAX = 0x4000;
@@ -111,29 +109,39 @@ bool BleStandbyScanner::waitForWake(BleWakeEvent* event,
     return xQueueReceive(_event_queue, event, timeout_ticks) == pdTRUE;
 }
 
-void BleStandbyScanner::pauseScan()
+bool BleStandbyScanner::pauseScan()
 {
     // Stop publishing before cancelling the controller procedure. A discovery
     // report already queued by NimBLE after this point is safely ignored.
     _accept_events.store(false);
 
-    if (!_scanning.exchange(false)) return;
+    if (!_ble_initialized || !ble_gap_disc_active()) {
+        _scanning.store(false);
+        return true;
+    }
 
     const int result = ble_gap_disc_cancel();
-    if (result != 0 && result != BLE_HS_EALREADY) {
-        ESP_LOGW(TAG, "Passive scan cancel failed: %d", result);
+    if (result == 0 || result == BLE_HS_EALREADY) {
+        // In this NimBLE version a successful cancel synchronously disables
+        // discovery and resets the GAP procedure state. Do not wait for a
+        // DISC_COMPLETE event, because the explicit cancel path does not emit
+        // one.
+        _scanning.store(false);
+        return true;
     }
-    if (result == 0 && _host_events) {
-        // Wait until NimBLE has delivered DISC_COMPLETE. This prevents an
-        // immediate resume from racing the still-active discovery procedure.
-        xEventGroupWaitBits(_host_events, SCAN_STOPPED_BIT, pdFALSE, pdTRUE,
-                            SCAN_STOP_TIMEOUT);
-    }
+
+    // Preserve the controller's real state on failure. Marking the scan
+    // stopped unconditionally would make subsequent recovery attempts call
+    // ble_gap_disc() while the old procedure may still be active.
+    _scanning.store(ble_gap_disc_active());
+    ESP_LOGE(TAG, "Passive scan cancel failed: %d, active=%s", result,
+             _scanning.load() ? "yes" : "no");
+    return false;
 }
 
 bool BleStandbyScanner::resumeScan()
 {
-    if (!_ble_initialized) return false;
+    if (!_ble_initialized || !_host_synced.load()) return false;
     if (_scanning.load()) return true;
     return startConfiguredScan();
 }
@@ -152,10 +160,10 @@ void BleStandbyScanner::shutdown()
     nimble_port_deinit();
 
     _ble_initialized = false;
+    _host_synced.store(false);
     _scanning.store(false);
     if (_host_events) {
-        xEventGroupClearBits(_host_events,
-                             HOST_SYNCED_BIT | SCAN_STOPPED_BIT);
+        xEventGroupClearBits(_host_events, HOST_SYNCED_BIT);
     }
     if (scanner_instance == this) scanner_instance = nullptr;
 }
@@ -178,6 +186,7 @@ bool BleStandbyScanner::initializeBle()
     }
 
     scanner_instance = this;
+    _host_synced.store(false);
     xEventGroupClearBits(_host_events, HOST_SYNCED_BIT);
 
     const esp_err_t result = nimble_port_init();
@@ -210,12 +219,11 @@ bool BleStandbyScanner::initializeBle()
 bool BleStandbyScanner::startConfiguredScan()
 {
     if (!_ble_initialized || _scan_interval_units == 0 ||
-        _scan_window_units == 0) {
+        _scan_window_units == 0 || !_host_synced.load()) {
         return false;
     }
 
     clearEvents();
-    xEventGroupClearBits(_host_events, SCAN_STOPPED_BIT);
 
     ble_gap_disc_params parameters{};
     parameters.itvl = _scan_interval_units;
@@ -223,7 +231,10 @@ bool BleStandbyScanner::startConfiguredScan()
     parameters.filter_policy = BLE_HCI_SCAN_FILT_NO_WL;
     parameters.limited = 0;
     parameters.passive = 1;
-    parameters.filter_duplicates = 1;
+    // The wake payload already has an application-level session ID. Controller
+    // duplicate filtering on ESP32-C3 defaults to advertiser address only,
+    // which can hide a new session if a previous scan was not cleanly reset.
+    parameters.filter_duplicates = 0;
 
     // Set this before starting the asynchronous procedure so an immediate
     // discovery report cannot be lost between ble_gap_disc() and its return.
@@ -254,10 +265,10 @@ void BleStandbyScanner::onHostReset(int reason)
     BleStandbyScanner* scanner = scanner_instance;
     if (scanner) {
         scanner->_accept_events.store(false);
+        scanner->_host_synced.store(false);
         scanner->_scanning.store(false);
         if (scanner->_host_events) {
             xEventGroupClearBits(scanner->_host_events, HOST_SYNCED_BIT);
-            xEventGroupSetBits(scanner->_host_events, SCAN_STOPPED_BIT);
         }
     }
     ESP_LOGW(TAG, "NimBLE host reset: %d", reason);
@@ -276,6 +287,7 @@ void BleStandbyScanner::onHostSync()
     }
 
     scanner->_own_address_type = address_type;
+    scanner->_host_synced.store(true);
     xEventGroupSetBits(scanner->_host_events, HOST_SYNCED_BIT);
 }
 
@@ -297,9 +309,8 @@ int BleStandbyScanner::onGapEvent(ble_gap_event* event, void* argument)
     } else if (event->type == BLE_GAP_EVENT_DISC_COMPLETE) {
         scanner->_accept_events.store(false);
         scanner->_scanning.store(false);
-        if (scanner->_host_events) {
-            xEventGroupSetBits(scanner->_host_events, SCAN_STOPPED_BIT);
-        }
+        ESP_LOGW(TAG, "Passive scan ended unexpectedly, reason=%d",
+                 event->disc_complete.reason);
     }
     return 0;
 }

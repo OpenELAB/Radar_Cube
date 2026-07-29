@@ -72,3 +72,5 @@ platformio run -e xiao_3s_30ms -t erase
 只使用已安装 Arduino Core 和 ESP-IDF 自带的组件，因此不会生成
 `managed_components` 或 `dependencies.lock`。以后若引入 ESP Component
 Registry 中的组件，需要重新启用 Component Manager。
+
+platformio run -e xiao_3s_30ms -t erase --upload-port COMx   擦除配对信息

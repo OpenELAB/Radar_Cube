@@ -21,20 +21,21 @@ struct BleWakeEvent {
 //
 // NimBLE is initialized once by start() and remains initialized while scans are
 // paused. Only shutdown() stops and deinitializes the NimBLE host/controller.
-// The application task should normally block in waitForWake(), allowing the
-// idle task and ESP-IDF power manager to enter light sleep between scan windows.
+// The application task should use a bounded waitForWake() timeout so it can
+// verify that the resident scan is still healthy. A blocked queue is not
+// notified when the NimBLE host resets or an infinite scan ends unexpectedly.
 class BleStandbyScanner {
 public:
     bool begin(const uint8_t expected_master[6]);
     bool start(uint32_t interval_ms, uint32_t window_ms);
-    bool waitForWake(BleWakeEvent* event,
-                     TickType_t timeout_ticks = portMAX_DELAY);
+    bool waitForWake(BleWakeEvent* event, TickType_t timeout_ticks);
 
-    void pauseScan();
+    bool pauseScan();
     bool resumeScan();
     void shutdown();
 
     bool isInitialized() const { return _ble_initialized; }
+    bool isHostSynced() const { return _host_synced.load(); }
     bool isScanning() const { return _scanning.load(); }
     QueueHandle_t eventQueue() const { return _event_queue; }
     void clearEvents();
@@ -55,6 +56,7 @@ private:
 
     bool _configured = false;
     bool _ble_initialized = false;
+    std::atomic<bool> _host_synced{false};
     std::atomic<bool> _scanning{false};
     std::atomic<bool> _accept_events{false};
 
