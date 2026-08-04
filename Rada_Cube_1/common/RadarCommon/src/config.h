@@ -24,6 +24,7 @@
 #define RADAR_SEND_INTERVAL_MS  200     // 雷达数据发送间隔 (ms)
 #define WORK_TIMEOUT_MS         (60000 * 3) // 工作模式超时 (ms)，超时自动退出 (目前设为 3 分钟)
 #define END_SEND_COUNT          3       // 结束帧重发次数（确保对方收到）
+#define END_RESPONSE_TIMEOUT_MS 1500
 
 // ======================== 按键 ========================
 #define BUTTON_LONG_PRESS_MS    3000    // 长按阈值 (ms)，>3s 判定为长按

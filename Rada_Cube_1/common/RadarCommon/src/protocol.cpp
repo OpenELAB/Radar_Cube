@@ -11,15 +11,24 @@ uint8_t frame_calc_checksum(const protocol_frame_t* frame)
     return sum;
 }
 
-// 构建帧
-void frame_build(protocol_frame_t* frame, uint8_t head, frame_type_t type,
-                 uint16_t dist, int16_t angle)
+bool battery_percent_is_valid(uint8_t battery_percent)
 {
-    frame->head     = head;
-    frame->type     = type;
-    frame->dist     = dist;
-    frame->angle    = angle;
-    frame->reserve  = 0;
+    return battery_percent <= BATTERY_PERCENT_MAX;
+}
+
+// 构建帧
+void frame_build(protocol_frame_t* frame,
+                 uint8_t head,
+                 frame_type_t type,
+                 uint16_t dist,
+                 int16_t angle,
+                 uint8_t battery_percent)
+{
+    frame->head = head;
+    frame->type = type;
+    frame->dist = dist;
+    frame->angle = angle;
+    frame->battery_percent = battery_percent;
     frame->checksum = frame_calc_checksum(frame);
 }
 

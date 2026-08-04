@@ -40,12 +40,19 @@ MacMatch Matcher(Espnow);
 // ======================== 辅助函数 ========================
 
 // 发送结束帧（重发 END_SEND_COUNT 次确保对方收到）
-static void sendEndFrame(const uint8_t* peer_mac, uint8_t head)
+static void sendEndFrame(const uint8_t* peer_mac,
+                         uint8_t head,
+                         uint8_t battery_percent)
 {
     protocol_frame_t frame;
-    frame_build(&frame, head, FRAME_END);
+    frame_build(&frame,
+                head,
+                FRAME_END,
+                0,
+                0,
+                battery_percent);
     for (int i = 0; i < END_SEND_COUNT; i++) {
-        Espnow.send(peer_mac, (uint8_t*)&frame, sizeof(frame));
+        Espnow.send(peer_mac, reinterpret_cast<uint8_t*>(&frame), sizeof(frame));
         vTaskDelay(pdMS_TO_TICKS(50));
     }
 }
@@ -118,9 +125,17 @@ static SysMode detectButtonMode(WakeupSource wakeup)
 static void outside_work_mode(uint8_t* peer_mac)
 {
     // 1) 回复唤醒 ACK
+    const uint8_t wake_battery_percent = Power.get_battery_value();
     protocol_frame_t ack;
-    frame_build(&ack, SLAVE_FRAME_HEAD, FRAME_WAKE_ACK);
-    if (Espnow.send(peer_mac, (uint8_t*)&ack, sizeof(ack)) != ESP_OK) {
+    frame_build(&ack,
+                SLAVE_FRAME_HEAD,
+                FRAME_WAKE_ACK,
+                0,
+                0,
+                wake_battery_percent);
+    if (Espnow.send(peer_mac,
+                    reinterpret_cast<uint8_t*>(&ack),
+                    sizeof(ack)) != ESP_OK) {
         ESP_LOGE(MAIN_TAG, "Failed to send WAKE_ACK");
     }
 
@@ -174,7 +189,8 @@ static void outside_work_mode(uint8_t* peer_mac)
     }
 
     // 3) 退出：通知主机 + 关雷达
-    sendEndFrame(peer_mac, SLAVE_FRAME_HEAD);
+    const uint8_t end_battery_percent = Power.get_battery_value();
+    sendEndFrame(peer_mac, SLAVE_FRAME_HEAD, end_battery_percent);
     Radar.shutdown();
     ESP_LOGI(MAIN_TAG, "Work mode finished");
 }
@@ -318,15 +334,6 @@ void setup()
     // 加上打开Lora电源，第一次上电发现不加上打开电源，功率开关的使能引脚会卡在加上上拉电阻后也是0.7V左右不是3.3V导致Lora无法工作
     pinMode(LORA_POWER_PIN, OUTPUT);
     digitalWrite(LORA_POWER_PIN, LORA_POWER_ON);
-
-    // 电池电量检测
-    uint8_t bat = Power.get_battery_value();
-    // 这个可以调高一点，bat是0的时候可能不能上电了就
-    if (bat == 0) {
-        ESP_LOGE(MAIN_TAG, "Battery empty, going to sleep");
-        Power.deep_sleep();
-        // TODO：是不是可以在电量过低时发个警告？比如闪灯或者蜂鸣？
-    }
 
     // 读取已配对 MAC（如果有）
 // #ifdef INSIDE

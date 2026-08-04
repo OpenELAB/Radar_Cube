@@ -33,6 +33,10 @@ struct SensorLinkState {
     uint8_t recovery_valid_count = 0;
     bool distance_fault = false;
     protocol_frame_t latest_data{};
+    uint8_t wake_battery_percent = BATTERY_PERCENT_UNKNOWN;
+    bool wake_battery_received = false;
+    uint8_t end_battery_percent = BATTERY_PERCENT_UNKNOWN;
+    bool end_received = false;
 
     bool isActive() const
     {
@@ -356,6 +360,101 @@ static SensorChanges updateSensorConnectionLost(
     return changes;
 }
 
+static void printBatteryPercent(const char* tag,
+                                const char* phase,
+                                uint8_t battery_percent)
+{
+    if (battery_percent_is_valid(battery_percent)) {
+        ESP_LOGI(tag, "%s battery: %u%%", phase, battery_percent);
+        return;
+    }
+
+    ESP_LOGW(tag,
+             "%s battery: unknown/invalid (%u)",
+             phase,
+             battery_percent);
+}
+
+static void captureWakeBattery(SensorLinkState& sensor,
+                               const protocol_frame_t& wake_ack,
+                               const char* tag)
+{
+    if (sensor.wake_battery_received) {
+        return;
+    }
+
+    sensor.wake_battery_percent = wake_ack.battery_percent;
+    sensor.wake_battery_received = true;
+    printBatteryPercent(tag, "wake", sensor.wake_battery_percent);
+}
+
+static bool captureEndBattery(const espnow_msg_t& msg,
+                              const uint8_t* a_mac,
+                              const uint8_t* b_mac,
+                              SensorLinkState& sensor_a,
+                              SensorLinkState& sensor_b)
+{
+    if (!frame_validate(msg.data,
+                        msg.len,
+                        SLAVE_FRAME_HEAD,
+                        FRAME_END)) {
+        return false;
+    }
+
+    SensorLinkState* sensor = nullptr;
+    const char* tag = nullptr;
+    if (memcmp(msg.src_mac, a_mac, 6) == 0) {
+        sensor = &sensor_a;
+        tag = SLAVE_A_TAG;
+    } else if (memcmp(msg.src_mac, b_mac, 6) == 0) {
+        sensor = &sensor_b;
+        tag = SLAVE_B_TAG;
+    } else {
+        return false;
+    }
+
+    if (!sensor->end_received) {
+        protocol_frame_t end_frame{};
+        memcpy(&end_frame, msg.data, sizeof(end_frame));
+        sensor->end_battery_percent = end_frame.battery_percent;
+        sensor->end_received = true;
+        printBatteryPercent(tag, "end", sensor->end_battery_percent);
+    }
+    return true;
+}
+
+static void waitForEndBatteryFrames(const uint8_t* a_mac,
+                                    const uint8_t* b_mac,
+                                    SensorLinkState& sensor_a,
+                                    SensorLinkState& sensor_b)
+{
+    const uint32_t started_ms = millis();
+    espnow_msg_t msg;
+
+    while ((sensor_a.woke && !sensor_a.end_received) ||
+           (sensor_b.woke && !sensor_b.end_received)) {
+        const uint32_t elapsed_ms = millis() - started_ms;
+        if (elapsed_ms >= END_RESPONSE_TIMEOUT_MS) {
+            break;
+        }
+
+        const uint32_t remaining_ms = END_RESPONSE_TIMEOUT_MS - elapsed_ms;
+        const uint32_t wait_ms = remaining_ms < WORK_POLL_INTERVAL_MS
+                                     ? remaining_ms
+                                     : WORK_POLL_INTERVAL_MS;
+        if (Espnow.readBlocking(&msg, pdMS_TO_TICKS(wait_ms))) {
+            captureEndBattery(msg, a_mac, b_mac, sensor_a, sensor_b);
+        }
+    }
+
+    if (sensor_a.woke && !sensor_a.end_received) {
+        ESP_LOGW(SLAVE_A_TAG, "End battery response timed out");
+    }
+    if (sensor_b.woke && !sensor_b.end_received) {
+        ESP_LOGW(SLAVE_B_TAG, "End battery response timed out");
+    }
+}
+
 static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
 {
     // 1) Lora 发送唤醒帧，等从机 ESP-NOW 回复 WAKE_ACK
@@ -380,9 +479,12 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
             vTaskDelay(pdMS_TO_TICKS(WAKE_POLL_INTERVAL_MS));
             while (Espnow.read(&msg)) {
                 if (frame_validate(msg.data, msg.len, SLAVE_FRAME_HEAD, FRAME_WAKE_ACK)) {
+                    protocol_frame_t wake_ack{};
+                    memcpy(&wake_ack, msg.data, sizeof(wake_ack));
                     // 这里判断一下是哪个从机返回的消息
                     if(memcmp(msg.src_mac, a_mac, 6) == 0) {
                         if (!sensor_a.woke) {
+                            captureWakeBattery(sensor_a, wake_ack, SLAVE_A_TAG);
                             const bool second_wake = sensor_b.woke;
                             sensor_a.woke = true;
                             if (feedback_ready) {
@@ -404,6 +506,7 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
                     }
                     else if(memcmp(msg.src_mac, b_mac, 6) == 0) {
                         if (!sensor_b.woke) {
+                            captureWakeBattery(sensor_b, wake_ack, SLAVE_B_TAG);
                             const bool second_wake = sensor_a.woke;
                             sensor_b.woke = true;
                             if (feedback_ready) {
@@ -446,6 +549,7 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
         // 唤醒失败发送停止工作帧，确保从机全部关闭
         sendEndFrame(a_mac, MASTER_FRAME_HEAD);
         sendEndFrame(b_mac, MASTER_FRAME_HEAD);
+        waitForEndBatteryFrames(a_mac, b_mac, sensor_a, sensor_b);
         waitFeedbackOrTimeout(FEEDBACK_DEFAULT_TIMEOUT_MS);
         
         return;
@@ -548,7 +652,11 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
                              sensor_b.latest_data.angle * 0.01f);
                 }
             }
-            else if(frame_validate(msg.data, msg.len, SLAVE_FRAME_HEAD, FRAME_END))
+            else if (captureEndBattery(msg,
+                                       a_mac,
+                                       b_mac,
+                                       sensor_a,
+                                       sensor_b))
             {
                 ESP_LOGI(MAIN_TAG, "Received END frame from slave");
                 exit_flag = true;
@@ -677,6 +785,7 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
     // 4) 退出：通知从机结束。距离反馈由后续 shutdown 事件统一停止。
     sendEndFrame(a_mac, MASTER_FRAME_HEAD);
     sendEndFrame(b_mac, MASTER_FRAME_HEAD);
+    waitForEndBatteryFrames(a_mac, b_mac, sensor_a, sensor_b);
     if (wait_exit_feedback) {
         waitFeedbackOrTimeout(FEEDBACK_DEFAULT_TIMEOUT_MS);
     }
