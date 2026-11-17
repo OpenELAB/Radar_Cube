@@ -1,4 +1,4 @@
-// 定义LED、蜂鸣器的类
+// Define the classes of LED and buzzer
 #include <Arduino.h>
 #include <esp_log.h>
 #include "freertos/FreeRTOS.h"
@@ -7,7 +7,7 @@
 #include "config.h"
 #include "driver/rtc_io.h"
 
-// 初始化LED引脚
+// Initialize LED pin
 void LEDControler::led_init()
 {
     pinMode(LED_PIN, OUTPUT);
@@ -23,10 +23,10 @@ void LEDControler::led_off()
 }
 
 
-// period 传入延时时间，单位毫秒
+// period incoming delay time, unit milliseconds
 void LEDControler::blink(LED_PERIOD period)
 {
-    // 解绑LEDC通道，重新设置为输出模式
+    // Unbind the LEDC channel and reset it to output mode
     pinMode(LED_PIN, OUTPUT);
 
     const uint32_t led_period = period / 2;
@@ -36,7 +36,7 @@ void LEDControler::blink(LED_PERIOD period)
     vTaskDelay(pdMS_TO_TICKS(led_period));
 }
 
-// 传入延时速度，单位ms, 数值越小速度越快
+// Incoming delay speed, unit ms, the smaller the value, the faster the speed
 void LEDControler::breath(LED_SPEED speed)
 {
     ledcAttach(LED_PIN, LED_FREQ, LEDC_TIMER_8_BIT);
@@ -54,24 +54,24 @@ void LEDControler::breath(LED_SPEED speed)
 }
 
 
-// 电池电量采样初始化
+// Battery power sampling initialization
 void PowerManager::power_init()
 {
-    // 配置电池电量采样引脚
+    // Configure battery power sampling pin
     pinMode(BATTERY_PIN, INPUT);
 }
 
-// 读取电池电量值
+// Read battery power value
 uint8_t PowerManager::get_battery_value()
 {
     uint32_t Vbatt = 0;
 
-    // 采样32次，取平均值
+    // Sampling 32 times, taking the average
     for(int i = 0; i < 32; i++)
     {
         Vbatt += analogReadMilliVolts(BATTERY_PIN);
     }
-    // 1：2 分压，计算实际电压值
+    // 1:2 voltage divider, calculate the actual voltage value
     float Vbattf = (Vbatt * 2) / 32.0 / 1000.0;
     if (Vbattf < BATTERY_LOW_THRESHOLD)
     {
@@ -81,20 +81,20 @@ uint8_t PowerManager::get_battery_value()
     {
         Vbattf = BATTERY_HIGH_THRESHOLD;
     }
-    // 输出电压值
+    // Output voltage value
     ESP_LOGI(POWER_TAG, "battery voltage: %.3f", Vbattf);
-    // 计算电池电量百分比
+    // Calculate battery percentage
     uint8_t bat_perc = (Vbattf - BATTERY_LOW_THRESHOLD) * 100.0f / (BATTERY_HIGH_THRESHOLD - BATTERY_LOW_THRESHOLD) + 0.5f;
     ESP_LOGI(POWER_TAG, "battery percentage: %d%%", bat_perc);
     return bat_perc;
 }
 
-// 检测唤醒源：ESP-IDF API + 读按钮电平
+// Detect wake-up source: ESP-IDF API + read button level
 void PowerManager::detectWakeupSource()
 {
     esp_sleep_wakeup_cause_t reason = esp_sleep_get_wakeup_cause();
 
-    // 等一小段时间让 GPIO 电平稳定后再读
+    // Wait for a short period of time for the GPIO level to stabilize before reading again
     vTaskDelay(pdMS_TO_TICKS(20));
     bool user_pressed = (digitalRead(USER_BUTTON_PIN) == BUTTON_PRESSED);
     bool dev_pressed  = (digitalRead(DEV_BUTTON_PIN)  == BUTTON_PRESSED);
@@ -104,7 +104,7 @@ void PowerManager::detectWakeupSource()
 
 
 // #ifdef OUTSIDE
-    // C6 的 EXT1 唤醒可以通过 bitmask 判断具体引脚
+    // C6’s EXT1 wake-up can determine the specific pin through bitmask
     case ESP_SLEEP_WAKEUP_EXT1:
     {
         uint64_t mask = esp_sleep_get_ext1_wakeup_status();
@@ -127,7 +127,7 @@ void PowerManager::detectWakeupSource()
         break;
     }
 
-    // C6 的 GPIO 唤醒 = Lora 唤醒
+    // C6’s GPIO wakeup = Lora wakeup
     case ESP_SLEEP_WAKEUP_GPIO:
         _wakeup_src = WAKEUP_LORA;
         ESP_LOGI(POWER_TAG, "Wakeup: Lora");
@@ -141,7 +141,7 @@ void PowerManager::detectWakeupSource()
     }
 }
 
-// 等待唤醒按键电平复位
+// Waiting for wake-up button level reset
 void PowerManager::wait_wakeup_button_intend()
 {
 
@@ -152,30 +152,30 @@ void PowerManager::wait_wakeup_button_intend()
 
 }
 
-// 进入睡眠模式
+// Enter sleep mode
 void PowerManager::deep_sleep()
 {
-    // 等待唤醒引脚电平复位
+    // Waiting for wake-up pin level reset
     wait_wakeup_button_intend();
-    // 配置按键唤醒引脚
+    // Configure key wake-up pin
 // #ifdef OUTSIDE
-    //  配置按键唤醒源
+    //  Configure key wake-up source
     esp_sleep_enable_ext1_wakeup(BUTTON_WAKEUP_BITMASK, ESP_EXT1_WAKEUP_ANY_HIGH);
-    // 配置Lora唤醒源
+    // Configure Lora wake-up source
     esp_deep_sleep_enable_gpio_wakeup(
         BIT(LORA_WAKE_PIN),
         LORA_WAKE_ACTIVE ? ESP_GPIO_WAKEUP_GPIO_HIGH : ESP_GPIO_WAKEUP_GPIO_LOW);
 // #endif
-    // 进入睡眠
+    // Go to sleep
     ESP_LOGI(POWER_TAG, "Going to sleep now");
     esp_deep_sleep_start();
-    // 不会执行到这里
+    // It will not be executed till here.
 }
 
-// 按键唤醒引脚初始化为输入模式
+// Key wake-up pin initialized to input mode
 void PowerManager::wakeup_gpio_init()
 {
-// 配置按键唤醒引脚
+// Configure key wake-up pin
 
 // #ifdef OUTSIDE
     pinMode(LORA_WAKE_PIN, INPUT);

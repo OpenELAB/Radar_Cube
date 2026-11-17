@@ -35,21 +35,21 @@
 // #define ECHO   5
 
 
-// #define ALPHA 0.2           // 低通滤波系数，0.1~0.3 建议
-// #define PULSE_TIMEOUT 40000 // 40ms 超时（JSN-SR04T 推荐）
+// #define ALPHA 0.2 // Low-pass filter coefficient, 0.1~0.3 recommended
+// #define PULSE_TIMEOUT 40000 // 40ms timeout (JSN-SR04T recommended)
 
-// float filteredDistance = -1; // 初始状态
+// float filteredDistance = -1; // Initial state
 
 // void setup() {
 //   Serial.begin(115200);
 //   pinMode(TRIG, OUTPUT);
-//   pinMode(ECHO, INPUT); // 不用 INPUT_PULLUP
+//   pinMode(ECHO, INPUT); // No need for INPUT_PULLUP
 //   digitalWrite(TRIG, LOW);
 //   delay(50);
 // }
 
 // int readDistanceOnce() {
-//   // 触发 10us
+//   //Trigger 10us
 //   digitalWrite(TRIG, LOW);
 //   delayMicroseconds(2);
 
@@ -58,20 +58,20 @@
 //   digitalWrite(TRIG, LOW);
 
 //   unsigned long duration = pulseIn(ECHO, HIGH, PULSE_TIMEOUT);
-//   if (duration == 0) return 0; // 无回波
+//   if (duration == 0) return 0; // no echo
 //   int cm = duration / 58;
-//   if (cm < 20) cm = 20;        // JSN-SR04T 的盲区
-//   if (cm > 600) cm = 600;      // 最大范围
+//   if (cm < 20) cm = 20; // Blind area of JSN-SR04T
+//   if (cm > 600) cm = 600; // maximum range
 //   return cm;
 // }
 
 // void loop() {
 //   int d = readDistanceOnce(); 
-//   if (d == 0) return;  // 无回波就跳过
+//   if (d == 0) return; // skip if there is no echo
 
-//   // --- 一阶低通滤波（关键）---
+//   // --- First-order low-pass filtering (key) ---
 //   if (filteredDistance < 0) {
-//     filteredDistance = d;  // 初始化
+//     filteredDistance = d; // initialization
 //   } else {
 //     filteredDistance = filteredDistance + ALPHA * (d - filteredDistance);
 //   }
@@ -79,7 +79,7 @@
 //   Serial.print("Distance-cm: ");
 //   Serial.println(filteredDistance);
 
-//   delay(60);  // JSN-SR04T 推荐 ≥ 50ms
+//   delay(60); // JSN-SR04T recommended ≥ 50ms
 // }
 
 
@@ -121,7 +121,7 @@
 
 
 
-// // ——————————  UART 自动串口模式  ——————————
+// // —————————— UART automatic serial port mode ——————————
 // #include <Arduino.h>
 // #include <HardwareSerial.h>
 
@@ -130,7 +130,7 @@
 
 // #define ALPHA 0.2
 
-// float filteredDistance = -1; // 初始状态
+// float filteredDistance = -1; // Initial state
 
 
 // HardwareSerial Rada_Serial(1);
@@ -148,7 +148,7 @@
 //             {
 //                 float distamce_cm = distance / 10.0;
 
-//                 // ------ 一阶低通滤波器 ------
+//                 // ------ First-order low-pass filter ------
 //                 if(filteredDistance < 0)
 //                 {
 //                     filteredDistance = distamce_cm;
@@ -163,7 +163,7 @@
 //             }
 //             else
 //             {
-//                 Serial.println("校验失败");
+//                 Serial.println("Verification failed");
 //             }
 //         }
 //         else
@@ -188,22 +188,22 @@
 
 
 
-// ——————————  普通触发测距模式  ——————————
-// #define ALPHA 0.2           // 低通滤波系数，0.1~0.3 建议
-// #define PULSE_TIMEOUT 40000 // 40ms 超时（JSN-SR04T 推荐）
+// —————————— Normal trigger ranging mode ——————————
+// #define ALPHA 0.2 // Low-pass filter coefficient, 0.1~0.3 recommended
+// #define PULSE_TIMEOUT 40000 // 40ms timeout (JSN-SR04T recommended)
 
-// float filteredDistance = -1; // 初始状态
+// float filteredDistance = -1; // Initial state
 
 // void setup() {
 //   Serial.begin(115200);
 //   pinMode(TRIG, OUTPUT);
-//   pinMode(ECHO, INPUT); // 不用 INPUT_PULLUP
+//   pinMode(ECHO, INPUT); // No need for INPUT_PULLUP
 //   digitalWrite(TRIG, LOW);
 //   delay(50);
 // }
 
 // int readDistanceOnce() {
-//   // 触发 10us
+//   //Trigger 10us
 //   digitalWrite(TRIG, LOW);
 //   delayMicroseconds(2);
 
@@ -212,20 +212,20 @@
 //   digitalWrite(TRIG, LOW);
 
 //   unsigned long duration = pulseIn(ECHO, HIGH, PULSE_TIMEOUT);
-//   if (duration == 0) return 0; // 无回波
+//   if (duration == 0) return 0; // no echo
 //   int cm = duration / 58;
-//   if (cm < 20) cm = 20;        // JSN-SR04T 的盲区
-//   if (cm > 600) cm = 600;      // 最大范围
+//   if (cm < 20) cm = 20; // Blind area of JSN-SR04T
+//   if (cm > 600) cm = 600; // maximum range
 //   return cm;
 // }
 
 // void loop() {
 //   int d = readDistanceOnce(); 
-//   if (d == 0) return;  // 无回波就跳过
+//   if (d == 0) return; // skip if there is no echo
 
-//   // --- 一阶低通滤波（关键）---
+//   // --- First-order low-pass filtering (key) ---
 //   if (filteredDistance < 0) {
-//     filteredDistance = d;  // 初始化
+//     filteredDistance = d; // initialization
 //   } else {
 //     filteredDistance = filteredDistance + ALPHA * (d - filteredDistance);
 //   }
@@ -233,7 +233,7 @@
 //   Serial.print("Distance-cm: ");
 //   Serial.println(filteredDistance);
 
-//   delay(60);  // JSN-SR04T 推荐 ≥ 50ms
+//   delay(60); // JSN-SR04T recommended ≥ 50ms
 // }
 
 
@@ -250,32 +250,32 @@ float filteredAngle = -1;
 
 HardwareSerial Rada_Serial(1);
 
-// 环形缓冲区
+// Ring buffer
 constexpr size_t Rada_FIFO_SIZE = 512;
 uint8_t fifo[Rada_FIFO_SIZE];
 volatile size_t fifo_head = 0;
 volatile size_t fifo_tail = 0;
 
-// 入队
+// Join the team
 static inline bool fifoPut(uint8_t b)
 {
     size_t next = (fifo_head + 1) % Rada_FIFO_SIZE;
-    if(next == fifo_tail) return false; // 队列满了
+    if(next == fifo_tail) return false; // The queue is full
     fifo[fifo_head] = b;
     fifo_head = next;
     return true;
 }
 
-// 出队
+// Departure
 static inline bool fifoGet(uint8_t *b)
 {
-    if(fifo_head == fifo_tail) return false; // 队列空的
+    if(fifo_head == fifo_tail) return false; // The queue is empty
     *b = fifo[fifo_tail];
     fifo_tail = (fifo_tail + 1) % Rada_FIFO_SIZE;
     return true;
 }
 
-// 校验和
+// Checksum
 static bool verifychecksum(const uint8_t* raw, size_t len = 12)
 {
     uint8_t sum = 0;
@@ -286,22 +286,22 @@ static bool verifychecksum(const uint8_t* raw, size_t len = 12)
     return sum == raw[len];
 }
 
-// 雷达帧结构
+// Radar frame structure
 #pragma pack(1)
 typedef struct
 {
-    uint16_t head; // 帧头
-    uint16_t cmd;  // 命令
-    uint16_t len;  // 数据长度
-    uint16_t dist; // 距离
-    uint16_t angle; // 角度
-    uint16_t reserve; // 预留
-    uint16_t crc; // CRC校验
+    uint16_t head; // Frame header
+    uint16_t cmd;  // Command
+    uint16_t len;  // Data length
+    uint16_t dist; // Distance
+    uint16_t angle; // angle
+    uint16_t reserve; // Reserved
+    uint16_t crc; // CRC check
 }RadarFrame_t;
 #pragma pack()
 
 
-// 数据帧解析函数
+// Data frame parsing function
 bool parseRadarFrame(const uint8_t* raw, RadarFrame_t* f)
 {
     if(raw[0] != 0xAA || raw[1] != 0x55) return false;
@@ -311,7 +311,7 @@ bool parseRadarFrame(const uint8_t* raw, RadarFrame_t* f)
     return true;
 }
 
-// 接收回调函数
+// Receive callback function
 void Rada_onReceive()
 {
     while(Rada_Serial.available() > 0)
@@ -321,7 +321,7 @@ void Rada_onReceive()
     }
 }
 
-//  状态机
+//  State machine
 enum : uint8_t{HUNT_AA, HUNT_55, PAYLOAD};
 uint8_t state = HUNT_AA;
 uint8_t rxBuf[14];
@@ -397,14 +397,14 @@ void loop()
                         // Serial.print("distant: ");
                         // Serial.println(x_dist);
 
-                        // // 测试，直接对距离数据进行滤波
+                        // //Test, directly filter the distance data
                         // if(dist < 20.0f)
                         // {
-                        //     dist = 20.0f; // 最小距离
+                        //     dist = 20.0f; // minimum distance
                         // }
                         // else if(dist > 250.0f)
                         // {
-                        //     dist = 250.0f; // 最大距离
+                        //     dist = 250.0f; // maximum distance
                         // }
                         // if(filteredDistance < 0)
                         // {
@@ -417,8 +417,8 @@ void loop()
                         // Serial.print("distant: ");
                         // Serial.println(filteredDistance);
 
-                        //先算出距离，然后进行滤波
-                        // // 异常数据处理
+                        //Calculate the distance first, then filter
+                        // //Exception data processing
                         // if(x_dist < 20.0f)
                         // {
                         //     x_dist = 20.0f;
@@ -427,7 +427,7 @@ void loop()
                         // {
                         //     x_dist = 250.0f;
                         // }
-                        // // 一阶低通滤波
+                        // // First-order low-pass filter
                         // if(filteredDistance < 0)
                         // {
                         //     filteredDistance = x_dist;
@@ -439,10 +439,10 @@ void loop()
                         // Serial.print("distant: ");
                         // Serial.println(filteredDistance);
 
-                        // // 先对距离和角度分别滤波，在计算水平坐标
+                        // // First filter the distance and angle separately, and then calculate the horizontal coordinates
                         // if(angle_deg > 60.0f || angle_deg < -60.0f)
                         // {
-                        //     // 超出有效角度范围
+                        //     //Out of the valid angle range
                         //     state = HUNT_AA;
                         //     break;
                         // }
@@ -454,7 +454,7 @@ void loop()
                         // {
                         //     dist = 250.0f;
                         // }
-                        // // 距离滤波
+                        // // Distance filtering
                         // if(filteredDistance < 0)
                         // {
                         //     filteredDistance = dist;
@@ -463,7 +463,7 @@ void loop()
                         // {
                         //     filteredDistance  = filteredDistance + ALPHA * (dist - filteredDistance);
                         // }
-                        // // 角度滤波
+                        // //Angle filtering
                         // if(filteredAngle < 0)
                         // {
                         //     filteredAngle = angle_deg;
@@ -472,7 +472,7 @@ void loop()
                         // {
                         //     filteredAngle  = filteredAngle + ALPHA * (angle_deg - filteredAngle);
                         // }
-                        // // 计算水平坐标
+                        // // Calculate horizontal coordinates
                         // float angle_rad = filteredAngle * PI / 180.0f;
                         // float x_dist = filteredDistance * cos(angle_rad);
                         // Serial.print("distant: ");

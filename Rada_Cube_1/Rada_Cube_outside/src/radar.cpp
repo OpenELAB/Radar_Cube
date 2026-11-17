@@ -6,7 +6,7 @@
 
 RadarModule* RadarModule::_instance = nullptr;
 
-// ======================== 初始化 / 关闭 ========================
+// ======================== Initialization / Shutdown ========================
 
 void RadarModule::init()
 {
@@ -31,7 +31,7 @@ void RadarModule::shutdown()
 bool RadarModule::fifoPush(uint8_t b)
 {
     uint16_t next = (_fifo_head + 1) % FIFO_SIZE;
-    if (next == _fifo_tail) return false;   // 满了
+    if (next == _fifo_tail) return false;   // full
     _fifo[_fifo_head] = b;
     _fifo_head = next;
     return true;
@@ -39,13 +39,13 @@ bool RadarModule::fifoPush(uint8_t b)
 
 bool RadarModule::fifoPop(uint8_t* b)
 {
-    if (_fifo_head == _fifo_tail) return false;   // 空的
+    if (_fifo_head == _fifo_tail) return false;   // empty
     *b = _fifo[_fifo_tail];
     _fifo_tail = (_fifo_tail + 1) % FIFO_SIZE;
     return true;
 }
 
-// ======================== 串口回调 ========================
+// ======================== Serial port callback ========================
 
 void RadarModule::onSerialRxStatic()
 {
@@ -59,22 +59,22 @@ void RadarModule::onSerialRx()
     }
 }
 
-// ======================== 校验 & 解析 ========================
+// ======================== Verification & Analysis ========================
 
-// 校验：前12字节之和的低8位 == 第12字节（下标12）
+// Check: the lower 8 bits of the sum of the first 12 bytes == the 12th byte (subscript 12)
 bool RadarModule::verifyChecksum(const uint8_t* raw)
 {
     uint8_t sum = 0;
     for (int i = 0; i < 12; i++) {
         sum += raw[i];
     }
-    // checksum 在帧的最后2字节（下标12-13），取低字节比较
+    // checksum is in the last 2 bytes of the frame (subscript 12-13), take the low byte for comparison
     return (sum == raw[12]);
 }
 
 bool RadarModule::parseFrame(const uint8_t* raw, RadarFrame_t* out)
 {
-    // 帧头检查
+    // Frame header check
     if (raw[0] != 0xAA || raw[1] != 0x55) {
         ESP_LOGW(RADAR_TAG, "header error");
         return false;
@@ -82,13 +82,13 @@ bool RadarModule::parseFrame(const uint8_t* raw, RadarFrame_t* out)
 
     memcpy(out, raw, sizeof(RadarFrame_t));
 
-    // 数据长度检查
+    // Data length check
     if (out->len != RADAR_DATA_LEN) {
         ESP_LOGW(RADAR_TAG, "len error");
         return false;
     }
 
-    // 校验和检查
+    // Checksum check
     if (!verifyChecksum(raw)) {
         ESP_LOGW(RADAR_TAG, "checksum error");
         return false;
@@ -97,7 +97,7 @@ bool RadarModule::parseFrame(const uint8_t* raw, RadarFrame_t* out)
     return true;
 }
 
-// ======================== 主循环解析 ========================
+// ======================== Main loop analysis ========================
 
 void RadarModule::loop()
 {

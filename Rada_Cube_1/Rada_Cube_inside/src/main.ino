@@ -63,19 +63,19 @@ struct SensorChanges {
 };
 
 
-// 系统模式
+// System mode
 enum SysMode {
-    UNPAIRED_MODE,      // 未配对 → 直接睡眠
-    PAIRED_MODE,        // 配对模式
-    WORK_MODE,          // 工作模式（Normal）
-    TEST_MODE,          // 测试模式（预留）
-    CONFIG_MODE,        // 配置模式（预留）
-    FACTORY_RESET_MODE  // 恢复出厂设置
+    UNPAIRED_MODE,      // Not paired → sleep directly
+    PAIRED_MODE,        // Pairing mode
+    WORK_MODE,          // Working mode (Normal)
+    TEST_MODE,          // Test mode (reserved)
+    CONFIG_MODE,        // Configuration mode (reserved)
+    FACTORY_RESET_MODE  // Restore factory settings
 };
 
-// ======================== 全局实例 ========================
+// ======================== Global instance ========================
 
-// 串口实例（pins.h 里 extern 声明，这里定义）
+// Serial port instance (extern statement in pins.h, defined here)
 HardwareSerial& LoraSerial = Serial1;
 PowerManager Power;
 LoraManager Lora;
@@ -177,12 +177,12 @@ static void pairFeedbackCallback(uint8_t slave_id,
             toFeedbackSensorSet(pair_context->left_paired,
                                 pair_context->right_paired);
 
-        // 等待上一段配对反馈结束，再播放本次从机的成功反馈。
+        // Wait for the previous pairing feedback to end, and then play the successful feedback from the slave this time.
         waitFeedbackOrTimeout(FEEDBACK_DEFAULT_TIMEOUT_MS);
 
-        // PairSucceeded event：更新当前已配对成功的模块集合及对应灯效。
+        // PairSucceeded event: Update the currently successfully paired module collection and corresponding lighting effects.
         Feedback.onPairSucceededEvent(paired_sensors);
-        // PairSuccessTone event：播放本次从机配对成功提示音。
+        // PairSuccessTone event: Play the slave pairing success tone.
         Feedback.onPairSuccessToneEvent();
     }
 }
@@ -190,7 +190,7 @@ static void pairFeedbackCallback(uint8_t slave_id,
 static void enterDeepSleepWithFeedback(FeedbackScene current_scene)
 {
     if (feedback_ready) {
-        // Shutdown event：发生系统关机事件。
+        // Shutdown event: A system shutdown event occurs.
         Feedback.onShutdownEvent(current_scene);
         waitFeedbackOrTimeout(FEEDBACK_DEFAULT_TIMEOUT_MS);
         Feedback.end();
@@ -208,9 +208,9 @@ static void enterDeepSleepWithFeedback(FeedbackScene current_scene)
 }
 
 
-// ======================== 辅助函数 ========================
+// ======================== Auxiliary functions ========================
 
-// 发送结束帧（重发 END_SEND_COUNT 次确保对方收到）
+// Send end frame (resend END_SEND_COUNT times to ensure the other party receives it)
 static void sendEndFrame(const uint8_t* peer_mac, uint8_t head)
 {
     protocol_frame_t frame;
@@ -221,7 +221,7 @@ static void sendEndFrame(const uint8_t* peer_mac, uint8_t head)
     }
 }
 
-// 检查是否收到结束帧
+// Check whether the end frame is received
 static bool checkEndFrame(uint8_t expect_head)
 {
     espnow_msg_t msg;
@@ -233,7 +233,7 @@ static bool checkEndFrame(uint8_t expect_head)
     return false;
 }
 
-// 等待按键释放并返回持续时间（ms）
+// Wait for button release and return duration (ms)
 static uint32_t waitButtonRelease()
 {
     uint32_t t_start = millis();
@@ -256,12 +256,12 @@ static uint32_t waitButtonRelease()
     return hold_time;
 }
 
-// 两键同时按下从机实现比较困难，我把config_mode和factor_reset_mode对换了
+// It is difficult to press two keys at the same time on the slave machine. I swapped config_mode and factor_reset_mode.
 
-// 按键 → 模式判断（USER 和 DEV 分开处理）
-//   USER button: 短按 → WORK_MODE,  长按(3s) → PAIRED_MODE
-//   DEV  button: 短按 → TEST_MODE,  长按(3s) → CONFIG_MODE
-//   两键同按:     → FACTORY_RESET_MODE
+// Key → Mode judgment (USER and DEV are processed separately)
+//   USER button: short press → WORK_MODE, long press (3s) → PAIRED_MODE
+//   DEV button: short press → TEST_MODE, long press (3s) → CONFIG_MODE
+//   Press two keys at the same time: → FACTORY_RESET_MODE
 static SysMode detectButtonMode(WakeupSource wakeup)
 {
     uint32_t hold = waitButtonRelease();
@@ -281,7 +281,7 @@ static SysMode detectButtonMode(WakeupSource wakeup)
     return UNPAIRED_MODE;
 }
 
-// ======================== INSIDE 工作模式 ========================
+// ======================== INSIDE working mode ========================
 static bool isRadarDistanceValid(uint16_t dist)
 {
     return dist > 0 && dist <= DIST_MAX_CM;
@@ -295,7 +295,7 @@ static SensorChanges updateSensorDataState(
     SensorChanges changes;
     const bool valid_distance = isRadarDistanceValid(data.dist);
     sensor.last_data_ms = now_ms;
-    // 通过校验的雷达数据帧足以证明通信链路在线，即使其中的距离值无效。
+    // A verified radar data frame is enough to prove that the communication link is online, even if the distance value in it is invalid.
     changes.link_restored = sensor.lost_announced;
     sensor.lost_announced = false;
 
@@ -358,14 +358,14 @@ static SensorChanges updateSensorConnectionLost(
 
 static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
 {
-    // 1) Lora 发送唤醒帧，等从机 ESP-NOW 回复 WAKE_ACK
+    // 1) Lora sends a wake-up frame and waits for the slave ESP-NOW to reply WAKE_ACK
     bool pending_wake_success_tone = false;
     bool pending_wake_ok_tone = false;
     espnow_msg_t msg;
     SensorLinkState sensor_a;
     SensorLinkState sensor_b;
 
-    // ================ 把循环里的电平切换放到外面来，加上100ms延时，之前的10ms延时不够会导致帧发送不完全 =================
+    // ================ Put the level switching in the loop outside and add a 100ms delay. The previous 10ms delay is not enough, which will lead to incomplete frame transmission =================
     Lora.enable_ce();
     vTaskDelay(pdMS_TO_TICKS(100));
     for (int retry = 0;
@@ -380,7 +380,7 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
             vTaskDelay(pdMS_TO_TICKS(WAKE_POLL_INTERVAL_MS));
             while (Espnow.read(&msg)) {
                 if (frame_validate(msg.data, msg.len, SLAVE_FRAME_HEAD, FRAME_WAKE_ACK)) {
-                    // 这里判断一下是哪个从机返回的消息
+                    // Here determine which slave machine returns the message
                     if(memcmp(msg.src_mac, a_mac, 6) == 0) {
                         if (!sensor_a.woke) {
                             const bool second_wake = sensor_b.woke;
@@ -389,13 +389,13 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
                                 const FeedbackSensorSet awake_sensors =
                                     toFeedbackSensorSet(sensor_a.woke,
                                                         sensor_b.woke);
-                                // WakeSucceeded event：更新当前已唤醒的模块集合。
+                                // WakeSucceeded event: Update the currently woken module collection.
                                 Feedback.onWakeSucceededEvent(awake_sensors);
                                 if (second_wake) {
                                     pending_wake_success_tone = true;
                                     pending_wake_ok_tone = true;
                                 } else {
-                                    // WakeSuccessTone event：发生单侧唤醒成功提示音事件。
+                                    // WakeSuccessTone event: A unilateral wake-up success tone event occurs.
                                     Feedback.onWakeSuccessToneEvent();
                                 }
                             }
@@ -410,13 +410,13 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
                                 const FeedbackSensorSet awake_sensors =
                                     toFeedbackSensorSet(sensor_a.woke,
                                                         sensor_b.woke);
-                                // WakeSucceeded event：更新当前已唤醒的模块集合。
+                                // WakeSucceeded event: Update the currently woken module collection.
                                 Feedback.onWakeSucceededEvent(awake_sensors);
                                 if (second_wake) {
                                     pending_wake_success_tone = true;
                                     pending_wake_ok_tone = true;
                                 } else {
-                                    // WakeSuccessTone event：发生单侧唤醒成功提示音事件。
+                                    // WakeSuccessTone event: A unilateral wake-up success tone event occurs.
                                     Feedback.onWakeSuccessToneEvent();
                                 }
                             }
@@ -432,18 +432,18 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
     }
     Lora.disable_ce();
 
-    // 唤醒失败处理
-    // TODO：唤醒失败，可能是两个从机中其中一个醒来另一个出问题，还是要发送一下工作结束帧让醒来的从机停止工作
+    // Wake-up failure handling
+    // TODO: The wake-up failed. It may be that one of the two slaves wakes up and the other has a problem. It is still necessary to send a work end frame to let the awakened slave stop working.
     if (!(sensor_a.woke && sensor_b.woke)) {
         ESP_LOGE(MAIN_TAG, "Failed to wake slave after %d retries", WAKE_MAX_RETRY);
         if (feedback_ready) {
-            // WakeTimedOut event：发生唤醒超时事件。
+            // WakeTimedOut event: A wake-up timeout event occurs.
             Feedback.onWakeTimedOutEvent(
                 toFeedbackSensorSet(sensor_a.woke, sensor_b.woke));
         }
         
 
-        // 唤醒失败发送停止工作帧，确保从机全部关闭
+        // If wake-up fails, a stop working frame is sent to ensure that all slave machines are shut down.
         sendEndFrame(a_mac, MASTER_FRAME_HEAD);
         sendEndFrame(b_mac, MASTER_FRAME_HEAD);
         waitFeedbackOrTimeout(FEEDBACK_DEFAULT_TIMEOUT_MS);
@@ -454,18 +454,18 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
 
     
 
-    // 唤醒成功处理：给用户明确的成功反馈
-    // 播放一段上升音调，向用户发出 "Active Positive" 信号，代表雷达已启动
+    // Wake-up success processing: Give the user clear success feedback
+    // Play a rising tone to send an "Active Positive" signal to the user, indicating that the radar has been activated.
 
 
-    // 唤醒成功后可以关 Lora 省电
+    // After successful wake-up, you can turn off Lora to save power.
     Lora.shutdown();
 
-    // 2) 创建蜂鸣器任务
-    // 初始化互斥锁
+    // 2) Create buzzer task
+    // Initialize mutex lock
  
 
-    // 3) 工作循环：读最新雷达数据 → 蜂鸣器提示
+    // 3) Work cycle: read the latest radar data → buzzer prompt
     uint32_t work_start = millis();
 
     bool exit_flag = false;
@@ -477,42 +477,42 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
     uint8_t pending_distance_level_count = 0;
     uint32_t last_distance_level_switch_ms = 0;
 
-    // 迟滞区间，用来记录上一次是什么模式，防止频繁切换
+    // Hysteresis interval, used to record the last mode to prevent frequent switching
 
     while (true) {
         if (feedback_ready && !Feedback.isBusy()) {
             if (pending_wake_success_tone) {
-                // WakeSuccessTone event：发生延迟调度的单侧唤醒成功提示音事件。
+                // WakeSuccessTone event: A delay-scheduled unilateral wake-up success tone event occurs.
                 Feedback.onWakeSuccessToneEvent();
                 pending_wake_success_tone = false;
             } else if (pending_wake_ok_tone) {
-                // WakeCompletedTone event：发生双侧唤醒完成提示音事件。
+                // WakeCompletedTone event: A bilateral wake-up completion tone event occurs.
                 Feedback.onWakeCompletedToneEvent();
                 pending_wake_ok_tone = false;
             }
         }
 
-        // 退出条件1：超时
+        // Exit condition 1: timeout
         if (millis() - work_start > WORK_TIMEOUT_MS) {
             ESP_LOGI(MAIN_TAG, "Work timeout, exiting");
             break;
         }
 
-        // 退出条件2：按键按下
-        // TODO：改成中断处理而不是轮询检测？现在这样是为了在工作循环里顺便处理按键事件，感觉也还好，暂时先这样
+        // Exit condition 2: button pressed
+        // TODO: Change to interrupt processing instead of polling detection? Now this is to handle key events in the work loop. It feels good, so I will do this for the time being.
         if (digitalRead(USER_BUTTON_PIN) == BUTTON_PRESSED ||
             digitalRead(DEV_BUTTON_PIN)  == BUTTON_PRESSED) {
             ESP_LOGI(MAIN_TAG, "Button pressed, exiting work mode");
             break;
         }
 
-        // 退出条件3：收到结束帧
-        // (OUTSIDE 主动退出时会发 END 帧)
+        // Exit condition 3: End frame received
+        // (OUTSIDE will send an END frame when exiting actively)
 
-        // 查看一下队列里的数据深度
+        // Check the data depth in the queue
         // ESP_LOGI(MAIN_TAG, "Queue depth: %d", Espnow.getQueueCount());
 
-        // TODO：队列里读取雷达数据, 如果队列里一直有数据，会不会出现卡死的情况?
+        // TODO: Read radar data in the queue. If there is always data in the queue, will it get stuck?
         SensorChanges left_changes;
         SensorChanges right_changes;
 
@@ -520,7 +520,7 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
         {
             if(frame_validate(msg.data, msg.len, SLAVE_FRAME_HEAD, FRAME_RADAR_DATA))
             {
-                // 判断哪个从机返回的数据
+                // Determine which slave returns the data
                 if(memcmp(msg.src_mac, a_mac, 6) == 0)
                 {
                     memcpy(&sensor_a.latest_data,
@@ -556,14 +556,14 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
             }
         }
 
-        // 收到退出帧后，跳出循环
+        // After receiving the exit frame, jump out of the loop
         if(exit_flag)
         {
             break;
         }
 
-        // 模式判断
-        // TODO：如果从机数据很久没有更新了，是不是也应该认为它失联了？
+        // Mode judgment
+        // TODO: If the slave data has not been updated for a long time, should it be considered that it has lost contact?
         const uint32_t now_ms = millis();
         left_changes.merge(updateSensorConnectionLost(sensor_a, now_ms));
         right_changes.merge(updateSensorConnectionLost(sensor_b, now_ms));
@@ -578,20 +578,20 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
         if (both_sensor_lost &&
             (left_changes.link_lost || right_changes.link_lost)) {
             if (feedback_ready) {
-                // BothLinksLost event：发生双侧链路失联事件。
+                // BothLinksLost event: A bilateral link loss event occurred.
                 Feedback.onBothLinksLostEvent();
             }
             wait_exit_feedback = true;
             exit_flag = true;
         } else if (feedback_ready) {
             if (left_changes.link_lost || right_changes.link_lost) {
-                // LinkLost event：根据失联后的活动模块集合更新反馈。
+                // LinkLost event: Update feedback based on the set of active modules after the link was lost.
                 Feedback.onLinkLostEvent(active_sensors);
             }
-            // 移除类事件优先于恢复事件，防止传感器在同一轮询周期内恢复在线
-            // 并进入故障时，被 RGB 灯短暂显示为已恢复。
+            // Removal events take priority over recovery events to prevent the sensor from returning online during the same polling cycle
+            // When entering a fault, it is briefly displayed as recovered by the RGB light.
             if (left_changes.fault_started || right_changes.fault_started) {
-                // DistanceSensorFault event：发生距离传感器故障事件。
+                // DistanceSensorFault event: A distance sensor fault event occurs.
                 Feedback.onDistanceSensorFaultEvent(
                     toFeedbackSensorSet(sensor_a.distance_fault,
                                         sensor_b.distance_fault),
@@ -601,7 +601,7 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
                 (left_changes.link_restored && !sensor_a.distance_fault) ||
                 (right_changes.link_restored && !sensor_b.distance_fault);
             if (active_link_restored) {
-                // LinkRestored event：根据恢复后的活动模块集合更新反馈。
+                // LinkRestored event: Update feedback based on the restored active module collection.
                 Feedback.onLinkRestoredEvent(active_sensors);
             }
         }
@@ -611,7 +611,7 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
         }
 
         if (left_changes.fault_cleared || right_changes.fault_cleared) {
-            // 只有确认达到设定数量的连续有效距离帧后，才恢复正常距离反馈。
+            // Normal distance feedback will be restored only after confirming that the set number of consecutive valid distance frames has been reached.
             distance_feedback_started = false;
         }
 
@@ -624,7 +624,7 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
             min_dist = sensor_b.latest_data.dist;
         }
 
-        // 加上迟滞区间，防止蜂鸣器模式频繁切换
+        // Add a hysteresis interval to prevent the buzzer mode from switching frequently
 
         FeedbackDistanceLevel distance_level =
             distanceToFeedbackLevel(min_dist);
@@ -662,7 +662,7 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
             !pending_wake_success_tone &&
             !pending_wake_ok_tone &&
             !Feedback.isBusy()) {
-            // DistanceLevelChanged event：发生距离等级变化事件。
+            // DistanceLevelChanged event: A distance level change event occurs.
             Feedback.onDistanceLevelChangedEvent(active_sensors, distance_level);
             last_active_sensors = active_sensors;
             last_distance_level = distance_level;
@@ -674,7 +674,7 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
 
         vTaskDelay(pdMS_TO_TICKS(WORK_POLL_INTERVAL_MS));
     }
-    // 4) 退出：通知从机结束。距离反馈由后续 shutdown 事件统一停止。
+    // 4) Exit: Notify the slave machine of the end. Distance feedback is uniformly stopped by subsequent shutdown events.
     sendEndFrame(a_mac, MASTER_FRAME_HEAD);
     sendEndFrame(b_mac, MASTER_FRAME_HEAD);
     if (wait_exit_feedback) {
@@ -683,13 +683,13 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
     ESP_LOGI(MAIN_TAG, "Work mode finished");
 }
 
-// ======================== 唤醒源 → 模式判断 ========================
+// ======================== Wake-up source → Mode judgment ========================
 
 static SysMode determineMode(WakeupSource wakeup, bool has_peer)
 {
     SysMode mode = UNPAIRED_MODE;
 
-    // 车内模块：只有按键唤醒和上电
+    // In-car module: only key wake-up and power-on
     switch (wakeup) {
     case WAKEUP_USER_BUTTON:
     case WAKEUP_DEV_BUTTON:
@@ -697,11 +697,11 @@ static SysMode determineMode(WakeupSource wakeup, bool has_peer)
         mode = detectButtonMode(wakeup);
         break;
     default:
-        // 上电复位 → 保持 UNPAIRED_MODE → 直接睡
+        // Power-on reset → keep UNPAIRED_MODE → sleep directly
         break;
     }
 
-    // 工作模式需要已配对
+    // Working mode needs to be paired
     if (mode == WORK_MODE && !has_peer) {
         ESP_LOGW(MAIN_TAG, "Not paired, cannot enter WORK_MODE");
         mode = UNPAIRED_MODE;
@@ -710,7 +710,7 @@ static SysMode determineMode(WakeupSource wakeup, bool has_peer)
     return mode;
 }
 
-// ======================== 模式处理 ========================
+// ======================== Pattern processing ========================
 
 static void handleMode(SysMode mode)
 {
@@ -718,18 +718,18 @@ static void handleMode(SysMode mode)
     {
     case FACTORY_RESET_MODE:
         ESP_LOGI(MAIN_TAG, "Mode: FACTORY_RESET");
-        // 第一版 Feedback API 暂未定义恢复出厂反馈，只处理业务动作。
+        // The first version of Feedback API has not yet defined factory reset feedback and only handles business actions.
         Matcher.clear_slave_mac();
-        Lora.setup();               // 需要先初始化 Lora 才能清配置
+        Lora.setup();               // Lora needs to be initialized before clearing the configuration
         Lora.clearConfigFlag();
         Lora.shutdown();
         break;
     
-    // TODO：unpair模式要不要直接开始配对？
+    // TODO: Should I start pairing directly in unpair mode?
     case UNPAIRED_MODE:
         ESP_LOGI(MAIN_TAG, "Mode: UNPAIRED");
         if (feedback_ready) {
-            // UnpairedDetected event：发生未配对状态检测事件。
+            // UnpairedDetected event: An unpaired status detection event occurs.
             Feedback.onUnpairedDetectedEvent();
         }
         waitFeedbackOrTimeout(FEEDBACK_DEFAULT_TIMEOUT_MS);
@@ -739,7 +739,7 @@ static void handleMode(SysMode mode)
     {
         ESP_LOGI(MAIN_TAG, "Mode: PAIRING");
         if (feedback_ready) {
-            // PairingStarted event：发生开始配对事件。
+            // PairingStarted event: A pairing start event occurs.
             Feedback.onPairingStartedEvent();
         }
 
@@ -756,18 +756,18 @@ static void handleMode(SysMode mode)
             toFeedbackSensorSet(pair_context.left_paired,
                                 pair_context.right_paired);
 
-        // 等待最后一个从机的成功反馈结束，再提交最终配对结果反馈。
+        // Wait for the successful feedback from the last slave to end before submitting the final pairing result feedback.
         waitFeedbackOrTimeout(FEEDBACK_DEFAULT_TIMEOUT_MS);
 
         if (!pair_ok && paired_sensors != FeedbackSensorSet::Both) {
             ESP_LOGE(MAIN_TAG, "Pair failed, going to sleep");
             if (feedback_ready) {
-                // PairingTimedOut event：发生配对超时事件。
+                // PairingTimedOut event: A pairing timeout event occurs.
                 Feedback.onPairingTimedOutEvent(paired_sensors);
             }
         } else {
             if (feedback_ready) {
-                // PairBothSucceeded event：发生双侧配对成功事件。
+                // PairBothSucceeded event: A bilateral pairing success event occurred.
                 Feedback.onPairBothSucceededEvent();
             }
         }
@@ -778,13 +778,13 @@ static void handleMode(SysMode mode)
 
     case TEST_MODE:
         ESP_LOGI(MAIN_TAG, "Mode: TEST");
-        // TODO：测试模式，用于开发和工厂测试硬件
+        // TODO: Test mode, used for development and factory testing of hardware
         // Led.blink(LED_PERIOD_2);
         break;
 
     case CONFIG_MODE:
         ESP_LOGI(MAIN_TAG, "Mode: CONFIG");
-        // TODO：配置模式，预留（OTA 等）
+        // TODO: Configuration mode, reserved (OTA, etc.)
         // Led.blink(LED_PERIOD_2);
         break;
 
@@ -792,11 +792,11 @@ static void handleMode(SysMode mode)
     {
         ESP_LOGI(MAIN_TAG, "Mode: WORK");
 
-        // ---- 车内模块工作流程 ----
-        // 1) Lora 初始化 + 发唤醒帧
+        // ---- In-vehicle module work flow ----
+        // 1) Lora initialization + sending wake-up frame
         Lora.setup();
 
-        // 2) ESP-NOW 初始化
+        // 2) ESP-NOW initialization
         Espnow.init();
         uint8_t a_mac[6]{};
         Matcher.load_slave_mac(a_mac, SLAVE_A_ID);
@@ -806,10 +806,10 @@ static void handleMode(SysMode mode)
         Espnow.addPeer(b_mac);
         Espnow.recvStart();
 
-        // 3) 唤醒从机 → 工作循环
+        // 3) Wake up the slave → work cycle
         inside_work_mode(a_mac, b_mac);
 
-        // 4) 清理
+        // 4) Clean up
         Espnow.recvStop();
         Espnow.deinit();
         Lora.shutdown();
@@ -824,7 +824,7 @@ static void handleMode(SysMode mode)
 void setup()
 {
 
-    // 初始化按键引脚 & 检测唤醒原因
+    // Initialize button pins & detect wake-up reasons
     Power.wakeup_gpio_init();
     Power.detectWakeupSource();
     WakeupSource wakeup = Power.getWakeupSource();
@@ -832,7 +832,7 @@ void setup()
     // Led.led_init();
     Power.power_init();
 
-    // 加上打开Lora电源，第一次上电发现不加上打开电源，功率开关的使能引脚会卡在加上上拉电阻后也是0.7V左右不是3.3V导致Lora无法工作
+    // After turning on the power of Lora, I found that without turning on the power for the first time, the enable pin of the power switch will be stuck at about 0.7V instead of 3.3V after adding a pull-up resistor, causing Lora to not work.
     pinMode(LORA_POWER_PIN, OUTPUT);
     digitalWrite(LORA_POWER_PIN, LORA_POWER_ON);
 
@@ -857,30 +857,30 @@ void setup()
         }
     }
 
-    // 电池电量检测
+    // Battery power detection
     uint8_t bat = Power.get_battery_value();
     if (bat <= LOW_BATTERY_PERCENT) {
-        // 电量检测和低电处理由 main/电源管理负责；这里先记录低电日志。
+        // Main/power management is responsible for battery detection and low battery processing; the low battery log is recorded here first.
         ESP_LOGW(MAIN_TAG, "Low battery: %u%%", bat);
     }
-    // 这个可以调高一点，bat是0的时候可能不能上电了就
+    // This can be adjusted a little higher. When the bat is 0, it may not be able to be powered on.
     if (bat == 0) {
         ESP_LOGE(MAIN_TAG, "Battery empty, going to sleep");
         enterDeepSleepWithFeedback(FeedbackScene::Idle);
         return;
-        // TODO：是不是可以在电量过低时发个警告？比如闪灯或者蜂鸣？
+        // TODO: Is it possible to send a warning when the battery is too low? Like a flashing light or a buzzer?
     }
 
-    // 读取已配对 MAC（如果有）
+    // Read paired MAC (if available)
     bool has_peer = Matcher.has_slave_a_mac() && Matcher.has_slave_b_mac();
 
-    // TODO：这里是不是加个else直接进入unpair模式？
+    // TODO: Should I add an else here to directly enter the unpair mode?
 
-    // 判断模式 → 执行 → 睡眠
+    // Judgment mode → Execute → Sleep
     SysMode mode = determineMode(wakeup, has_peer);
     FeedbackScene scene = modeToFeedbackScene(mode);
     if (feedback_ready) {
-        // SystemBoot event：发生系统启动事件。
+        // SystemBoot event: A system startup event occurs.
         Feedback.onSystemBootEvent(scene);
     }
     handleMode(mode);

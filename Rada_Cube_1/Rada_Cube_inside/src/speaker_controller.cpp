@@ -5,7 +5,7 @@
 
 namespace {
 
-// 这些参数只描述音频硬件时序和 task 运行约束，不承载业务策略。
+// These parameters only describe audio hardware timing and task operation constraints, and do not carry business policies.
 constexpr uint8_t SPEAKER_SHUTDOWN_ACTIVE_LEVEL = LOW;
 constexpr uint16_t SPEAKER_ENABLE_SETTLE_MS = 5;
 constexpr uint16_t SPEAKER_END_SILENCE_MS = 80;
@@ -76,7 +76,7 @@ bool durationFrames(uint32_t sample_rate,
     return true;
 }
 
-} // 匿名命名空间
+} // Anonymous namespace
 
 SpeakerController::SpeakerController() = default;
 
@@ -141,7 +141,7 @@ bool SpeakerController::begin()
         return false;
     }
 
-    // task 创建前一次性恢复跨 task 状态，避免沿用上一个生命周期的播放意图。
+    // Restore the cross-task state at once before task creation to avoid inheriting the playback intention of the previous life cycle.
     taskENTER_CRITICAL(&_state_mux);
     _current_mode = SPEAKER_MODE_SILENT;
     _current_path = nullptr;
@@ -164,7 +164,7 @@ bool SpeakerController::begin()
     _last_output_ms = 0;
     resetOutputSamples();
 
-    // task 句柄先由局部变量接收，创建成功后再发布到共享状态。
+    // The task handle is first received by the local variable, and then published to the shared state after the creation is successful.
     TaskHandle_t created_handle = nullptr;
     const BaseType_t created = xTaskCreate(
         taskEntry,
@@ -220,7 +220,7 @@ void SpeakerController::end()
 
     xSemaphoreGive(api_mutex);
 
-    // 优先等待 task 自行关闭文件、I2S 和功放，超时后才接管退出所有权。
+    // Prioritize waiting for the task to close the file, I2S and amplifier by itself, and then take over and exit ownership after timeout.
     bool stopped_cleanly = !has_task;
     if (has_task && task_stopped != nullptr) {
         stopped_cleanly = xSemaphoreTake(
@@ -229,7 +229,7 @@ void SpeakerController::end()
     }
 
     if (!stopped_cleanly) {
-        // 与 task 原子争用退出所有权，只有取得 handle 的一方负责强制删除 task。
+        // Atomic contention with the task to exit ownership. Only the party that obtains the handle is responsible for forcibly deleting the task.
         taskENTER_CRITICAL(&_state_mux);
         TaskHandle_t task_handle = _task_handle;
         _task_handle = nullptr;
@@ -446,7 +446,7 @@ void SpeakerController::taskLoop()
     taskEXIT_CRITICAL(&_state_mux);
     setTaskRunning(false);
 
-    // task 先取得退出所有权再通知 end()；若 end() 已接管，则等待被强制删除。
+    // The task first obtains exit ownership and then notifies end(); if end() has taken over, it waits to be forcibly deleted.
     taskENTER_CRITICAL(&_state_mux);
     const bool owns_task_exit = _task_handle != nullptr;
     if (owns_task_exit) {
@@ -480,7 +480,7 @@ bool SpeakerController::sendPlaybackCommand(CommandType type, const char* audio_
         return false;
     }
 
-    // 播放 API 必须非阻塞；队列锁正忙时由调用方决定是否重试。
+    // The playback API must be non-blocking; when the queue lock is busy, the caller decides whether to retry.
     if (xSemaphoreTake(_queue_mutex, 0) != pdTRUE) {
         xSemaphoreGive(api_mutex);
         return false;
@@ -491,8 +491,8 @@ bool SpeakerController::sendPlaybackCommand(CommandType type, const char* audio_
     command.audio_path = audio_path;
 
     /*
-     * 命令进入队列前同步更新“最新请求”状态，使 isBusy() 和 stop() 语义从
-     * API 返回时立即生效。若覆盖写入意外失败，下方按 sequence 回滚本次更新。
+     * Synchronously update the "latest request" status before the command enters the queue, so that the semantics of isBusy() and stop() change from
+     * It takes effect immediately when the API returns. If the overwriting fails unexpectedly, press sequence below to roll back this update.
      */
     taskENTER_CRITICAL(&_state_mux);
     const uint32_t previous_sequence = _latest_sequence;
@@ -547,7 +547,7 @@ bool SpeakerController::sendPlaybackCommand(CommandType type, const char* audio_
 bool SpeakerController::receiveCommand(Command& command)
 {
     SemaphoreHandle_t queue_mutex = _queue_mutex;
-    // task 不等待 API 释放队列锁，下一轮或下一个音频 chunk 会再次检查。
+    // The task does not wait for the API to release the queue lock, and will check again in the next round or next audio chunk.
     if (queue_mutex == nullptr || xSemaphoreTake(queue_mutex, 0) != pdTRUE) {
         return false;
     }
@@ -561,7 +561,7 @@ bool SpeakerController::receiveCommand(Command& command)
 bool SpeakerController::handleCommand(const Command& command)
 {
     taskENTER_CRITICAL(&_state_mux);
-    // 队列读取后可能又有更新命令到达，过期 sequence 不能覆盖最新状态。
+    // Another update command may arrive after the queue is read, and the expired sequence cannot overwrite the latest status.
     if (command.sequence != _latest_sequence) {
         taskEXIT_CRITICAL(&_state_mux);
         return false;
@@ -591,7 +591,7 @@ bool SpeakerController::handleCommand(const Command& command)
 void SpeakerController::finishOnce(uint32_t finished_sequence)
 {
     taskENTER_CRITICAL(&_state_mux);
-    // 播放期间只要出现更新命令，旧 once 就不能结束 busy 或恢复旧 loop。
+    // As long as an update command occurs during playback, the old once cannot end the busy or resume the old loop.
     if (_latest_sequence != finished_sequence ||
         _active_sequence != finished_sequence) {
         taskEXIT_CRITICAL(&_state_mux);
@@ -614,7 +614,7 @@ void SpeakerController::finishOnce(uint32_t finished_sequence)
 void SpeakerController::failPlayback(uint32_t failed_sequence)
 {
     taskENTER_CRITICAL(&_state_mux);
-    // 过期播放的失败不能把随后到达的新命令错误切回静音。
+    // Failure of expired playback cannot cause new commands arriving subsequently to switch back to mute.
     if (_latest_sequence == failed_sequence &&
         _active_sequence == failed_sequence) {
         _current_mode = SPEAKER_MODE_SILENT;
@@ -675,7 +675,7 @@ bool SpeakerController::readWavInfo(File& file, WavInfo& info)
     bool found_fmt = false;
     bool found_data = false;
 
-    // 在 RIFF 声明范围内逐块解析，拒绝越界、截断和非法填充字节。
+    // Parse block-by-block within the RIFF declaration range, rejecting out-of-bounds, truncated, and illegal padding bytes.
     while (file.position() <= riff_end - 8U) {
         uint32_t chunk_size = 0;
         if (!readChunkId(file, id) || !readLE32(file, chunk_size)) {
@@ -735,7 +735,7 @@ bool SpeakerController::readWavInfo(File& file, WavInfo& info)
 
 bool SpeakerController::startI2S(const WavInfo& info)
 {
-    // 采样率未变化时复用现有 I2S，避免每个 loop 周期重复初始化硬件。
+    // Reuse the existing I2S when the sampling rate does not change to avoid repeated hardware initialization in each loop cycle.
     if (_i2s_started && _i2s_sample_rate == info.sample_rate) {
         setSpeakerEnabled(true);
         return true;
@@ -803,7 +803,7 @@ bool SpeakerController::writeSilence(uint32_t sample_rate, uint16_t duration_ms)
         return false;
     }
 
-    // 先按帧计算再换算字节，保证每次尾部静音都保持双声道帧对齐。
+    // Calculate by frame first and then convert bytes to ensure that the two-channel frame alignment is maintained for each tail silence.
     uint64_t bytes_left =
         static_cast<uint64_t>(frame_count) * 2U * sizeof(int16_t);
     while (bytes_left > 0) {
@@ -870,7 +870,7 @@ bool SpeakerController::writeFadeToSilence(uint32_t sample_rate,
         }
     }
 
-    // 一次淡出已经终结当前播放，不能把未完成的淡入进度带到下一条命令。
+    // A fade-out has ended the current playback, and the unfinished fade-in progress cannot be carried to the next command.
     resetOutputSamples();
     return true;
 }
@@ -974,12 +974,12 @@ SpeakerController::PlaybackResult SpeakerController::playWav(
 
     uint32_t bytes_left = wav_info.data_size;
     while (taskShouldRun() && bytes_left > 0) {
-        // 每个 chunk 前先消费最新命令，保证 stop/once/loop 能及时抢占当前文件。
+        // Consume the latest command before each chunk to ensure that stop/once/loop can seize the current file in time.
         Command new_command;
         if (receiveCommand(new_command) && handleCommand(new_command)) {
             file.close();
 
-            // 先将当前采样淡出；切到新声音时保留淡入意图，stop 则补尾部静音。
+            // Fade out the current sample first; retain the fade-in intention when switching to a new sound, and stop to add tail silence.
             const SpeakerMode next_mode = currentMode();
             const bool faded =
                 writeFadeToSilence(wav_info.sample_rate, SPEAKER_FADE_MS);
@@ -1051,7 +1051,7 @@ bool SpeakerController::writeAudioChunk(uint8_t* data,
                                         uint8_t volume_value)
 {
     if (info.channels == 2) {
-        // 双声道原地缩放，保持输入帧的左右声道排列。
+        // Binaural scaling in place, maintaining the left and right channel arrangement of the input frame.
         int16_t* samples = reinterpret_cast<int16_t*>(data);
         const size_t sample_count = bytes_read / sizeof(int16_t);
         const size_t frame_count = sample_count / 2U;
@@ -1083,7 +1083,7 @@ bool SpeakerController::writeAudioChunk(uint8_t* data,
         return _i2s.write(data, bytes_read) == bytes_read;
     }
 
-    // 单声道先应用音量和淡入，再扩展成左右相同的双声道帧。
+    // The mono channel first applies volume and fade-in, and then expands to the same two-channel frame on the left and right.
     const size_t sample_count = bytes_read / sizeof(int16_t);
     const int16_t* mono_samples = reinterpret_cast<const int16_t*>(data);
 

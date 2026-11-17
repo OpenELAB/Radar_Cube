@@ -6,81 +6,81 @@
 #include <Arduino.h>
 #include "pins.h"
 
-// ======================== 雷达数据帧 ========================
-#define RADAR_FRAME_LEN     14      // 帧总长度（字节）
-#define RADAR_DATA_LEN      6       // 数据段长度
+// ======================== Radar data frame ========================
+#define RADAR_FRAME_LEN     14      // Total frame length (bytes)
+#define RADAR_DATA_LEN      6       // Data segment length
 
 typedef struct __attribute__((packed)) {
-    uint16_t head;          // 帧头 0xAA55
-    uint16_t cmd;           // 命令
-    uint16_t len;           // 数据长度
-    uint16_t dist;          // 距离 (mm)
-    int16_t  angle;         // 角度 (x0.01°)
-    uint16_t reserve;       // 预留
-    uint16_t checksum;      // 校验
+    uint16_t head;          // Frame header 0xAA55
+    uint16_t cmd;           // Command
+    uint16_t len;           // Data length
+    uint16_t dist;          // Distance (mm)
+    int16_t  angle;         // Angle (x0.01°)
+    uint16_t reserve;       // Reserved
+    uint16_t checksum;      // Verification
 } RadarFrame_t;
 
-// 解析后的雷达数据（方便上层使用）
+// Analyzed radar data (convenient for upper layer use)
 struct RadarData {
-    uint16_t dist_mm;       // 距离 mm
-    float    angle_deg;     // 角度 度
+    uint16_t dist_mm;       // Distance mm
+    float    angle_deg;     // angle degree
 };
 
-// ======================== 雷达模块类 ========================
+// ======================== Radar module class ========================
 /**
- * 雷达传感器模块（仅车外模块使用）
+ * Radar sensor module (only used for exterior modules)
  *
- * 使用示例：
+ * Usage example:
  *
  *   RadarModule Radar;
  *
- *   Radar.init();           // 初始化串口 + 开电源
+ *   Radar.init();           // Initialize serial port + turn on power
  *   while (running) {
- *       Radar.loop();       // 从 FIFO 取数据并解析（非阻塞）
+ *       Radar.loop();       // Get data from FIFO and parse it (non-blocking)
  *       RadarData rd;
  *       if (Radar.getData(&rd)) {
- *           // rd.dist_mm, rd.angle_deg 即为最新数据
+ *           // rd.dist_mm, rd.angle_deg is the latest data
  *       }
  *   }
- *   Radar.shutdown();       // 关闭雷达
+ *   Radar.shutdown();       // Turn off radar
  */
 class RadarModule
 {
 public:
-    // 初始化串口 + 电源
+    // Initialize serial port + power supply
     void init();
-    // 关闭雷达
+    // Turn off radar
     void shutdown();
-    // 主循环中调用，从 FIFO 取数据并解析
+    // Called in the main loop, fetch data from FIFO and parse it
     void loop();
-    // 获取最新一帧解析结果，返回 true 表示有新数据（读后自动清除标志）
+    // Get the latest frame analysis result, return true to indicate there is new data (the flag is automatically cleared after reading)
     bool getData(RadarData* out);
 
 private:
-    // ---- 最新解析结果 ----
+    // ---- Latest analysis results ----
     RadarData _latest{};
     bool      _data_ready = false;
-    // ---- FIFO 环形缓冲区 ----
+    // ---- FIFO ring buffer ----
     static constexpr size_t FIFO_SIZE = 512;
     uint8_t  _fifo[FIFO_SIZE];
-    volatile uint16_t _fifo_head = 0;   // 注意：必须 uint16_t，因为 FIFO_SIZE=512 > 255
+    volatile uint16_t _fifo_head = 0;   // Note: uint16_t is required because FIFO_SIZE=512 > 255
     volatile uint16_t _fifo_tail = 0;
 
     bool fifoPush(uint8_t b);
     bool fifoPop(uint8_t* b);
 
-    // ---- 帧解析状态机 ----
+    // ---- Frame parsing state machine ----
     enum State : uint8_t { WAIT_AA, WAIT_55, RECV_PAYLOAD };
     State   _state = WAIT_AA;
     uint8_t _rxBuf[RADAR_FRAME_LEN];
     uint8_t _rxCnt = 0;
 
-    // 校验：前12字节之和 == 第13字节（低8位）
+    // Check: sum of first 12 bytes == 13th byte (lower 8 bits)
     bool verifyChecksum(const uint8_t* raw);
-    // 解析完整帧
+    // Parse the complete frame
     bool parseFrame(const uint8_t* raw, RadarFrame_t* out);
 
-    // ---- 串口回调 ----
+    // ---- Serial port callback ----
     static RadarModule* _instance;
     static void onSerialRxStatic();
     void onSerialRx();

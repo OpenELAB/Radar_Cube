@@ -1,4 +1,4 @@
-"""Generate voice WAV files from 音频与音效清单.md."""
+"""Generate voice WAV files from the sound asset list."""
 
 from __future__ import annotations
 
@@ -26,12 +26,12 @@ DEFAULT_OUT_DIR = SCRIPT_DIR / "data"
 DEFAULT_EXPECTED_COUNT = 19
 
 COLUMN_ALIASES = {
-    "文件名": ("文件名",),
-    "类型": ("类型",),
-    "播报内容": ("播报内容", "播报内容/声音说明"),
+    "filename": ("Filename",),
+    "type": ("Type",),
+    "spoken_text": ("Spoken text / sound description", "Broadcast content/voice description"),
 }
-ALLOWED_AUDIO_TYPES = {"语音", "短音效", "距离蜂鸣"}
-VOICE_AUDIO_TYPE = "语音"
+ALLOWED_AUDIO_TYPES = {"Voice", "Short sound effect", "Distance beep"}
+VOICE_AUDIO_TYPE = "Voice"
 
 
 @dataclass(frozen=True)
@@ -95,35 +95,35 @@ def parse_voice_entries(source_path: Path) -> list[VoiceEntry]:
 
         last_required_index = max(column_indexes.values())
         if len(columns) <= last_required_index:
-            raise ValueError(f"第 {line_number} 行缺少必需列")
+            raise ValueError(f"Line {line_number} is missing a required column")
 
-        raw_filename = columns[column_indexes["文件名"]]
+        raw_filename = columns[column_indexes["filename"]]
         filename = extract_wav_filename(raw_filename)
         if not filename:
             raise ValueError(
-                f"第 {line_number} 行的 WAV 文件名无效: {raw_filename or '<空>'}"
+                f"Invalid WAV filename on line {line_number}: {raw_filename or '<empty>'}"
             )
 
         if filename in seen_filenames:
-            raise ValueError(f"第 {line_number} 行存在重复的 WAV 文件名: {filename}")
+            raise ValueError(f"Duplicate WAV filename on line {line_number}: {filename}")
         seen_filenames.add(filename)
 
-        audio_type = columns[column_indexes["类型"]].strip()
+        audio_type = columns[column_indexes["type"]].strip()
         if audio_type not in ALLOWED_AUDIO_TYPES:
-            raise ValueError(f"第 {line_number} 行的音频类型无效: {audio_type or '<空>'}")
+            raise ValueError(f"Invalid audio type on line {line_number}: {audio_type or '<empty>'}")
 
         if audio_type != VOICE_AUDIO_TYPE:
             continue
 
-        text = columns[column_indexes["播报内容"]].strip()
+        text = columns[column_indexes["spoken_text"]].strip()
         if not text:
-            raise ValueError(f"第 {line_number} 行的播报内容不能为空: {filename}")
+            raise ValueError(f"Spoken text is empty on line {line_number}: {filename}")
 
         entries.append(VoiceEntry(filename=filename, text=text))
 
     if column_indexes is None:
-        required = "、".join(COLUMN_ALIASES)
-        raise ValueError(f"未找到包含以下列的音频资源表: {required}")
+        required = ", ".join(COLUMN_ALIASES)
+        raise ValueError(f"No sound asset table with these columns was found: {required}")
 
     return entries
 
@@ -146,7 +146,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument(
         "--source",
         default=str(DEFAULT_SOURCE),
-        help="Path to 音频与音效清单.md.",
+        help="Path to the sound asset list Markdown file.",
     )
     parser.add_argument(
         "--out-dir",
@@ -156,7 +156,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument(
         "--voice",
         default=DEFAULT_VOICE,
-        help="MiMo builtin voice ID. Default: 茉莉.",
+        help="MiMo built-in voice ID (defaults to the configured voice).",
     )
     parser.add_argument(
         "--skip-existing",

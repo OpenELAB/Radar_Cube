@@ -6,53 +6,53 @@
 #include "config.h"
 
 /**
- * Lora 无线模块管理
+ * Lora wireless module management
  *
- * 使用示例：
+ * Usage example:
  *
  *   LoraManager Lora;
  *
- *   // 初始化 + AT 配置（已配过则自动跳过）
+ *   // Initialization + AT configuration (automatically skipped if already configured)
  *   Lora.setup();
  *
- *   // 发送唤醒帧
+ *   // Send wake-up frame
  *   Lora.sendWakeFrame();
  *
- *   // 关闭模块
+ *   // Close the module
  *   Lora.shutdown();
  */
 class LoraManager
 {
 public:
-    // 初始化串口 + CE引脚 + 电源
+    // Initialize serial port + CE pin + power supply
     void init();
 
-    // 首次配置 AT 参数（已配置过则跳过），返回是否成功
+    // Configure AT parameters for the first time (skip if already configured), return whether successful
     bool configure();
 
-    // init() + configure() 的组合，给 main 调用
+    // Combination of init() + configure(), called to main
     void setup();
 
-    // 发送 AT 指令并等待 OK / ERROR，支持重试
+    // Send AT command and wait for OK / ERROR, support retry
     bool sendAT(const char* cmd, int timeout_ms = LORA_AT_TIMEOUT, uint8_t max_retry = LORA_AT_RETRY);
 
-    // 通过 Lora 发送无线唤醒帧
+    // Send wireless wake-up frame through Lora
     void sendWakeFrame();
 
-    // 关闭 Lora 模块（拉低电源 + 关串口）
+    // Turn off the Lora module (pull down the power + turn off the serial port)
     void shutdown();
 
-    // 清除 NVS 中的已配置标志（调试/重置用）
+    // Clear configured flags in NVS (for debugging/resetting)
     void clearConfigFlag();
 
-    // CE控制引脚，使能CE引脚用来发送，禁止用来接收
+    // CE control pin, enable the CE pin for sending, disable it for receiving
     void enable_ce();
     void disable_ce();
 
 private:
     Preferences _prefs;
 
-    // NVS 相关
+    // NVS related
     bool isConfigured();
     void setConfigured(bool flag);
 };

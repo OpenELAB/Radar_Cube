@@ -3,11 +3,11 @@
 #include "lora.h"
 #include "protocol.h"
 
-// NVS 键名
+// NVS key name
 static const char* NVS_NAMESPACE = "lora";
 static const char* NVS_KEY_FLAG  = "configured";
 
-// Lora 模块初始化 AT 命令序列
+// Lora module initialization AT command sequence
 static const char* LORA_INIT_CMDS[] = {
     "AT+MODE=0",
     "AT+RFCH=18",
@@ -20,7 +20,7 @@ static const char* LORA_INIT_CMDS[] = {
 static const int LORA_INIT_CMD_COUNT = sizeof(LORA_INIT_CMDS) / sizeof(LORA_INIT_CMDS[0]);
 
 #ifdef INSIDE
-// 车内模块 Lora 睡眠命令
+// In-car module Lora sleep command
 static const char* LORA_SLEEP_CMDS[] = {
     "AT+MODE=0",
     "AT+MAMP=0",
@@ -29,7 +29,7 @@ static const char* LORA_SLEEP_CMDS[] = {
 };
 static const int LORA_SLEEP_CMD_COUNT = sizeof(LORA_SLEEP_CMDS) / sizeof(LORA_SLEEP_CMDS[0]);
 
-// 车内模块 Lora 唤醒命令
+// In-vehicle module Lora wake-up command
 static const char* LORA_WAKEUP_CMDS[] = {
     "AT+MODE=0",
     "AT+MAMP=2",
@@ -39,11 +39,11 @@ static const char* LORA_WAKEUP_CMDS[] = {
 static const int LORA_WAKEUP_CMD_COUNT = sizeof(LORA_WAKEUP_CMDS) / sizeof(LORA_WAKEUP_CMDS[0]);
 #endif
 
-// ======================== NVS 操作 ========================
+// ======================== NVS operations ========================
 
 bool LoraManager::isConfigured()
 {
-    _prefs.begin(NVS_NAMESPACE, true);          // 只读
+    _prefs.begin(NVS_NAMESPACE, true);          // Read only
     bool flag = _prefs.getBool(NVS_KEY_FLAG, false);
     _prefs.end();
     return flag;
@@ -51,7 +51,7 @@ bool LoraManager::isConfigured()
 
 void LoraManager::setConfigured(bool flag)
 {
-    _prefs.begin(NVS_NAMESPACE, false);         // 读写
+    _prefs.begin(NVS_NAMESPACE, false);         // Reading and Writing
     _prefs.putBool(NVS_KEY_FLAG, flag);
     _prefs.end();
 }
@@ -63,7 +63,7 @@ void LoraManager::clearConfigFlag()
     _prefs.end();
 }
 
-// ======================== 硬件初始化 ========================
+// ======================== Hardware initialization ========================
 
 void LoraManager::init()
 {
@@ -71,11 +71,11 @@ void LoraManager::init()
     pinMode(LORA_CE_PIN, OUTPUT);
     pinMode(LORA_POWER_PIN, OUTPUT);
     digitalWrite(LORA_CE_PIN, LORA_CE_ACTIVE);
-    // TODO：这里还得把Lora模块的电源打开，不然Lora配置会失败，具体不知道什么原因
+    // TODO: The power of the Lora module must be turned on here, otherwise the Lora configuration will fail. I don’t know the specific reason.
     digitalWrite(LORA_POWER_PIN, LORA_POWER_ON);
 }
 
-// ======================== AT 指令 ========================
+// ======================== AT command ========================
 
 bool LoraManager::sendAT(const char* cmd, int timeout_ms, uint8_t max_retry)
 {
@@ -86,12 +86,12 @@ bool LoraManager::sendAT(const char* cmd, int timeout_ms, uint8_t max_retry)
 
     for (uint8_t retry = 0; retry < max_retry; retry++)
     {
-        // 清空接收缓冲区
+        // Clear the receive buffer
         while (LoraSerial.available()) LoraSerial.read();
 
         LoraSerial.println(cmd);
 
-        // 等待响应
+        // Waiting for response
         uint32_t t_start = millis();
         String response = "";
         while (millis() - t_start < (uint32_t)timeout_ms)
@@ -109,9 +109,9 @@ bool LoraManager::sendAT(const char* cmd, int timeout_ms, uint8_t max_retry)
                     }
                     if (response == "ERROR") {
                         ESP_LOGE(LORA_TAG, "[ERROR] %s", cmd);
-                        break;      // 跳出内层 while, 进入重试
+                        break;      // Jump out of the inner while and enter retry
                     }
-                    response = "";  // 清空，继续读下一行
+                    response = "";  // Clear, continue reading the next line
                 }
             }
         }
@@ -120,7 +120,7 @@ bool LoraManager::sendAT(const char* cmd, int timeout_ms, uint8_t max_retry)
     return false;
 }
 
-// ======================== 首次配置 ========================
+// ======================== First configuration ========================
 
 bool LoraManager::configure()
 {
@@ -131,7 +131,7 @@ bool LoraManager::configure()
 
     ESP_LOGI(LORA_TAG, "First time config...");
 
-    // CE 拉低进入配置模式
+    // Pull CE low to enter configuration mode
     digitalWrite(LORA_CE_PIN, LORA_CE_INACTIVE);
 
     for (int i = 0; i < LORA_INIT_CMD_COUNT; i++)
@@ -143,15 +143,15 @@ bool LoraManager::configure()
         }
     }
 
-    // CE 拉高回到正常工作模式
+    // Pull CE high to return to normal working mode
     digitalWrite(LORA_CE_PIN, LORA_CE_ACTIVE);
-    // 记录已配置
+    // Record configured
     setConfigured(true);
     ESP_LOGI(LORA_TAG, "Config done");
     return true;
 }
 
-// ======================== 组合接口 ========================
+// ======================== Combination interface ========================
 
 void LoraManager::setup()
 {
@@ -159,21 +159,21 @@ void LoraManager::setup()
     configure();
 }
 
-// ======================== 发送唤醒帧 ========================
+// ======================== Send wake-up frame ========================
 
 void LoraManager::sendWakeFrame()
 {
     protocol_frame_t frame;
     frame_build(&frame, MASTER_FRAME_HEAD, FRAME_WAKE);
 
-    // 问题: 这里切换电平会导致第一次发送失败和导致校验位数据错误
+    // Problem: Switching the level here will cause the first transmission to fail and cause the check digit data to be incorrect.
     // digitalWrite(LORA_CE_PIN, LORA_CE_INACTIVE);
-    // vTaskDelay(pdMS_TO_TICKS(100));  // TODO: 确保进入配置模式,记得是2ms,这里加10ms以防万一？
+    // vTaskDelay(pdMS_TO_TICKS(100)); // TODO: Make sure to enter configuration mode, remember it is 2ms, add 10ms here just in case?
     LoraSerial.write((uint8_t*)&frame, sizeof(frame));
     // digitalWrite(LORA_CE_PIN, LORA_CE_ACTIVE);
 }
 
-// ======================== 关闭 ========================
+// ======================== Close ========================
 
 void LoraManager::shutdown()
 {
@@ -181,13 +181,13 @@ void LoraManager::shutdown()
     LoraSerial.end();
 }
 
-// Lora使能ce引脚，CE低电平，进入发送数据和配置模式
+// Lora enables the ce pin, CE is low level, and enters the sending data and configuration mode.
 void LoraManager::enable_ce()
 {
     digitalWrite(LORA_CE_PIN, LORA_CE_INACTIVE);
 }
 
-// Lora禁用ce引脚，CE高电平，进入接收数据模式
+// Lora disables the ce pin, CE is high, and enters the receiving data mode.
 void LoraManager::disable_ce()
 {
     digitalWrite(LORA_CE_PIN, LORA_CE_ACTIVE);

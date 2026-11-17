@@ -2,18 +2,18 @@
 #define AUDIO_CATALOG_H
 
 /*
- * AudioCatalog 第一版框架草稿
+ * AudioCatalog first version framework draft
  *
- * 目标：
- * - 集中管理音频资源 ID 和 LittleFS 路径。
- * - FeedbackController 使用 AudioId 选择音频。
- * - SpeakerController 不包含本文件，只接收 const char* path 并播放。
- * - 倒车距离显示期间是否允许播放，由 FeedbackController 判断。
+ * Goal:
+ * - Centrally manage audio resource IDs and LittleFS paths.
+ * - FeedbackController selects audio using AudioId.
+ * - SpeakerController does not contain this file, it only receives const char* path and plays it.
+ * - Whether playback is allowed during the reversing distance display is determined by FeedbackController.
  *
- * 这个文件只提供：
- * - AudioId 枚举。
- * - audio_path_from_id(audio_id)：AudioId -> 路径。
- * - audio_is_blocked_during_parking(audio_id)：判断某个音频是否属于倒车期间黑名单。
+ * This file only provides:
+ * - AudioId enum.
+ * - audio_path_from_id(audio_id): AudioId -> path.
+ * - audio_is_blocked_during_parking(audio_id): Determine whether an audio belongs to the blacklist during reversing.
  */
 
 #include <Arduino.h>
@@ -43,8 +43,8 @@
 #define AUDIO_PATH_FAULT                 "/fault_system.wav"
 
 /*
- * AudioId 只属于 AudioCatalog 和 FeedbackController。
- * 不要把 AudioId 放进 SpeakerController。
+ * AudioId only belongs to AudioCatalog and FeedbackController.
+ * Don't put AudioId into SpeakerController.
  */
 enum AudioId : uint8_t {
     AUDIO_ID_NONE = 0,
@@ -75,7 +75,7 @@ enum AudioId : uint8_t {
 };
 
 /*
- * 根据 AudioId 返回 LittleFS 路径。
+ * Return the LittleFS path based on AudioId.
  */
 static const char *audio_path_from_id(AudioId audio_id)
 {
@@ -130,15 +130,15 @@ static const char *audio_path_from_id(AudioId audio_id)
 }
 
 /*
- * 倒车距离显示期间的音频黑名单。
+ * Audio blacklist during reversing distance display.
  *
- * FeedbackController 在进入倒车距离显示状态后，调用这个函数决定是否拦截。
- * SpeakerController 不知道倒车状态，也不做这个判断。
+ * After FeedbackController enters the reverse distance display state, it calls this function to decide whether to intercept.
+ * SpeakerController does not know the reverse status and does not make this judgment.
  *
- * 第一版规则：
- * - 距离蜂鸣 loop 不在黑名单里。
- * - 短提示音不在黑名单里，可以短暂打断距离蜂鸣。
- * - 语音类、模式类、最终结果类提示在黑名单里。
+ * First edition rules:
+ * - The distance beep loop is not in the blacklist.
+ * - The short beep is not in the blacklist and can briefly interrupt the distance beep.
+ * - Voice, mode, and final result prompts are in the blacklist.
  */
 static bool audio_is_blocked_during_parking(AudioId audio_id)
 {

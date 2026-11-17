@@ -1,204 +1,204 @@
-# TTS 转 WAV 工具
+# TTS to WAV tool
 
-这个目录用于生成倒车雷达项目的语音提示和蜂鸣音资源。项目最终使用的音频格式统一为：
+This directory is used to generate voice prompts and beep sound resources for the reversing radar project. The final audio format used in the project is unified as:
 
 - WAV
 - 16 kHz
 - 16-bit PCM
-- 单声道
+- Mono
 
 ## MiMo-V2.5-TTS
 
-`mimo_tts_to_wav.py` 用于通过小米 MiMo 官方 OpenAI-compatible TTS API 生成语音提示音。
+`mimo_tts_to_wav.py` is used to generate voice prompts through the official OpenAI-compatible TTS API of Xiaomi MiMo.
 
-脚本默认调用：
+The script calls by default:
 
 - Base URL: `https://api.xiaomimimo.com/v1`
 - Endpoint: `/chat/completions`
-- 默认模式: `voice-design`
-- 默认模型: `mimo-v2.5-tts-voicedesign`
-- 默认文本设计音色: `年轻女性车载安全提示音，标准普通话，声音清亮干练，吐字清晰，语速略快，语气冷静克制，不夸张，不拖尾，适合 1-2 秒短提示；严格只朗读输入短语，不添加解释或扩写。`
-- 默认音频标签: 无
-- 默认文本优化: 关闭
-- API Key 环境变量: `MIMO_API_KEY`
+- Default mode: `voice-design`
+- Default model: `mimo-v2.5-tts-voicedesign`
+- Default voice design prompt: a young female in-vehicle safety voice speaking standard Mandarin, clear and brisk, slightly fast, calm and restrained, without exaggerated delivery or drawn-out endings, suitable for short 1–2 second alerts; read only the input phrase without explanation or expansion.
+- Default Audio Tag: None
+- Default text optimization: off
+- API Key environment variable: `MIMO_API_KEY`
 
-MiMo API 会在 `choices[0].message.audio.data` 中返回 base64 编码的音频数据。脚本会先把这段音频保存为临时 WAV 文件，再通过 `ffmpeg` 转换为本项目要求的标准格式。
+MiMo API will return base64 encoded audio data in `choices[0].message.audio.data`. The script will first save this audio as a temporary WAV file, and then convert it to the standard format required by this project through `ffmpeg`.
 
-根据官方 V2.5 文档，文本设计音色模式使用 `mimo-v2.5-tts-voicedesign`。脚本把音色设计描述放在 `user.content`，把需要合成的播报文本放在 `assistant.content`。文本设计音色模式不传 `voice` 字段。
+According to the official V2.5 documentation, the text design voice mode uses `mimo-v2.5-tts-voicedesign`. The script places the sound design description in `user.content` and the broadcast text that needs to be synthesized in `assistant.content`. Text design voice mode does not pass the `voice` field.
 
-为保证车载短提示音严格只读原文，脚本默认不启用 `optimize_text_preview`，也不默认添加音频标签。官方文档说明 `optimize_text_preview` 会智能润色目标播报文本，因此它可能导致“雷达失联”被扩写成更长句子。
+To ensure that the in-vehicle short tone only reads the original text, the script does not enable `optimize_text_preview` by default, nor does it add audio tags by default. The official documentation states that `optimize_text_preview` will intelligently polish the text of the target broadcast, so it may cause "Radar Lost Contact" to be expanded into a longer sentence.
 
-## 环境准备
+## Environment preparation
 
-安装 Python 依赖：
+Install Python dependencies:
 
 ```powershell
 pip install openai
 ```
 
-如果本机还没有 `ffmpeg`，先安装：
+If the machine does not have `ffmpeg` yet, install it first:
 
 ```powershell
 winget install Gyan.FFmpeg
 ```
 
-在当前 PowerShell 会话中设置 MiMo API Key：
+Set the MiMo API Key in the current PowerShell session:
 
 ```powershell
-$env:MIMO_API_KEY="你的_api_key"
+$env:MIMO_API_KEY="your_api_key"
 ```
 
-不要把 API Key 或 `.env` 文件提交到 git。
+Do not submit API Key or `.env` files to git.
 
-## 使用方法
+## How to use
 
-### 按音效清单批量生成语音
+### Batch generate voices according to sound effect list
 
-根据 `tts_to_wav/音频与音效清单.md` 批量生成所有语音类 WAV：
+Batch generate the voice WAVs listed in `tts_to_wav/音频与音效清单.md`:
 
 ```powershell
-$env:MIMO_API_KEY="你的_api_key"
+$env:MIMO_API_KEY="your_api_key"
 python .\tts_to_wav\gen_voice_from_sound_list.py
 ```
 
-默认行为：
+Default behavior:
 
-- 根据 Markdown 表头读取资源，只生成 `类型` 为 `语音` 且“播报内容”非空的条目。
-- 不生成 `短音效` 和 `距离蜂鸣` 条目。
-- 当前默认清单包含 19 条语音资源。
-- 输出到 `.\tts_to_wav\data`。
-- 已有同名 WAV 会被覆盖。
-- 使用 MiMo 内置音色 `茉莉`。
+- Read the Markdown table and generate entries with type `Voice` and nonempty spoken text.
+- `Short Sound Effect` and `Distance Beep` entries are not generated.
+- The current default list contains 19 voice resources.
+- Output to `.\tts_to_wav\data`.
+- An existing WAV with the same name will be overwritten.
+- Use the MiMo built-in voice `茉莉`.
 
-先查看将生成哪些文件，不调用 API：
+First check which files will be generated without calling the API:
 
 ```powershell
 python .\tts_to_wav\gen_voice_from_sound_list.py --list
 ```
 
-跳过已有文件：
+Skip existing files:
 
 ```powershell
 python .\tts_to_wav\gen_voice_from_sound_list.py --skip-existing
 ```
 
-指定清单、输出目录或音色：
+Specify a source list, output directory, or voice:
 
 ```powershell
 python .\tts_to_wav\gen_voice_from_sound_list.py --source .\tts_to_wav\音频与音效清单.md --out-dir .\tts_to_wav\data --voice 茉莉
 ```
 
-### 交互式批量生成
+### Interactive batch generation
 
-无参数运行会进入交互模式：
+Running without parameters will enter interactive mode:
 
 ```powershell
 python .\tts_to_wav\mimo_tts_to_wav.py
 ```
 
-也可以显式指定：
+It can also be specified explicitly:
 
 ```powershell
 python .\tts_to_wav\mimo_tts_to_wav.py --interactive
 ```
 
-进入后先配置一次模式、音色、输出目录、采样率等参数，然后一直输入文本生成 WAV：
+After entering, first configure the mode, timbre, output directory, sampling rate and other parameters, and then keep inputting text to generate WAV:
 
 ```text
-文本> 设备未配对
-文本> 主机电量低 => power_low.wav
-文本> :config
-文本> q
+Text> Device not paired
+Text> Controller battery low => power_low.wav
+Text> :config
+Text> q
 ```
 
-输入规则：
+Input rules:
 
-- 直接输入文本：自动按文本生成文件名。
-- `文本 => 文件名.wav`：为这条文本指定输出文件名。
-- `:config`：重新进入配置流程。
-- `q` / `quit` / `exit`：退出。
+- Enter text directly: automatically generate file names based on text.
+- `text => filename.wav`: Specify the output file name for this text.
+- `:config`: Re-enter the configuration process.
+- `q` / `quit` / `exit`: Exit.
 
-### 单条命令生成
+### Single command generation
 
-使用默认文本设计音色生成提示音：
+Use the default text design sound to generate prompt sounds:
 
 ```powershell
-python .\tts_to_wav\mimo_tts_to_wav.py "设备未配对" -o .\tts_to_wav\data\mode_unpaired.wav
+python .\tts_to_wav\mimo_tts_to_wav.py "Device not paired" -o .\tts_to_wav\data\mode_unpaired.wav
 ```
 
-自定义文本设计音色：
+Custom text design tone:
 
 ```powershell
-python .\tts_to_wav\mimo_tts_to_wav.py "主机电量低" -o .\tts_to_wav\data\power_low.wav --voice-design "年轻女性车载安全提示音，普通话标准，声音清晰明亮，语气冷静，短促直接。"
+python .\tts_to_wav\mimo_tts_to_wav.py "Controller battery low" -o .\tts_to_wav\data\power_low.wav --voice-design "Clear, concise English vehicle safety prompt with a calm female voice."
 ```
 
-启用文本优化预览：
+Enable text optimization preview:
 
 ```powershell
-python .\tts_to_wav\mimo_tts_to_wav.py "设备未配对" -o .\tts_to_wav\data\mode_unpaired.wav --optimize-text-preview
+python .\tts_to_wav\mimo_tts_to_wav.py "Device not paired" -o .\tts_to_wav\data\mode_unpaired.wav --optimize-text-preview
 ```
 
-注意：`--optimize-text-preview` 可能会润色或扩写播报文本。雷达提示音通常不建议开启。
+Note: `--optimize-text-preview` may polish or expand the broadcast text. It is generally not recommended to turn on radar beeps.
 
-使用 MiMo 内置音色兼容模式：
+Use MiMo built-in tone compatibility mode:
 
 ```powershell
-python .\tts_to_wav\mimo_tts_to_wav.py "系统故障" -o .\tts_to_wav\data\fault_system.wav --mode builtin --voice 茉莉
+python .\tts_to_wav\mimo_tts_to_wav.py "System fault" -o .\tts_to_wav\data\fault_system.wav --mode builtin --voice 茉莉
 ```
 
-指定内置音色模式的播报风格：
+Specify the broadcast style of the built-in tone mode:
 
 ```powershell
-python .\tts_to_wav\mimo_tts_to_wav.py "左侧雷达电量低" -o .\tts_to_wav\data\power_sensor_low_left.wav --mode builtin --voice 茉莉 --style "清晰、标准普通话、冷静克制，适合车载安全提示音，短促直接。"
+python .\tts_to_wav\mimo_tts_to_wav.py "Left sensor battery low" -o .\tts_to_wav\data\power_sensor_low_left.wav --mode builtin --voice 茉莉 --style "Clear, standard Mandarin, calm and restrained, suitable for a short, direct in-vehicle safety alert."
 ```
 
-指定音频标签：
+Specify the audio tag:
 
 ```powershell
-python .\tts_to_wav\mimo_tts_to_wav.py "通信异常" -o .\tts_to_wav\data\fault_comm.wav --style-tags "平静 干练 清亮"
+python .\tts_to_wav\mimo_tts_to_wav.py "Communication fault" -o .\tts_to_wav\data\fault_comm.wav --style-tags "calm clear concise"
 ```
 
-关闭音频标签，只使用普通文本：
+Turn off the audio tag and just use normal text:
 
 ```powershell
-python .\tts_to_wav\mimo_tts_to_wav.py "通信异常" -o .\tts_to_wav\data\fault_comm.wav --no-style-tags
+python .\tts_to_wav\mimo_tts_to_wav.py "Communication fault" -o .\tts_to_wav\data\fault_comm.wav --no-style-tags
 ```
 
-保留 MiMo API 返回的原始 WAV，方便检查或对比：
+Keep the original WAV returned by the MiMo API for easy inspection or comparison:
 
 ```powershell
-python .\tts_to_wav\mimo_tts_to_wav.py "左侧雷达故障" -o .\tts_to_wav\data\fault_sensor_left.wav --keep-temp
+python .\tts_to_wav\mimo_tts_to_wav.py "Left sensor fault" -o .\tts_to_wav\data\fault_sensor_left.wav --keep-temp
 ```
 
-使用 `--keep-temp` 时，原始文件会保存为输出文件旁边的 `*.mimo_source.wav`。
+When using `--keep-temp`, the original file is saved as `*.mimo_source.wav` next to the output file.
 
-## 常用检查命令
+## Commonly used checking commands
 
-查看脚本参数：
+View script parameters:
 
 ```powershell
 python .\tts_to_wav\mimo_tts_to_wav.py --help
 ```
 
-检查脚本语法：
+Check script syntax:
 
 ```powershell
 python -m py_compile .\tts_to_wav\mimo_tts_to_wav.py
 ```
 
-## 现有脚本说明
+## Existing script description
 
-- `mimo_tts_to_wav.py`: 使用小米 MiMo 官方 TTS API 生成语音。
-- `gen_voice_from_sound_list.py`: 从 `音频与音效清单.md` 按资源类型解析语音条目并批量生成 WAV。
-- `tts_to_wav.py`: 原有 Edge TTS 语音生成脚本；无参数运行时也会先配置一次，然后循环输入文本生成。
-- `gen_beeps.py`: 使用 `ffmpeg` 生成或归一化蜂鸣音资源。
+- `mimo_tts_to_wav.py`: Use Xiaomi MiMo official TTS API to generate speech.
+- `gen_voice_from_sound_list.py`: Parse voice entries from `音频与音效清单.md` and generate WAV files in batches.
+- `tts_to_wav.py`: The original Edge TTS speech generation script; running it without parameters starts configuration, followed by a loop for entering text to generate audio.
+- `gen_beeps.py`: Use `ffmpeg` to generate or normalize beep resources.
 
-## 注意事项
+## Notes
 
-- 当前脚本默认使用 `mimo-v2.5-tts-voicedesign` 文本设计音色。
-- `--voice` 只在 `--mode builtin` 下使用；默认文本设计音色模式不会传 `voice`。
-- 语音克隆没有放进这个工具，避免引入参考音频授权风险。
-- `optimize_text_preview` 默认关闭；开启后可能润色或扩写文本。
-- 音频标签默认关闭；指定 `--style-tags` 后，标签会进入 `assistant.content`。
-- 真实生成音频需要网络访问和有效的 MiMo API Key。
-- 如果提示找不到 `ffmpeg`，安装后需要重启终端再试。
+- The current script uses the `mimo-v2.5-tts-voicedesign` text to design the voice by default.
+- `--voice` is only used under `--mode builtin`; the default text design tone mode does not pass `voice`.
+- Voice cloning is not included in this tool to avoid introducing reference audio licensing risks.
+- `optimize_text_preview` is turned off by default; turning it on may polish or expand the text.
+- Audio tags are turned off by default; when `--style-tags` is specified, tags will go into `assistant.content`.
+- Real audio generation requires network access and a valid MiMo API Key.
+- If you are prompted that `ffmpeg` cannot be found, you need to restart the terminal and try again after installation.

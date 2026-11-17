@@ -1,8 +1,8 @@
-// 这里定义应用层面配置参数相关的宏
+// Macros related to application-level configuration parameters are defined here.
 #ifndef __CONFIG_H__
 #define __CONFIG_H__
 
-// 定义不同距离的临界值
+// Define critical values for different distances
 
 
 

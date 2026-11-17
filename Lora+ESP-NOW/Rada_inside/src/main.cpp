@@ -33,7 +33,7 @@ void setup()
 
   SYSTEM_MODE system_mode = NOMAL_MODE;
 
-// ---------------------------- 检测按键唤醒原因 ---------------------------------
+// ------------------------------- Detect key wake-up reasons ----------------------------------
   // esp_sleep_wakeup_cause_t wakeup_reason;
   // wakeup_reason = esp_sleep_get_wakeup_cause();
   // switch(wakeup_reason)
@@ -43,10 +43,10 @@ void setup()
   // }
 // ------------------------------------------------------------------------------
 
-// -------------------------- 检测按键状态 ---------------------------------
+// -------------------------------- Detect key status --------------------------------
   bool user_button_level = digitalRead(WAKE_PIN);
   
-// 按键误触检测
+// Button accidental touch detection
   for(int i = 0; i < 3; i++)
   {
     user_button_level &= digitalRead(WAKE_PIN);
@@ -60,7 +60,7 @@ void setup()
     uint32_t user_button_end_time = 0;
     bool user_button_released = false;
     
-    // 按键按下点亮LED，直到按键松开，指示按键按下
+    // When the button is pressed, the LED lights up until the button is released, indicating that the button is pressed.
     digitalWrite(LED_PIN, HIGH);
     while(user_button_level == LOW)
     {
@@ -81,7 +81,7 @@ void setup()
     printf("User Button pressed time: %lu\r\n", user_button_press_time);
 
     digitalWrite(LED_PIN, LOW);
-    // ---------------------------- 根据按键按下的不同时间进入不同的模式 ---------------------------------
+    // ------------------------------- Enter different modes according to the different time the button is pressed ----------------------------------
     if(user_button_press_time > 10000 || slave_mac_exist == false)
     {
       system_mode = RECONFIG_MODE;
@@ -101,7 +101,7 @@ void setup()
   }
   printf("System mode: %d\r\n", system_mode);
 
-  // ----------------------------根据系统模式执行对应的操作---------------------------------
+  // ----------------------------Perform corresponding operations according to the system mode---------------------------------
   switch(system_mode)
   {
     case NOMAL_MODE:
@@ -128,7 +128,7 @@ void setup()
 
   esp_deep_sleep_enable_gpio_wakeup(BIT(WAKE_PIN), ESP_GPIO_WAKEUP_GPIO_LOW);
 
-  // 手动关闭WIFI
+  // Manually turn off WIFI
   esp_wifi_stop();
 
   printf("Going to sleep now\r\n");

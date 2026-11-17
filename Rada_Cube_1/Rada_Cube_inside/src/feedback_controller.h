@@ -2,30 +2,30 @@
 #define FEEDBACK_CONTROLLER_H
 
 /*
- * FeedbackController 第一版框架草稿
+ * FeedbackController first version framework draft
  *
- * 这个文件只定义“main 如何把业务事件交给反馈层”。
- * 不在第一版公开过多内部状态机、队列、token、去重 key，否则会让同事还没开始实现就被框架绑住。
+ * This file only defines "how main delivers business events to the feedback layer".
+ * Do not expose too many internal state machines, queues, tokens, and deduplication keys in the first version, otherwise colleagues will be tied to the framework before they even start implementing it.
  *
- * 核心边界：
- * - main 负责判断业务事件已经发生，例如左侧配对成功、双侧失联、距离等级变化。
- * - FeedbackController 负责把事件翻译成 RGB 灯效和声音。
- * - RgbLedController 只负责执行灯效。
- * - AudioCatalog 负责提供 AudioId 到路径的映射和倒车期间黑名单判断。
- * - SpeakerController 只负责播放指定路径的音频文件。
+ * Core Boundary:
+ * - main detects business events, such as left-sensor pairing, both links being lost, or a distance-level change.
+ * - FeedbackController is responsible for translating events into RGB lighting effects and sounds.
+ * - RgbLedController is only responsible for executing lighting effects.
+ * - AudioCatalog is responsible for providing AudioId to path mapping and blacklist judgment during reversing.
+ * - SpeakerController is only responsible for playing audio files in the specified path.
  *
- * 调用规则：
- * - 所有 onXxxEvent() 都必须立即返回，不在函数内部阻塞等待声音或动画结束。
- * - 需要等待的业务流程，通过 isBusy() + 超时判断完成。
- * - main 决定业务节奏：想保留前一个反馈，就先等 isBusy() 变 false；想抢占，就直接调用下一个事件。
- * - 除倒车距离显示外，main 调用新的 onXxxEvent() 就表示新事件可以替换/打断前一个视听反馈。
- * - 倒车距离显示期间不插入长语音，只允许短音效提示掉线、恢复等状态变化。
- * - 距离显示状态下，FeedbackController 只能用短提示音 playOnce() 打断距离 playLoop()。
- * - playOnce 打断 playLoop 后的 loop 恢复由 SpeakerController 负责，FeedbackController 不轮询恢复。
- * - 低优先级反馈，例如上电动画/启动音，可以被后续业务事件替换或打断。
- * - main 不需要询问“上电动画是否结束”再通知唤醒结果；直接调用对应事件即可。
+ * Calling rules:
+ * - All onXxxEvent() must return immediately and do not block inside the function waiting for the sound or animation to end.
+ * - The business process that needs to wait is completed through isBusy() + timeout judgment.
+ * - main controls the sequence: wait until isBusy() is false to retain the current feedback, or call the next event to interrupt it.
+ * - In addition to the reversing distance display, calling the new onXxxEvent() in main means that the new event can replace/interrupt the previous audio-visual feedback.
+ * - No long voice is inserted during the reversing distance display, only short sound effects are allowed to prompt status changes such as disconnection and recovery.
+ * - In the distance display state, FeedbackController can only interrupt the distance playLoop() with a short beep playOnce().
+ * - SpeakerController resumes playLoop after playOnce interrupts it; FeedbackController does not poll for resumption.
+ * - Low-priority feedback, such as power-on animation/startup sound, can be replaced or interrupted by subsequent business events.
+ * - main does not need to ask "whether the power-on animation is over" before notifying the wake-up result; just call the corresponding event directly.
  *
- * 将来移动到 src 后，正式代码预期包含：
+ * After moving to src in the future, the official code is expected to include:
  *   #include "rgb_led_controller.h"
  *   #include "speaker_controller.h"
  *   #include "audio_catalog.h"
@@ -40,10 +40,10 @@
 #define FEEDBACK_EVENT_COOLDOWN_MS        5000
 
 /*
- * FeedbackController 当前所处的业务场景。
+ * The current business scenario of FeedbackController.
  *
- * 第一版只用于统一休眠/关机事件，帮助 FeedbackController 决定是否需要先停止距离反馈、
- * 是否播放配对/工作场景下不同的退场灯效。
+ * The first version is only used to unify sleep/shutdown events to help FeedbackController decide whether to stop distance feedback first.
+ * Whether to play different exit lighting effects in pairing/working scenes.
  */
 enum class FeedbackScene : uint8_t {
     Idle,
@@ -53,11 +53,11 @@ enum class FeedbackScene : uint8_t {
 };
 
 /*
- * 逻辑上的可用车外模块集合。
+ * Logical set of available off-vehicle modules.
  *
- * 这不是物理 LED 区域。
- * 例如 SensorSet::Left 表示只有左侧外部模块可用；
- * 具体要亮哪几颗灯，由 FeedbackController 内部映射到 RgbLedController。
+ * This is not a physical LED area.
+ * For example, SensorSet::Left means that only the left external module is available;
+ * The specific lights to be turned on are internally mapped to RgbLedController by FeedbackController.
  */
 enum class FeedbackSensorSet : uint8_t {
     None,
@@ -67,14 +67,14 @@ enum class FeedbackSensorSet : uint8_t {
 };
 
 /*
- * 距离反馈等级。
+ * Distance feedback level.
  *
- * 第一版建议让 main 或现有距离逻辑继续负责判断距离等级，
- * FeedbackController 只根据等级选择灯效和蜂鸣音。
- * 等结构稳定后，再考虑把阈值判断也移动进来。
+ * The first version recommends that main or existing distance logic continue to be responsible for determining distance levels.
+ * FeedbackController only selects lighting effects and buzzers based on levels.
+ * After the structure is stable, consider moving the threshold judgment into it.
  */
 enum class FeedbackDistanceLevel : uint8_t {
-    Safe,       // 距离无效或 > 150 cm，静音
+    Safe,       // Invalid distance or > 150 cm, mute
     VeryFar,    // 121..150 cm
     Far,        // 91..120 cm
     Medium,     // 61..90 cm
@@ -83,14 +83,14 @@ enum class FeedbackDistanceLevel : uint8_t {
 };
 
 /*
- * 所有当前已经设计的反馈事件。
+ * All currently designed feedback events.
  *
- * 这个 enum 主要用于日志、调试和测试。
- * 正常业务代码优先调用下面具体的 onXxxEvent()，不要在 main 里 switch 这个 enum 做灯光和声音。
+ * This enum is mainly used for logging, debugging and testing.
+ * Normal business code gives priority to calling the specific onXxxEvent() below. Do not switch this enum in main to do lights and sounds.
  *
- * 建模原则：
- * - 同一个触发原因，只是结果不同，用一个 event + 参数。
- * - 不要把 Left/Right/None 这种结果组合膨胀成多个 event。
+ * Modeling principles:
+ * - The same trigger cause, but the result is different, using an event + parameter.
+ * - Don’t expand Left/Right/None result combinations into multiple events.
  */
 enum class FeedbackEvent : uint8_t {
     SystemBoot,
@@ -117,7 +117,7 @@ enum class FeedbackEvent : uint8_t {
     // LeftLinkRestored,
     // RightLinkRestored,
 
-    // 统一事件 API 使用以下值
+    // The Unified Events API uses the following values
     PairSucceeded,
     WakeSucceeded,
     LinkLost,
@@ -127,196 +127,196 @@ enum class FeedbackEvent : uint8_t {
 class FeedbackController {
 public:
     /*
-     * FeedbackController 不拥有硬件，只引用现有驱动。
-     * rgb.begin() 和 speaker.begin() 以及end() 仍然由 setup() 或应用层负责调用。
+     * FeedbackController does not own the hardware and only references the existing driver.
+     * rgb.begin(), speaker.begin() and end() are still called by setup() or the application layer.
      */
     FeedbackController(RgbLedController& rgb, SpeakerController& speaker);
 
     /*
-     * 初始化反馈层自己的状态。
-     * 不做硬件初始化，不进入具体业务模式。
+     * Initialize the feedback layer's own state.
+     * No hardware initialization is performed, and no specific business mode is entered.
      */
     bool begin();
 
     /*
-     * 清理反馈层状态，停止当前灯效和声音。
-     * 不销毁底层驱动对象。
+     * Clear the feedback layer status and stop the current lighting effects and sounds.
+     * Do not destroy the underlying driver object.
      */
     void end();
 
     /*
-     * 如果某些业务阶段需要等待最终提示音结束，例如配对完成、关机，
-     * main 可以轮询这个函数。
+     * If you need to wait for the final prompt sound to end in some business stages, such as pairing completion and shutdown,
+     * main can poll this function.
      *
-     * 第一版建议直接代理查询 SpeakerController/RgbLedController 的忙碌状态，
-     * FeedbackController 不维护自己的异步调度队列。
+     * The first version recommends directly querying the busy status of SpeakerController/RgbLedController through proxy.
+     * FeedbackController does not maintain its own asynchronous dispatch queue.
      *
-     * 注意：等待期间 main 仍然要继续处理无线接收和系统维护任务。
+     * Note: During the waiting period, main still needs to continue processing wireless reception and system maintenance tasks.
      */
     bool isBusy() const;
 
     /*
-     * 调试用：返回最近一次被处理的事件。
-     * 只播放声音、不改变业务状态的 Tone 调度接口不更新该值。
+     * For debugging: Return the most recently processed event.
+     * The Tone scheduling interface that only plays sound and does not change the service status does not update this value.
      */
     FeedbackEvent lastEvent() const;
 
     // ---------------------------------------------------------------------
-    // 通用事件
+    // General event
     // ---------------------------------------------------------------------
 
     /*
-     * 系统上电。
+     * The system is powered on.
      *
-     * startup_scene 表示上电后预计进入的业务场景。
-     * 例如配对模式可以完整播放配对提示；工作模式可以允许后续唤醒/距离事件快速打断。
+     * startup_scene indicates the business scenario expected to be entered after power on.
+     * For example, pairing mode can play the pairing prompt in full; working mode can allow subsequent wake/distance events to be quickly interrupted.
      */
     void onSystemBootEvent(FeedbackScene startup_scene);
 
     /*
-     * 统一休眠或关机事件。
+     * Unified sleep or shutdown events.
      *
-     * current_scene 表示当前从哪个业务场景退场。
-     * 第一版只保留一个 shutdown 入口，不展开低电、故障、工作退出等原因分支。
+     * current_scene indicates which business scenario you are currently exiting from.
+     * The first version only retains one shutdown entry, and does not expand branches due to low power, failure, job exit, etc.
      */
     void onShutdownEvent(FeedbackScene current_scene);
 
     // ---------------------------------------------------------------------
-    // 未配对事件
+    // Unpaired event
     // ---------------------------------------------------------------------
 
     /*
-     * 启动后检测到设备未配对。
-     * 建议：保持安静，只做一次很轻的蓝色提示或短语音，避免反复打扰。
+     * It is detected that the device is not paired after startup.
+     * Suggestion: Keep quiet and only make a very light blue prompt or short voice to avoid repeated interruptions.
      */
     void onUnpairedDetectedEvent();
 
     // ---------------------------------------------------------------------
-    // 配对事件
+    // pairing event
     // ---------------------------------------------------------------------
 
     /*
-     * 进入配对模式。
-     * 建议：四灯蓝色呼吸；无线配对流程立即开始，不等待声音。
+     * Enter pairing mode.
+     * Recommendation: Four lights blue breathing; the wireless pairing process starts immediately without waiting for the sound.
      */
     void onPairingStartedEvent();
 
     /*
-     * 一个或多个模块配对成功。
-     * paired_sensors 表示本次状态更新后已经配对成功的模块集合。
-     * 对应侧灯绿色常亮；成功提示音由 main 单独调度。
+     * One or more modules are paired successfully.
+     * paired_sensors indicates the set of modules that have been successfully paired after this status update.
+     * The corresponding side light is always green; the success tone is scheduled separately by main.
      */
     void onPairSucceededEvent(FeedbackSensorSet paired_sensors);
 
     /*
-     * 播放一次配对成功提示音，不改变配对状态和 LED 状态。
-     * main 使用该事件依次调度两个单侧成功提示音。
-     * 该纯音频调度命令不更新 lastEvent()。
+     * Play the pairing success prompt once, and do not change the pairing status and LED status.
+     * main uses this event to schedule two single-sided success prompts in sequence.
+     * This audio-only scheduling command does not update lastEvent().
      */
     void onPairSuccessToneEvent();
 
     /*
-     * 双侧配对成功。
-     * 建议：四灯成功动画，播放一次最终配对成功提示。
-     * main 可等待 isBusy() 变 false 后退出配对流程。
+     * Bilateral pairing is successful.
+     * Suggestion: Four lights successful animation, play the final pairing success prompt once.
+     * main can wait for isBusy() to become false before exiting the pairing process.
      */
     void onPairBothSucceededEvent();
 
     /*
-     * 配对超时。
+     * Pairing timeout.
      *
-     * paired_sensors 表示超时时已经配对成功的模块：
-     * - None：双侧均失败，播放 pair_fail_both。
-     * - Left：仅左侧成功，播放 pair_fail_right。
-     * - Right：仅右侧成功，播放 pair_fail_left。
+     * paired_sensors indicates the modules that have been paired successfully during timeout:
+     * - None: Both sides fail, play pair_fail_both.
+     * - Left: Only the left side succeeds, play pair_fail_right.
+     * - Right: Only the right side succeeds, play pair_fail_left.
      *
-     * 不应该传 Both；双侧都成功时应调用 onPairBothSucceededEvent()。
+     * Both should not be passed; onPairBothSucceededEvent() should be called when both sides are successful.
      */
     void onPairingTimedOutEvent(FeedbackSensorSet paired_sensors);
 
     // ---------------------------------------------------------------------
-    // 唤醒事件
+    // Wake-up event
     // ---------------------------------------------------------------------
 
     /*
-     * 一个或多个模块唤醒成功。
-     * awake_sensors 表示本次状态更新后的已唤醒集合；成功提示音由 main 单独调度。
+     * One or more modules wake up successfully.
+     * awake_sensors represents the awakened collection after this status update; the success tone is scheduled separately by main.
      */
     void onWakeSucceededEvent(FeedbackSensorSet awake_sensors);
 
     /*
-     * 播放一次唤醒成功提示音，不改变唤醒状态和 LED 状态。
-     * main 使用该事件依次调度多个成功提示音，同时确保传感器状态和 LED
-     * 能够及时响应。
-     * 该纯音频调度命令不更新 lastEvent()。
+     * Play the wake-up success tone once, without changing the wake-up status and LED status.
+     * main uses this event to schedule multiple success beeps in sequence while ensuring the sensor status and LED
+     * Able to respond promptly.
+     * This audio-only scheduling command does not update lastEvent().
      */
     void onWakeSuccessToneEvent();
 
     /*
-     * 播放最终唤醒完成提示音，不改变唤醒状态和 LED 状态。
-     * main 在两个单侧成功提示音都播放结束后调用该事件。
-     * 该纯音频调度命令不更新 lastEvent()。
-     * 如果距离反馈已经开始，则拦截该提示音。
+     * Play the final wake-up completion prompt sound without changing the wake-up status and LED status.
+     * main calls this event after the two single-sided success prompts have finished playing.
+     * This audio-only scheduling command does not update lastEvent().
+     * If distance feedback has started, intercept the prompt tone.
      */
     void onWakeCompletedToneEvent();
 
     /*
-     * 唤醒超时。
+     * Wake-up timeout.
      *
-     * awake_sensors 表示超时时已经唤醒成功的模块：
-     * - None：双侧均失败，进入系统不可用灯效，不启动距离蜂鸣。
-     * - Left：仅左侧成功，右侧失败提示；是否单侧工作由 main 决定。
-     * - Right：仅右侧成功，左侧失败提示；是否单侧工作由 main 决定。
+     * awake_sensors indicates modules that have been successfully awakened during timeout:
+     * - None: Both sides failed, the lighting effect is not available when entering the system, and the distance buzzer is not activated.
+     * - Left: Only the left side succeeds, and the right side fails; whether one side works is determined by main.
+     * - Right: Only the right side succeeds, and the left side fails; whether one side works is determined by main.
      *
-     * 不应该传 Both；双侧都唤醒成功时，main 应在两个单侧成功音结束后调用
-     * onWakeCompletedToneEvent() 形成最终完成反馈。误传 Both 时本事件不做任何处理。
+     * Both should not be passed; when both sides wake up successfully, main should be called after the two unilateral success tones have ended.
+     * onWakeCompletedToneEvent() forms the final completion feedback. This event will not be processed if Both is misrepresented.
      */
     void onWakeTimedOutEvent(FeedbackSensorSet awake_sensors);
 
     // ---------------------------------------------------------------------
-    // 距离工作事件
+    // Distance from work events
     // ---------------------------------------------------------------------
 
     /*
-     * 距离等级变化。
+     * Distance level changes.
      *
-     * 这个事件也承担“开始倒车距离显示”的职责。
-     * main 收到第一帧有效距离后即可调用。
-     * 如果业务上需要先播放 wake_ok，main 自己等待后再开始上报距离等级。
+     * This event also assumes the responsibility of "start reversing distance display".
+     * main can be called after receiving the effective distance of the first frame.
+     * If the business needs to play wake_ok first, main will wait before starting to report the distance level.
      *
-     * active_sensors 用于决定物理灯区：
-     * - Left：仅左灯显示距离。
-     * - Right：仅右灯显示距离。
-     * - Both：左、右两个灯显示距离。
+     * active_sensors is used to determine the physical light area:
+     * - Left: Only the left light displays the distance.
+     * - Right: Only the right light displays the distance.
+     * - Both: The left and right lights show the distance.
      */
     void onDistanceLevelChangedEvent(FeedbackSensorSet active_sensors,
                                      FeedbackDistanceLevel level);
 
     /*
-     * 一个或两个距离传感器达到连续无效次数上限。
-     * 灯光和声音反馈与对应的链路失联反馈一致，但 main 必须保持工作模式运行，
-     * 并等待满足连续有效帧恢复条件。
+     * One or two distance sensors have reached the upper limit of consecutive invalid times.
+     * The light and sound feedback are consistent with the corresponding link loss feedback, but main must keep running in working mode.
+     * And wait for the continuous valid frame recovery condition to be met.
      */
     void onDistanceSensorFaultEvent(FeedbackSensorSet faulted_sensors,
                                     FeedbackSensorSet active_sensors);
 
     /*
-     * 单侧链路确认失联。
-     * active_sensors 表示失联后仍可参与距离反馈的模块集合。
-     * 剩余模块继续距离反馈，并播放一次短下降音。
+     * One-sided link is confirmed to be lost.
+     * active_sensors represents the set of modules that can still participate in distance feedback after losing contact.
+     * The remaining modules continue distance feedback and play a short falling tone.
      */
     void onLinkLostEvent(FeedbackSensorSet active_sensors);
 
     /*
-     * 双侧确认失联。
-     * 建议：停止距离反馈，进入全局不可用灯效，播放一次合并故障短音。
-     * 随后由 main 退出工作模式并进入休眠或关机流程，不设计自动恢复。
+     * Bilateral confirmation of loss of contact.
+     * Suggestion: Stop distance feedback, enter the global unavailable lighting effect, and play a merge fault short sound.
+     * Then main exits the working mode and enters the sleep or shutdown process, and automatic recovery is not designed.
      */
     void onBothLinksLostEvent();
 
     /*
-     * 一个或多个模块恢复在线。
-     * active_sensors 表示恢复后可参与距离反馈的模块集合。
+     * One or more modules are back online.
+     * active_sensors represents the set of modules that can participate in distance feedback after recovery.
      */
     void onLinkRestoredEvent(FeedbackSensorSet active_sensors);
 
@@ -327,44 +327,44 @@ private:
     FeedbackEvent _last_event = FeedbackEvent::SystemBoot;
     FeedbackScene _scene = FeedbackScene::Idle;
     FeedbackDistanceLevel _distance_level = FeedbackDistanceLevel::Safe;
-    // 判断是否需要在距离显示期间禁止长语音插入
+    // Determine whether it is necessary to prohibit long voice insertion during distance display
     bool _distance_feedback_enabled = false;
 };
 
 /*
- * 第一版实现建议
+ * First version of implementation suggestions
  *
- * 1. 不实现 prompt queue，不实现 update() 轮询调度。
- *    需要顺序播放的场景由 main 通过 isBusy() 控制调用时机。
+ * 1. Does not implement prompt queue and update() polling scheduling.
+ *    Main controls the calling timing through isBusy() for scenes that need to be played sequentially.
  *
- * 2. main 只调用事件 API，不直接写灯光和声音策略。
- *    例如 main 判断链路失联后，只调用 onLinkLostEvent(active_sensors)。
+ * 2. main only calls the event API and does not write lighting and sound strategies directly.
+ *    For example, after main determines that the link is lost, it only calls onLinkLostEvent(active_sensors).
  *
- * 3. 每个业务状态 onXxxEvent() 内部先直接更新 _last_event 和必要状态，
- *    再组合调用 RgbLedController 和 SpeakerController。
- *    只播放声音、不改变业务状态的 Tone 调度接口不更新 _last_event。
- *    播放声音时，先选择 AudioId，再用 audio_path_from_id(audio_id) 得到路径，
- *    最后调用 _speaker.playOnce(path) 或 _speaker.playLoop(path)。
- *    第一版不预设额外私有 helper，避免还没实现就形成复杂框架。
+ * 3. Each business status onXxxEvent() directly updates _last_event and necessary status internally.
+ *    Call RgbLedController and SpeakerController in combination.
+ *    The Tone scheduling interface that only plays sound and does not change the business status does not update _last_event.
+ *    When playing sound, first select AudioId, and then use audio_path_from_id(audio_id) to get the path.
+ *    Finally call _speaker.playOnce(path) or _speaker.playLoop(path).
+ *    The first version does not preset additional private helpers to avoid forming a complex framework before it is implemented.
  *
- * 4. 距离反馈先沿用当前代码已经有的等级和蜂鸣文件。
- *    playLoop 被 playOnce 打断后恢复 loop 的语义放在 SpeakerController。
- *    但“距离显示期间能不能播放某个音频”的判断放在 FeedbackController，
- *    可通过 audio_is_blocked_during_parking(audio_id) 拦截长语音。
+ * 4. The distance feedback first uses the existing level and beep files of the current code.
+ *    The semantics of restoring the loop after playLoop is interrupted by playOnce are placed in SpeakerController.
+ *    But the judgment of "whether a certain audio can be played during the distance display" is placed in FeedbackController.
+ *    Long speech can be intercepted through audio_is_blocked_during_parking(audio_id).
  *
- * 5. 等这个简单版本跑通，再决定是否需要 token、去重 key、完整队列等更复杂机制。
- *    不要在第一版就把所有可能性都设计成公开类型。
+ * 5. Wait for this simple version to run through, and then decide whether more complex mechanisms such as tokens, deduplication keys, and complete queues are needed.
+ *    Don’t design all possibilities as public types in the first version.
  *
  *
- * 两个事件函数示例实现
+ * Example implementation of two event functions
  *
- * 下面代码建议放在 feedback_controller.cpp。
- * 目的不是一次性覆盖全部事件，而是给同事看清楚：
- * - onXxxEvent() 只更新必要状态。
- * - 直接把事件翻译成 RGB/Speaker 指令。
- * - 不在事件函数里等待音频或动画结束。
+ * It is recommended that the following code be placed in feedback_controller.cpp.
+ * The purpose is not to cover all events at once, but to let colleagues see clearly:
+ * - onXxxEvent() only updates necessary status.
+ * - Translate events directly into RGB/Speaker commands.
+ * - Do not wait for the audio or animation to end in the event function.
  *
- * 示例 1：配对状态更新
+ * Example 1: Pairing status update
  *
  * void FeedbackController::onPairSucceededEvent(
  *     FeedbackSensorSet paired_sensors)
@@ -382,7 +382,7 @@ private:
  *     }
  * }
  *
- * 示例 2：距离等级变化，也是开始倒车距离显示的入口
+ * Example 2: The distance level changes, which is also the entrance to start the reverse distance display.
  *
  * void FeedbackController::onDistanceLevelChangedEvent(
  *     FeedbackSensorSet active_sensors,
@@ -449,7 +449,7 @@ private:
  * }
  *
  *
- * main 调用 FeedbackController 的简单 demo
+ * Simple demo of main calling FeedbackController
  *
  * RgbLedController rgb;
  * SpeakerController speaker;
@@ -461,25 +461,25 @@ private:
  *     speaker.begin();
  *     feedback.begin();
  *
- *     // 工作模式上电：启动反馈可以被后续唤醒/距离事件打断。
+ *     // Work mode power on: startup feedback can be interrupted by subsequent wake/distance events.
  *     feedback.onSystemBootEvent(FeedbackScene::Working);
  * }
  *
  * void loop()
  * {
- *     // 示例：收到左侧配对成功 ACK。
+ *     // Example: Received ACK of successful pairing from the left side.
  *     if (left_pair_ack_received) {
  *         feedback.onPairSucceededEvent(FeedbackSensorSet::Left);
  *     }
  *
- *     // 示例：收到第一帧有效距离，或距离等级变化。
+ *     // Example: The effective distance of the first frame is received, or the distance level changes.
  *     if (distance_level_changed) {
  *         feedback.onDistanceLevelChangedEvent(
  *             FeedbackSensorSet::Both,
  *             FeedbackDistanceLevel::Medium);
  *     }
  *
- *     // 示例：需要等待最终提示时，main 自己决定是否等待。
+ *     // Example: When it needs to wait for the final prompt, main decides whether to wait.
  *     if (need_wait_final_prompt && !feedback.isBusy()) {
  *         enter_sleep_or_next_stage();
  *     }

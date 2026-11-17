@@ -1,6 +1,6 @@
 #include "protocol.h"
 
-// 计算校验值：前 7 字节之和 & 0xFF
+// Calculate check value: sum of first 7 bytes & 0xFF
 uint8_t frame_calc_checksum(const protocol_frame_t* frame)
 {
     const uint8_t* p = (const uint8_t*)frame;
@@ -11,7 +11,7 @@ uint8_t frame_calc_checksum(const protocol_frame_t* frame)
     return sum;
 }
 
-// 构建帧
+// build frame
 void frame_build(protocol_frame_t* frame, uint8_t head, frame_type_t type,
                  uint16_t dist, int16_t angle)
 {
@@ -23,7 +23,7 @@ void frame_build(protocol_frame_t* frame, uint8_t head, frame_type_t type,
     frame->checksum = frame_calc_checksum(frame);
 }
 
-// 校验帧合法性
+// Verify frame validity
 bool frame_validate(const uint8_t* data, int len,
                     uint8_t expect_head, frame_type_t expect_type)
 {

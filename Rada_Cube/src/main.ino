@@ -8,28 +8,28 @@
 #include "protocol.h"
 #include "espnow.h"
 
-// 系统模式
+// System mode
 enum SysMode {
-    UNPAIRED_MODE,      // 未配对 → 直接睡眠
-    PAIRED_MODE,        // 配对模式
-    WORK_MODE,          // 工作模式（Normal）
-    TEST_MODE,          // 测试模式（预留）
-    CONFIG_MODE,        // 配置模式（预留）
-    FACTORY_RESET_MODE  // 恢复出厂设置
+    UNPAIRED_MODE,      // Not paired → sleep directly
+    PAIRED_MODE,        // Pairing mode
+    WORK_MODE,          // Working mode (Normal)
+    TEST_MODE,          // Test mode (reserved)
+    CONFIG_MODE,        // Configuration mode (reserved)
+    FACTORY_RESET_MODE  // Restore factory settings
 };
 
 enum BuzzerMode{
-    SILENT_MODE,        // 静音模式
-    CONTINUOUS_MODE,    // 连续鸣叫
-    FAST_MODE,          // 快速鸣叫，周期0.25s
-    MED_MODE,           // 中速鸣叫，周期0.5s
-    SLOW_MODE,          // 慢速鸣叫，周期1s
+    SILENT_MODE,        // Silent mode
+    CONTINUOUS_MODE,    // Continuous tweeting
+    FAST_MODE,          // Quick beep, period 0.25s
+    MED_MODE,           // Medium speed chirp, period 0.5s
+    SLOW_MODE,          // Slow chirping, cycle 1s
 };
 
 
-// ======================== 全局实例 ========================
+// ======================== Global instance ========================
 
-// 串口实例（pins.h 里 extern 声明，这里定义）
+// Serial port instance (extern statement in pins.h, defined here)
 HardwareSerial& LoraSerial = Serial1;
 #ifdef INSIDE
     BeeperControler Beeper;
@@ -45,11 +45,11 @@ LoraManager Lora;
 EspNowManager Espnow;
 MacMatch Matcher(Espnow);
 
-// ======================== RTOS全局变量 ========================
+// ======================== RTOS global variables ========================
 static volatile BuzzerMode buzzer_mode = SILENT_MODE;
 static SemaphoreHandle_t buzzer_mutex = NULL;
 
-// ======================== RTOS任务 ========================
+// ======================== RTOS tasks ========================
 #ifdef INSIDE
     void buzzer_task(void* pvParameters)
     {
@@ -63,7 +63,7 @@ static SemaphoreHandle_t buzzer_mutex = NULL;
             BuzzerMode target = buzzer_mode;
             xSemaphoreGive(buzzer_mutex);
 
-            // 如果模式改变了，立即停止当前蜂鸣并准备切换
+            // If the mode changes, immediately stop the current beep and prepare to switch
             if(target != current_mode)
             {
                 is_on = false;
@@ -72,17 +72,17 @@ static SemaphoreHandle_t buzzer_mutex = NULL;
                 current_mode = target;
             }
 
-            // 状态机
+            // State machine
             TickType_t now = xTaskGetTickCount();
             uint16_t period = Beeper.get_period(current_mode);
 
             switch(current_mode)
             {
                 case SILENT_MODE:
-                    //  静音,保持上面静音状态不变
+                    //  Mute, keep the mute status above
                     break;
                 case CONTINUOUS_MODE:
-                    // 连续鸣叫
+                    // Continuous tweeting
                     if(!is_on)
                     {
                         Beeper.beep();
@@ -92,8 +92,8 @@ static SemaphoreHandle_t buzzer_mutex = NULL;
                 case FAST_MODE:
                 case MED_MODE:
                 case SLOW_MODE:
-                // 非阻塞式周期鸣叫
-                //TODO: 目前采用非阻塞式实现，有问题可以试试阻塞式实现，直接用蜂鸣器的周期来算延时
+                // Non-blocking periodic chirping
+                //TODO: Currently, non-blocking implementation is used. If you have any problems, you can try blocking implementation and directly use the buzzer period to calculate the delay.
                     if(now - last_toggle >= pdMS_TO_TICKS(period / 2))
                     {
                         if(is_on)
@@ -117,9 +117,9 @@ static SemaphoreHandle_t buzzer_mutex = NULL;
     }
 #endif
 
-// ======================== 辅助函数 ========================
+// ======================== Auxiliary functions ========================
 
-// 发送结束帧（重发 END_SEND_COUNT 次确保对方收到）
+// Send end frame (resend END_SEND_COUNT times to ensure the other party receives it)
 static void sendEndFrame(const uint8_t* peer_mac, uint8_t head)
 {
     protocol_frame_t frame;
@@ -130,7 +130,7 @@ static void sendEndFrame(const uint8_t* peer_mac, uint8_t head)
     }
 }
 
-// 检查是否收到结束帧
+// Check whether the end frame is received
 static bool checkEndFrame(uint8_t expect_head)
 {
     espnow_msg_t msg;
@@ -142,7 +142,7 @@ static bool checkEndFrame(uint8_t expect_head)
     return false;
 }
 
-// 等待按键释放并返回持续时间（ms）
+// Wait for button release and return duration (ms)
 static uint32_t waitButtonRelease()
 {
     uint32_t t_start = millis();
@@ -165,12 +165,12 @@ static uint32_t waitButtonRelease()
     return hold_time;
 }
 
-// 两键同时按下从机实现比较困难，我把config_mode和factor_reset_mode对换了
+// It is difficult to press two keys at the same time on the slave machine. I swapped config_mode and factor_reset_mode.
 
-// 按键 → 模式判断（USER 和 DEV 分开处理）
-//   USER button: 短按 → WORK_MODE,  长按(3s) → PAIRED_MODE
-//   DEV  button: 短按 → TEST_MODE,  长按(3s) → CONFIG_MODE
-//   两键同按:     → FACTORY_RESET_MODE
+// Key → Mode judgment (USER and DEV are processed separately)
+//   USER button: short press → WORK_MODE, long press (3s) → PAIRED_MODE
+//   DEV button: short press → TEST_MODE, long press (3s) → CONFIG_MODE
+//   Press two keys at the same time: → FACTORY_RESET_MODE
 static SysMode detectButtonMode(WakeupSource wakeup)
 {
     uint32_t hold = waitButtonRelease();
@@ -190,17 +190,17 @@ static SysMode detectButtonMode(WakeupSource wakeup)
     return UNPAIRED_MODE;
 }
 
-// ======================== INSIDE 工作模式 ========================
+// ======================== INSIDE working mode ========================
 #ifdef INSIDE
 static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
 {
-    // 1) Lora 发送唤醒帧，等从机 ESP-NOW 回复 WAKE_ACK
+    // 1) Lora sends a wake-up frame and waits for the slave ESP-NOW to reply WAKE_ACK
     bool slave_a_woke = false;
     bool slave_b_wake = false;
     bool woke = false;
     espnow_msg_t msg;
 
-    // ================ 把循环里的电平切换放到外面来，加上100ms延时，之前的10ms延时不够会导致帧发送不完全 =================
+    // ================ Put the level switching in the loop outside and add a 100ms delay. The previous 10ms delay is not enough, which will lead to incomplete frame transmission =================
     Lora.enable_ce();
     vTaskDelay(pdMS_TO_TICKS(100));
     for (int retry = 0; retry < WAKE_MAX_RETRY && !woke; retry++) {
@@ -211,7 +211,7 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
             vTaskDelay(pdMS_TO_TICKS(WAKE_POLL_INTERVAL_MS));
             while (Espnow.read(&msg)) {
                 if (frame_validate(msg.data, msg.len, SLAVE_FRAME_HEAD, FRAME_WAKE_ACK)) {
-                    // 这里判断一下是哪个从机返回的消息
+                    // Here determine which slave machine returns the message
                     if(memcmp(msg.src_mac, a_mac, 6) == 0) {
                         slave_a_woke = true;
                         ESP_LOGI(MAIN_TAG, "Slave A woke up");
@@ -230,16 +230,16 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
     }
     Lora.disable_ce();
 
-    // 唤醒失败处理
-    // TODO：唤醒失败，可能是两个从机中其中一个醒来另一个出问题，还是要发送一下工作结束帧让醒来的从机停止工作
+    // Wake-up failure handling
+    // TODO: The wake-up failed. It may be that one of the two slaves wakes up and the other has a problem. It is still necessary to send a work end frame to let the awakened slave stop working.
     if (!woke) {
         ESP_LOGE(MAIN_TAG, "Failed to wake slave after %d retries", WAKE_MAX_RETRY);
         
-        // 建议：唤醒失败时，播放下降音调，告诉用户“车外模块失联了，不要倒车！”
+        // Suggestion: When wake-up fails, play a descending tone to tell the user "The external module of the vehicle has lost contact, do not reverse the vehicle!"
         Beeper.beeper_init();
         Beeper.play_fail_tone();
 
-        // 唤醒失败发送停止工作帧，确保从机全部关闭
+        // If wake-up fails, a stop working frame is sent to ensure that all slave machines are shut down.
         sendEndFrame(a_mac, MASTER_FRAME_HEAD);
         sendEndFrame(b_mac, MASTER_FRAME_HEAD);
         
@@ -249,25 +249,25 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
 
     
 
-    // 唤醒成功处理：给用户明确的成功反馈
-    // 播放一段上升音调，向用户发出 "Active Positive" 信号，代表雷达已启动
+    // Wake-up success processing: Give the user clear success feedback
+    // Play a rising tone to send an "Active Positive" signal to the user, indicating that the radar has been activated.
     Beeper.beeper_init();
     Beeper.play_success_tone();
 
-    // 唤醒成功后可以关 Lora 省电
+    // After successful wake-up, you can turn off Lora to save power.
     Lora.shutdown();
 
-    // 2) 创建蜂鸣器任务
-    // 初始化互斥锁
+    // 2) Create buzzer task
+    // Initialize mutex lock
     if(buzzer_mutex == NULL)
     {
         buzzer_mutex = xSemaphoreCreateMutex();
     }
-    // 创建蜂鸣器任务
+    // Create a buzzer task
     TaskHandle_t beeper_handle = NULL;
     xTaskCreate(buzzer_task, "beeper", 2048, NULL, 2, &beeper_handle);
 
-    // 3) 工作循环：读最新雷达数据 → 蜂鸣器提示
+    // 3) Work cycle: read the latest radar data → buzzer prompt
     uint32_t work_start = millis();
 
     protocol_frame_t slave_a_data = {0};
@@ -275,36 +275,36 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
     uint16_t dist_min = 0;
     bool exit_flag = false;
 
-    // 迟滞区间，用来记录上一次是什么模式，防止频繁切换
+    // Hysteresis interval, used to record the last mode to prevent frequent switching
     BuzzerMode current_mode = SILENT_MODE;
 
     while (true) {
-        // 退出条件1：超时
+        // Exit condition 1: timeout
         if (millis() - work_start > WORK_TIMEOUT_MS) {
             ESP_LOGI(MAIN_TAG, "Work timeout, exiting");
             break;
         }
 
-        // 退出条件2：按键按下
-        // TODO：改成中断处理而不是轮询检测？现在这样是为了在工作循环里顺便处理按键事件，感觉也还好，暂时先这样
+        // Exit condition 2: button pressed
+        // TODO: Change to interrupt processing instead of polling detection? Now this is to handle key events in the work loop. It feels good, so I will do this for the time being.
         if (digitalRead(USER_BUTTON_PIN) == BUTTON_PRESSED ||
             digitalRead(DEV_BUTTON_PIN)  == BUTTON_PRESSED) {
             ESP_LOGI(MAIN_TAG, "Button pressed, exiting work mode");
             break;
         }
 
-        // 退出条件3：收到结束帧
-        // (OUTSIDE 主动退出时会发 END 帧)
+        // Exit condition 3: End frame received
+        // (OUTSIDE will send an END frame when exiting actively)
 
-        // 查看一下队列里的数据深度
+        // Check the data depth in the queue
         // ESP_LOGI(MAIN_TAG, "Queue depth: %d", Espnow.getQueueCount());
 
-        // TODO：队列里读取雷达数据, 如果队列里一直有数据，会不会出现卡死的情况?
+        // TODO: Read radar data in the queue. If there is always data in the queue, will it get stuck?
         while(Espnow.read(&msg))
         {
             if(frame_validate(msg.data, msg.len, SLAVE_FRAME_HEAD, FRAME_RADAR_DATA))
             {
-                // 判断哪个从机返回的数据
+                // Determine which slave returns the data
                 if(memcmp(msg.src_mac, a_mac, 6) == 0)
                 {
                     memcpy(&slave_a_data, msg.data, sizeof(protocol_frame_t));
@@ -326,62 +326,62 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
             }
         }
 
-        // 收到退出帧后，跳出循环
+        // After receiving the exit frame, jump out of the loop
         if(exit_flag)
         {
             break;
         }
 
-        // 模式判断
-        // TODO：如果从机数据很久没有更新了，是不是也应该认为它失联了？
+        // Mode judgment
+        // TODO: If the slave data has not been updated for a long time, should it be considered that it has lost contact?
         uint16_t dist_a = slave_a_data.dist;
         uint16_t dist_b = slave_b_data.dist;
 
-        // 判断数据是否有效
-        // TODO：需不需要加上最大值限制？
+        // Determine whether the data is valid
+        // TODO: Do I need to add a maximum limit?
         bool valid_a = (dist_a > 0);
         bool valid_b = (dist_b > 0);
 
-        // 取判断值
+        // Get the judgment value
         uint16_t min_dist = UINT16_MAX;
         BuzzerMode new_mode;
 
         if(valid_a && valid_b)
         {
-            // 如果两个都有效，取更近的那个
+            // If both are valid, take the closer one
             min_dist = (dist_a < dist_b) ? dist_a : dist_b;
         }
         else if(valid_a)
         {
-            // 如果只有 A 有效，取 A
+            // If only A is valid, take A
             min_dist = dist_a;
         }
         else if(valid_b)
         {
-            // 如果只有 B 有效，取 B
+            // If only B is valid, take B
             min_dist = dist_b;
         }
         else
         {
-            // 如果两个都无效，保持初始值
+            // If both are invalid, keep the initial value
         }
 
-        // 加上迟滞区间，防止蜂鸣器模式频繁切换
-        // TODO：看一下需不需换成滤波还是在加上一层滤波
+        // Add a hysteresis interval to prevent the buzzer mode from switching frequently
+        // TODO: Let’s see if we need to change to filtering or add a layer of filtering.
         if(min_dist == UINT16_MAX)
         {
-            // 没有有效数据，保持静音
+            // No valid data, keep mute
             new_mode = SILENT_MODE;
             current_mode = SILENT_MODE;
         }
         else
         {
-            // 基于当前模式去做迟滞判断（±10cm的缓冲带）
+            // Make hysteresis judgment based on the current mode (±10cm buffer zone)
             switch(current_mode)
             {
                 case SILENT_MODE:
                 {
-                    // 当前是静音模式，进入到慢速模式需要小于210cm
+                    // Currently in silent mode, entering slow mode requires less than 210cm
                     if(min_dist < DIST_FAR_CM - DIST_HYSTERESIS_CM)
                     {
                         new_mode = SLOW_MODE;
@@ -395,102 +395,102 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
                 }
                 case SLOW_MODE:
                 {
-                    // 当前是慢速模式，进入中速报警模式需要小于160cm，回退到静音需要大于230cm
+                    // It is currently in slow speed mode. It needs to be less than 160cm to enter the medium speed alarm mode, and it needs to be more than 230cm to return to silent mode.
                     if(min_dist < DIST_MID_CM - DIST_HYSTERESIS_CM)
                     {
-                        // < 160cm 进入中速报警
+                        // < 160cm, enter medium speed alarm
                         new_mode = MED_MODE;
                         current_mode = MED_MODE;
                     }
                     else if(min_dist > DIST_FAR_CM + DIST_HYSTERESIS_CM)
                     {
-                        // > 230cm 回退到静音
+                        // > 230cm Return to mute
                         new_mode = SILENT_MODE;
                         current_mode = SILENT_MODE;
                     }
                     else
                     {
-                        // 170~220cm 维持在慢速报警
+                        // 170~220cm, maintain slow alarm
                         new_mode = SLOW_MODE;
                     }
                     break;
                 }
                 case MED_MODE:
                 {
-                    // 当前是中速报警模式，进入到急促报警模式需要小于110cm，回退到慢速报警需要大于180cm
+                    // It is currently in the medium speed alarm mode. To enter the rapid alarm mode, it needs to be less than 110cm, and to return to the slow alarm mode, it needs to be more than 180cm.
                     if(min_dist < DIST_CLOSE_CM - DIST_HYSTERESIS_CM)
                     {
-                        // < 110cm 进入急促报警
+                        // < 110cm, enter emergency alarm
                         new_mode = FAST_MODE;
                         current_mode = FAST_MODE;
                     }
                     else if(min_dist > DIST_MID_CM + DIST_HYSTERESIS_CM)
                     {
-                        // > 180cm 回退到慢速报警
+                        // > 180cm Return to slow alarm
                         new_mode = SLOW_MODE;
                         current_mode = SLOW_MODE;
                     }
                     else
                     {
-                        // 120~170cm 维持在中速报警
+                        // 120~170cm, maintain medium speed alarm
                         new_mode = MED_MODE;
                     }
                     break;
                 }
                 case FAST_MODE:
                 {
-                    // 当前是急促报警模式，进入紧急报警模式需要小于60cm，回退到中速需要大于130cm
+                    // It is currently in rapid alarm mode. To enter the emergency alarm mode, it needs to be less than 60cm, and to return to the medium speed, it needs to be more than 130cm.
                     if(min_dist < DIST_DANGER_CM - DIST_HYSTERESIS_CM)
                     {
-                        // 进入紧急报警
+                        // Enter emergency alarm
                         new_mode = CONTINUOUS_MODE;
                         current_mode = CONTINUOUS_MODE;
                     }
                     else if(min_dist > DIST_CLOSE_CM + DIST_HYSTERESIS_CM)
                     {
-                        // 回退到中速报警
+                        // Return to medium speed alarm
                         new_mode = MED_MODE;
                         current_mode = MED_MODE;
                     }
                     else
                     {
-                        // 70~120cm 维持在急促报警
+                        // 70~120cm maintains rapid alarm
                         new_mode = FAST_MODE;
                     }
                     break;
                 }
                 case CONTINUOUS_MODE:
                 {
-                    //当前模式是紧急报警模式，回退到急促报警模式需要大于80
+                    //The current mode is emergency alarm mode. To return to urgent alarm mode, it needs to be greater than 80
                     if(min_dist > DIST_DANGER_CM + DIST_HYSTERESIS_CM)
                     {
-                        // 回退到急促报警
+                        // Return to urgent alarm
                         new_mode = FAST_MODE;
                         current_mode = FAST_MODE;
                     }
                     else
                     {
-                        // < 70cm 维持在紧急报警
+                        // < 70cm maintain emergency alarm
                         new_mode = CONTINUOUS_MODE;
                     }
                     break;
                 }
                 default:
                 {
-                    // 应该不会出现其他模式了，如果出现了就回退到静音
+                    // Other modes should not appear. If they do, fall back to mute.
                     new_mode = SILENT_MODE;
                     current_mode = SILENT_MODE;
                 }
             }
         }
-        // 写入蜂鸣器任务
+        // Write buzzer task
         xSemaphoreTake(buzzer_mutex, portMAX_DELAY);
         buzzer_mode = new_mode;
         xSemaphoreGive(buzzer_mutex);
 
         vTaskDelay(pdMS_TO_TICKS(WORK_POLL_INTERVAL_MS));
     }
-    // 改为主动杀死进程
+    // Change to actively kill the process
     vTaskDelay(pdMS_TO_TICKS(200));
     if(beeper_handle != NULL)
     {
@@ -498,7 +498,7 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
         ESP_LOGI(MAIN_TAG, "Buzzer task deleted");
     }
 
-    // 4) 退出：停蜂鸣 + 通知从机结束
+    // 4) Exit: stop beeping + notify the slave of the end
     Beeper.beep_stop();
     sendEndFrame(a_mac, MASTER_FRAME_HEAD);
     sendEndFrame(b_mac, MASTER_FRAME_HEAD);
@@ -506,39 +506,39 @@ static void inside_work_mode(uint8_t* a_mac, uint8_t* b_mac)
 }
 #endif
 
-// ======================== OUTSIDE 工作模式 ========================
+// ======================== OUTSIDE working mode ========================
 #ifdef OUTSIDE
 static void outside_work_mode(uint8_t* peer_mac)
 {
-    // 1) 回复唤醒 ACK
+    // 1) Reply to wake up ACK
     protocol_frame_t ack;
     frame_build(&ack, SLAVE_FRAME_HEAD, FRAME_WAKE_ACK);
     if (Espnow.send(peer_mac, (uint8_t*)&ack, sizeof(ack)) != ESP_OK) {
         ESP_LOGE(MAIN_TAG, "Failed to send WAKE_ACK");
     }
 
-    // Lora 不再需要，关掉串口给雷达让路（共用 Serial1）
+    // Lora is no longer needed, turn off the serial port to make way for the radar (share Serial1)
     LoraSerial.end();
 
-    // 2) 初始化雷达 + 定期发送雷达数据
+    // 2) Initialize radar + send radar data periodically
     Radar.init();
     uint32_t work_start = millis();
 
     while (true) {
-        // 退出条件1：超时
+        // Exit condition 1: timeout
         if (millis() - work_start > WORK_TIMEOUT_MS) {
             ESP_LOGI(MAIN_TAG, "Work timeout, exiting");
             break;
         }
 
-        // 退出条件2：按键按下
+        // Exit condition 2: button pressed
         if (digitalRead(USER_BUTTON_PIN) == BUTTON_PRESSED ||
             digitalRead(DEV_BUTTON_PIN)  == BUTTON_PRESSED) {
             ESP_LOGI(MAIN_TAG, "Button pressed, exiting work mode");
             break;
         }
 
-        // 退出条件3：收到主机结束帧
+        // Exit condition 3: Host end frame received
         {
             espnow_msg_t msg;
             if (Espnow.read(&msg)) {
@@ -549,14 +549,14 @@ static void outside_work_mode(uint8_t* peer_mac)
             }
         }
 
-        // 解析雷达 + 发送
+        // Analyze Radar + Send
         Radar.loop();
         RadarData rd;
         if (Radar.getData(&rd)) {
             protocol_frame_t frame;
             frame_build(&frame, SLAVE_FRAME_HEAD, FRAME_RADAR_DATA,
                         rd.dist_mm, (int16_t)(rd.angle_deg * 100));
-            // 发送的时候随机加个延时，避免长期占线
+            // Add a random delay when sending to avoid being busy for a long time
             // uint8_t delay_ms = random(0, 4);
             // vTaskDelay(pdMS_TO_TICKS(delay_ms));
             vTaskDelay(pdMS_TO_TICKS(10));
@@ -566,21 +566,21 @@ static void outside_work_mode(uint8_t* peer_mac)
         vTaskDelay(pdMS_TO_TICKS(RADAR_SEND_INTERVAL_MS));
     }
 
-    // 3) 退出：通知主机 + 关雷达
+    // 3) Exit: notify host + turn off radar
     sendEndFrame(peer_mac, SLAVE_FRAME_HEAD);
     Radar.shutdown();
     ESP_LOGI(MAIN_TAG, "Work mode finished");
 }
 #endif
 
-// ======================== 唤醒源 → 模式判断 ========================
+// ======================== Wake-up source → Mode judgment ========================
 
 static SysMode determineMode(WakeupSource wakeup, bool has_peer)
 {
     SysMode mode = UNPAIRED_MODE;
 
 #ifdef INSIDE
-    // 车内模块：只有按键唤醒和上电
+    // In-car module: only key wake-up and power-on
     switch (wakeup) {
     case WAKEUP_USER_BUTTON:
     case WAKEUP_DEV_BUTTON:
@@ -588,13 +588,13 @@ static SysMode determineMode(WakeupSource wakeup, bool has_peer)
         mode = detectButtonMode(wakeup);
         break;
     default:
-        // 上电复位 → 保持 UNPAIRED_MODE → 直接睡
+        // Power-on reset → keep UNPAIRED_MODE → sleep directly
         break;
     }
 #endif
 
 #ifdef OUTSIDE
-    // 车外模块：按键唤醒、Lora 唤醒、上电
+    // External module: key wake-up, Lora wake-up, power-on
     switch (wakeup) {
     case WAKEUP_LORA:
         if (has_peer) {
@@ -610,12 +610,12 @@ static SysMode determineMode(WakeupSource wakeup, bool has_peer)
         mode = detectButtonMode(wakeup);
         break;
     default:
-        // 上电复位 → 保持 UNPAIRED_MODE → 直接睡
+        // Power-on reset → keep UNPAIRED_MODE → sleep directly
         break;
     }
 #endif
 
-    // 工作模式需要已配对
+    // Working mode needs to be paired
     if (mode == WORK_MODE && !has_peer) {
         ESP_LOGW(MAIN_TAG, "Not paired, cannot enter WORK_MODE");
         mode = UNPAIRED_MODE;
@@ -624,7 +624,7 @@ static SysMode determineMode(WakeupSource wakeup, bool has_peer)
     return mode;
 }
 
-// ======================== 模式处理 ========================
+// ======================== Pattern processing ========================
 
 static void handleMode(SysMode mode)
 {
@@ -633,7 +633,7 @@ static void handleMode(SysMode mode)
     case FACTORY_RESET_MODE:
         ESP_LOGI(MAIN_TAG, "Mode: FACTORY_RESET");
         for (int i = 0; i < 3; i++) Led.blink(LED_PERIOD_3);
-        // 清除
+        // Clear
 #ifdef INSIDE
         Matcher.clear_slave_mac();
 #endif
@@ -641,12 +641,12 @@ static void handleMode(SysMode mode)
 #ifdef OUTSIDE
         Matcher.clear_master_mac();
 #endif
-        Lora.setup();               // 需要先初始化 Lora 才能清配置
+        Lora.setup();               // Lora needs to be initialized before clearing the configuration
         Lora.clearConfigFlag();
         Lora.shutdown();
         break;
     
-    // TODO：unpair模式要不要直接开始配对？
+    // TODO: Should I start pairing directly in unpair mode?
     case UNPAIRED_MODE:
         ESP_LOGI(MAIN_TAG, "Mode: UNPAIRED");
         for (int i = 0; i < 2; i++) Led.blink(LED_PERIOD_2);
@@ -654,24 +654,24 @@ static void handleMode(SysMode mode)
 
     case PAIRED_MODE:
         ESP_LOGI(MAIN_TAG, "Mode: PAIRED");
-        // TODO：这里需不要要用灯来指示配对过程，比如处于配对时用呼吸灯？
+        // TODO: Is it necessary to use a light to indicate the pairing process, such as a breathing light during pairing?
         Led.blink(LED_PERIOD_1);
         if (!Matcher.pair()) {
             ESP_LOGE(MAIN_TAG, "Pair failed, going to sleep");
         } else {
-            for (int i = 0; i < 3; i++) Led.blink(LED_PERIOD_1);  // 配对成功提示
+            for (int i = 0; i < 3; i++) Led.blink(LED_PERIOD_1);  // Pairing success prompt
         }
         break;
 
     case TEST_MODE:
         ESP_LOGI(MAIN_TAG, "Mode: TEST");
-        // TODO：测试模式，用于开发和工厂测试硬件
+        // TODO: Test mode, used for development and factory testing of hardware
         Led.blink(LED_PERIOD_2);
         break;
 
     case CONFIG_MODE:
         ESP_LOGI(MAIN_TAG, "Mode: CONFIG");
-        // TODO：配置模式，预留（OTA 等）
+        // TODO: Configuration mode, reserved (OTA, etc.)
         Led.blink(LED_PERIOD_2);
         break;
 
@@ -681,11 +681,11 @@ static void handleMode(SysMode mode)
         Led.led_on();
 
 #ifdef INSIDE
-        // ---- 车内模块工作流程 ----
-        // 1) Lora 初始化 + 发唤醒帧
+        // ---- In-vehicle module work flow ----
+        // 1) Lora initialization + sending wake-up frame
         Lora.setup();
 
-        // 2) ESP-NOW 初始化
+        // 2) ESP-NOW initialization
         Espnow.init();
         uint8_t a_mac[6]{};
         Matcher.load_slave_mac(a_mac, SLAVE_A_ID);
@@ -695,31 +695,31 @@ static void handleMode(SysMode mode)
         Espnow.addPeer(b_mac);
         Espnow.recvStart();
 
-        // 3) 唤醒从机 → 工作循环
+        // 3) Wake up the slave → work cycle
         inside_work_mode(a_mac, b_mac);
 
-        // 4) 清理
+        // 4) Clean up
         Espnow.recvStop();
         Espnow.deinit();
         Lora.shutdown();
 #endif
 
 #ifdef OUTSIDE
-        // ---- 车外模块工作流程 ----
-        // 1) Lora 初始化（被唤醒后需要就绪状态）
+        // ---- Off-vehicle module work flow ----
+        // 1) Lora initialization (needs ready state after waking up)
         Lora.setup();
 
-        // 2) ESP-NOW 初始化
+        // 2) ESP-NOW initialization
         Espnow.init();
         uint8_t master_mac[6]{};
         Matcher.load_master_mac(master_mac);
         Espnow.addPeer(master_mac);
         Espnow.recvStart();
 
-        // 3) 回复 ACK → 雷达采集循环
+        // 3) Reply ACK → radar acquisition loop
         outside_work_mode(master_mac);
 
-        // 4) 清理
+        // 4) Clean up
         Espnow.recvStop();
         Espnow.deinit();
         Lora.shutdown();
@@ -736,7 +736,7 @@ static void handleMode(SysMode mode)
 void setup()
 {
 
-    // 初始化按键引脚 & 检测唤醒原因
+    // Initialize button pins & detect wake-up reasons
     Power.wakeup_gpio_init();
     Power.detectWakeupSource();
     WakeupSource wakeup = Power.getWakeupSource();
@@ -744,20 +744,20 @@ void setup()
     Led.led_init();
     Power.power_init();
 
-    // 加上打开Lora电源，第一次上电发现不加上打开电源，功率开关的使能引脚会卡在加上上拉电阻后也是0.7V左右不是3.3V导致Lora无法工作
+    // After turning on the power of Lora, I found that without turning on the power for the first time, the enable pin of the power switch will be stuck at about 0.7V instead of 3.3V after adding a pull-up resistor, causing Lora to not work.
     pinMode(LORA_POWER_PIN, OUTPUT);
     digitalWrite(LORA_POWER_PIN, LORA_POWER_ON);
 
-    // 电池电量检测
+    // Battery power detection
     uint8_t bat = Power.get_battery_value();
-    // 这个可以调高一点，bat是0的时候可能不能上电了就
+    // This can be adjusted a little higher. When the bat is 0, it may not be able to be powered on.
     if (bat == 0) {
         ESP_LOGE(MAIN_TAG, "Battery empty, going to sleep");
         Power.deep_sleep();
-        // TODO：是不是可以在电量过低时发个警告？比如闪灯或者蜂鸣？
+        // TODO: Is it possible to send a warning when the battery is too low? Like a flashing light or a buzzer?
     }
 
-    // 读取已配对 MAC（如果有）
+    // Read paired MAC (if available)
 #ifdef INSIDE
     bool has_peer = Matcher.has_slave_a_mac() && Matcher.has_slave_b_mac();
 #endif
@@ -767,9 +767,9 @@ void setup()
 #endif
 
 
-    // TODO：这里是不是加个else直接进入unpair模式？
+    // TODO: Should I add an else here to directly enter the unpair mode?
 
-    // 判断模式 → 执行 → 睡眠
+    // Judgment mode → Execute → Sleep
     SysMode mode = determineMode(wakeup, has_peer);
     handleMode(mode);
     Power.deep_sleep();

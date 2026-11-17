@@ -1,94 +1,94 @@
-# RgbLedController 独立实机测试
+# RgbLedController independent real machine test
 
-本测试直接编译和调用生产 `src/rgb_led_controller.h/.cpp`，不复制驱动源码。串口断言只验证可由软件观察的 API 与状态；灯区、动画方向和灯效节奏必须结合实物确认。
+This test directly compiles and calls the production `src/rgb_led_controller.h/.cpp` without copying the driver source code. The serial port assertion only verifies the API and status that can be observed by the software; the lighting area, animation direction and lighting effect rhythm must be confirmed with physical objects.
 
-## 编译与烧录
+## Compile and burn
 
-在 `Rada_Cube_inside` 目录执行以下步骤：
+Perform the following steps in the `Rada_Cube_inside` directory:
 
-1. 临时将 `src/main.ino` 改名为 `src/main.ino.old`。
-2. 将 `test/rgb_led_controller/rgbcontroller_entry.ino` 复制为 `src/rgbcontroller.ino`。
-3. 执行 `pio run` 和 `pio run -t upload`。
-4. 以 115200 波特率打开串口，输入 `a` 运行完整测试。
-5. 测试结束后删除临时 `src/rgbcontroller.ino`，并将 `src/main.ino.old` 恢复为 `src/main.ino`。
+1. Temporarily rename `src/main.ino` to `src/main.ino.old`.
+2. Copy `test/rgb_led_controller/rgbcontroller_entry.ino` to `src/rgbcontroller.ino`.
+3. Execute `pio run` and `pio run -t upload`.
+4. Open the serial port at 115200 baud and enter `a` to run the complete test.
+5. After the test, delete the temporary `src/rgbcontroller.ino` and restore `src/main.ino.old` to `src/main.ino`.
 
-不要提交第 1、2、5 步产生的临时 `src` 目录改动。
+Do not commit the temporary `src` directory changes produced in steps 1, 2, and 5.
 
-## 完整测试与生命周期压力测试
+## Complete testing and life cycle stress testing
 
-输入 `a` 会运行一次完整测试，包括：
+Entering `a` will run a complete test, including:
 
-- 一轮 `begin()/end()` 生命周期检查。
-- API 参数、非法枚举与亮度钳制检查。
-- 全部灯区及 `off()` 检查。
-- blink/breathe 三档速度检查。
-- 四种有限动画、`isBusy()` 和动画抢占检查。
-- 600 次快速命令覆盖检查。
+- One `begin()/end()` lifecycle check.
+- API parameters, illegal enumeration and brightness clamp checks.
+- All light areas and `off()` check.
+- blink/breathe third speed check.
+- Four limited animations, `isBusy()` and animation preemption checks.
+- 600 quick command coverage checks.
 
-完整测试结束时，串口摘要应显示 `54/54 checks passed`。其中 `[PASS]` 是软件自动检查结果，所有 `[OBSERVE]` 项仍需通过实物或视频确认。
+At the end of the complete test, the serial port summary should show `54/54 checks passed`. Among them, `[PASS]` is the result of automatic checking by the software, and all `[OBSERVE]` items still need to be confirmed by physical objects or videos.
 
-输入一次 `l` 只运行一轮生命周期测试：调用两次 `end()`，检查 begun、task、RGB 供电和命令拒绝状态；随后调用两次 `begin()`，检查 begun、task 与 RGB 供电恢复。它不验证灯区、频率或动画。
+Enter `l` once to run only one round of life cycle testing: call `end()` twice to check begun, task, RGB power supply and command rejection status; then call `begin()` twice to check begun, task and RGB power supply restoration. It does not validate light zones, frequencies, or animations.
 
-连续输入十个 `l`：
+Enter ten consecutive `l`s:
 
 ```text
 llllllllll
 ```
 
-即可执行连续 10 轮生命周期压力测试，主要验证 task、NeoPixel 和 RMT 资源能否稳定重复创建和释放。每轮应输出 8 项 `[PASS]`，十轮共 80 项，且不得出现 RMT 错误、内存不足、异常复位或卡死。
+You can perform 10 consecutive rounds of life cycle stress testing, mainly to verify whether task, NeoPixel and RMT resources can be stably and repeatedly created and released. Each round should output 8 items of `[PASS]`, for a total of 80 items in ten rounds, and there must be no RMT error, insufficient memory, abnormal reset or stuck.
 
-在 PlatformIO 中可按以下方式手动执行：
+This can be done manually in PlatformIO as follows:
 
 ```powershell
 pio device monitor -p COM6 -b 115200
 ```
 
-进入串口后直接输入 `llllllllll`。如果使用的串口终端不会立即发送字符，则输入后按回车；测试程序会忽略换行。测试结束后输入 `p`，预期状态为：
+Enter `llllllllll` directly after entering the serial port. If the serial port terminal used does not send characters immediately, press Enter after typing; the test program will ignore line breaks. After the test is completed, enter `p` and the expected status is:
 
 ```text
 [STATE] begun=1 task_running=1 busy=0 brightness=64 power_pin=1
 ```
 
-生命周期测试结束时会重新调用 `begin()`，因此最终 task 和 RGB 供电保持开启。
+`begin()` will be called again at the end of the life cycle test, so the final task and RGB power supply remain on.
 
-## 自动检查
+## Automatic check
 
-- [x] `begin()/end()` 重复调用保持幂等。
-- [x] `end()` 后 task 停止、RGB 供电关闭，且拒绝新灯效命令。
-- [x] `begin()` 后 task 运行、RGB 供电开启。
-- [x] 亮度输入钳制到 `RGB_LED_MAX_BRIGHTNESS`。
-- [x] 等待执行的灯效命令与后续亮度命令正确合并。
-- [x] 非法 zone、speed、animation 返回 `false`。
-- [x] 四种有限动画运行时 `isBusy()` 为 `true`，完成后恢复 `false`。
-- [x] 持续灯效抢占动画后及时清除 busy。
-- [x] 600 次快速覆盖命令全部被接受，task 保持运行且最终状态正确。
+- [x] Repeated calls of `begin()/end()` remain idempotent.
+- [x] After `end()`, the task stops, the RGB power supply is turned off, and new lighting effect commands are rejected.
+- [x] After `begin()`, the task runs and RGB power supply is turned on.
+- [x] Brightness input clamped to `RGB_LED_MAX_BRIGHTNESS`.
+- [x] The lighting effect command waiting to be executed is correctly merged with the subsequent brightness command.
+- [x] Illegal zone, speed, animation returns `false`.
+- [x] Four limited animations run with `isBusy()` as `true` and return to `false` after completion.
+- [x] Clear busy in time after continuous lighting effect preempts animation.
+- [x] All 600 quick coverage commands were accepted, the task kept running and the final state was correct.
 
-串口摘要必须显示所有 `[AUTOMATED]` 检查通过；出现任一 `[FAIL]` 都不能判定测试通过。
+The serial port summary must show that all `[AUTOMATED]` checks have passed; the occurrence of any `[FAIL]` cannot determine that the test has passed.
 
-## 实物检查
+## Physical inspection
 
-- [x] `LED_ZONE_ALL`：四灯亮。
-- [x] `LED_ZONE_ONLY_LEFT`：仅左灯亮。
-- [x] `LED_ZONE_ONLY_RIGHT`：仅右灯亮。
-- [x] `LED_ZONE_ONLY_SIDES`：左右两灯亮，上下灯不亮。
-- [x] `LED_ZONE_LEFT`：左灯、上灯、下灯亮。
-- [x] `LED_ZONE_RIGHT`：右灯、上灯、下灯亮。
-- [x] `LED_ZONE_NONE` 与 `off()`：四灯熄灭。
-- [x] blink 慢、中、快三档约为 1000/500/200 ms 周期。
-- [x] breathe 慢、中、快三档约为 2400/1600/900 ms 周期。
-- [x] 顺时针跑马灯：`BOTTOM -> LEFT -> TOP -> RIGHT`，绿色，约 1 秒。
-- [x] 逆时针跑马灯：`BOTTOM -> RIGHT -> TOP -> LEFT`，绿色，约 1 秒。
-- [x] `FLASH`：四灯绿色快速闪烁 3 次。
-- [x] `FADE_OUT`：柔和琥珀色按 `RIGHT -> TOP -> LEFT -> BOTTOM` 渐暗。
-- [x] 动画被常亮抢占后立即显示四灯蓝色，不恢复旧动画。
-- [x] 快速覆盖结束后显示四灯绿色，无卡死、异常复位或闪烁残留。
-- [x] `end()` 后四灯熄灭且 RGB 供电关闭。
+- [x] `LED_ZONE_ALL`: Four lights are on.
+- [x] `LED_ZONE_ONLY_LEFT`: Only the left light is on.
+- [x] `LED_ZONE_ONLY_RIGHT`: Only the right light is on.
+- [x] `LED_ZONE_ONLY_SIDES`: The left and right lights are on, but the upper and lower lights are off.
+- [x] `LED_ZONE_LEFT`: The left, upper, and lower lights are on.
+- [x] `LED_ZONE_RIGHT`: The right light, upper light, and lower light are on.
+- [x] `LED_ZONE_NONE` and `off()`: four lights are off.
+- [x] blink slow, medium and fast three speeds are about 1000/500/200 ms period.
+- [x] breathe The three gears of slow, medium and fast are about 2400/1600/900 ms period.
+- [x] Clockwise ticker: `BOTTOM -> LEFT -> TOP -> RIGHT`, green, about 1 second.
+- [x] Counterclockwise marquee: `BOTTOM -> RIGHT -> TOP -> LEFT`, green, about 1 second.
+- [x] `FLASH`: The four lights flash green 3 times quickly.
+- [x] `FADE_OUT`: Soft amber fade by pressing `RIGHT -> TOP -> LEFT -> BOTTOM`.
+- [x] After the animation is preempted by the constant light, the four-light blue light will be displayed immediately and the old animation will not be restored.
+- [x] After the quick overwrite is completed, four green lights are displayed, and there is no stuck, abnormal reset or flickering residue.
+- [x] `end()` The last four lights go out and the RGB power supply is turned off.
 
-## 当前结果
+## Current result
 
-- 生产环境编译：通过（2026-07-14，ESP32-C6 / Arduino 3.3.9）。
-- 固件烧录：通过（2026-07-14，ESP32-C6，COM6）。
-- 自动串口检查：通过，54/54 checks passed；额外连续 10 轮 `end()/begin()` 压力测试通过。
-- 实物观察：通过，全部灯区、频率、动画及抢占效果已确认正确。
+- Production environment compilation: Passed (2026-07-14, ESP32-C6 / Arduino 3.3.9).
+- Firmware burning: passed (2026-07-14, ESP32-C6, COM6).
+- Automatic serial port check: passed, 54/54 checks passed; additional 10 consecutive rounds of `end()/begin()` stress test passed.
+- Physical observation: Passed, all light areas, frequencies, animations and preemption effects have been confirmed to be correct.
 
-首次实测发现重复 `end()/begin()` 后 GPIO4 的 RMT 通道未重新附着。生产 Controller 已改为每个生命周期独立创建和销毁 NeoPixel 实例，修复后重复生命周期及完整自动测试均未再出现 RMT 错误。
+The first actual measurement found that the RMT channel of GPIO4 was not reattached after repeating `end()/begin()`. The production Controller has been changed to create and destroy NeoPixel instances independently for each life cycle. After the repair, RMT errors no longer occur in repeated life cycles and complete automated tests.

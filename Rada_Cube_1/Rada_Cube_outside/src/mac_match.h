@@ -5,46 +5,46 @@
 #include "espnow.h"
 #include "protocol.h"
 
-// ======================== 配对参数 ========================
-#define PAIR_MAX_RETRY          60      // 配对最大重试次数
-#define PAIR_POLL_INTERVAL_MS   100     // 配对轮询间隔 (ms)
-#define PAIR_ROUND_CHECKS       10      // 每轮发送后检查次数（PAIR_ROUND_CHECKS * PAIR_POLL_INTERVAL_MS = 1轮总等待时间）
+// ======================== Pairing parameters ========================
+#define PAIR_MAX_RETRY          60      // Maximum number of pairing retries
+#define PAIR_POLL_INTERVAL_MS   100     // Pairing polling interval (ms)
+#define PAIR_ROUND_CHECKS       10      // Number of checks after each round of sending (PAIR_ROUND_CHECKS * PAIR_POLL_INTERVAL_MS = 1 round of total waiting time)
 
 /**
- * MAC 地址配对模块
+ * MAC address pairing module
  *
- * 责任：通过 ESP-NOW 完成主从配对，并把对方 MAC 地址持久化到 NVS
+ * Responsibility: Complete master-slave pairing through ESP-NOW and persist the other party's MAC address to NVS
  *
- * 使用示例：
+ * Usage example:
  *
  *   EspNowManager Espnow;
  *   MacMatch matcher(Espnow);
  *
- *   // 检查是否已配对
+ *   // Check if paired
  *   if (matcher.hasPeerMac()) {
  *       uint8_t mac[6];
  *       matcher.loadPeerMac(mac);
  *   }
  *
- *   // 执行配对（阻塞，最多等 PAIR_MAX_RETRY 轮）
+ *   // Perform pairing (blocking, waiting at most PAIR_MAX_RETRY rounds)
  *   if (!matcher.pair()) {
- *       // 配对失败处理
+ *       // Pairing failure processing
  *   }
  *
- *   // 清除已保存的配对信息
+ *   // Clear saved pairing information
  *   matcher.clearPeerMac();
  */
 class MacMatch
 {
 public:
-    // 构造时传入 EspNowManager 引用
+    // Pass in the EspNowManager reference during construction
     MacMatch(EspNowManager& espnow) : _espnow(espnow) {}
 
-    // 执行配对流程（阻塞，超时返回 false）
+    // Execute the pairing process (blocking, returning false after timeout)
     bool pair(uint8_t max_retry = PAIR_MAX_RETRY);
 
-    // NVS 操作
-    // 主机NVS操作
+    // NVS operation
+    // Host NVS operation
 // #ifdef INSIDE
 //     bool has_slave_a_mac();
 //     bool has_slave_b_mac();
@@ -53,7 +53,7 @@ public:
 //     void clear_slave_mac();
 
 // #endif
-    // 从机NVS操作
+    // Slave NVS operation
 // #ifdef OUTSIDE
     bool has_master_mac();
     bool load_master_mac(uint8_t mac_out[6]);

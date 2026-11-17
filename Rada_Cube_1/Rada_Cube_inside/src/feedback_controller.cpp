@@ -274,8 +274,8 @@ void FeedbackController::onWakeCompletedToneEvent()
 void FeedbackController::onWakeTimedOutEvent(
     FeedbackSensorSet awake_sensors)
 {
-    // Both 表示唤醒完成，而不是唤醒超时。忽略这个非法调用，避免在给出
-    // 成功反馈的同时，将最近一次事件错误地覆盖为 WakeTimedOut。
+    // Both indicates wake-up completion, not wake-up timeout. Ignore this illegal call to avoid giving
+    // While successfully feedbacking, the latest event is incorrectly overwritten as WakeTimedOut.
     if (awake_sensors == FeedbackSensorSet::Both) {
         return;
     }

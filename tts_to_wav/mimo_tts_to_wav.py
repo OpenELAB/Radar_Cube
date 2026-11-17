@@ -356,7 +356,7 @@ def prompt_choice(label: str, choices: list[str], default: str) -> str:
         value = prompt_with_default(f"{label} ({choice_text})", default)
         if value in choices:
             return value
-        print(f"[WARN] 请输入: {choice_text}")
+        print(f"[WARN] Enter: {choice_text}")
 
 
 def prompt_yes_no(label: str, default: bool = False) -> bool:
@@ -367,7 +367,7 @@ def prompt_yes_no(label: str, default: bool = False) -> bool:
             return True
         if value in ("n", "no"):
             return False
-        print("[WARN] 请输入 y 或 n")
+        print("[WARN] Enter y or n")
 
 
 def prompt_int(label: str, default: int) -> int:
@@ -376,7 +376,7 @@ def prompt_int(label: str, default: int) -> int:
         try:
             return int(value)
         except ValueError:
-            print("[WARN] 请输入整数")
+            print("[WARN] Enter an integer")
 
 
 def collect_interactive_config(args: argparse.Namespace | None = None) -> dict[str, object]:
@@ -391,27 +391,27 @@ def collect_interactive_config(args: argparse.Namespace | None = None) -> dict[s
     default_base_url = getattr(args, "base_url", DEFAULT_BASE_URL)
 
     print("=" * 72)
-    print("  MiMo TTS 批量生成模式")
-    print("  先配置一次参数，然后重复输入文本生成 WAV。输入 q 退出。")
+    print("  MiMo TTS batch generation mode")
+    print("  Configure once, then enter text to generate WAV files. Enter q to quit.")
     print("=" * 72)
 
-    mode = prompt_choice("模式", [VOICE_DESIGN_MODE, BUILTIN_MODE], default_mode)
+    mode = prompt_choice("Mode", [VOICE_DESIGN_MODE, BUILTIN_MODE], default_mode)
     voice = default_voice
     voice_design = default_voice_design
     style = default_style
     optimize_text_preview = False
 
     if mode == VOICE_DESIGN_MODE:
-        voice_design = prompt_with_default("文本设计音色描述", default_voice_design)
-        optimize_text_preview = prompt_yes_no("是否启用文本优化预览（可能扩写文本）", False)
+        voice_design = prompt_with_default("Voice design description", default_voice_design)
+        optimize_text_preview = prompt_yes_no("Enable text optimization preview (may expand text)", False)
     else:
-        voice = prompt_with_default("内置音色 ID", default_voice)
-        style = prompt_with_default("内置音色风格提示", default_style)
+        voice = prompt_with_default("Built-in voice ID", default_voice)
+        style = prompt_with_default("Built-in voice style prompt", default_style)
 
-    style_tags = prompt_with_default("音频标签（空=不加）", default_style_tags or "") or None
-    output_dir_value = prompt_with_default("输出目录", str(DEFAULT_OUTPUT_DIR))
-    sample_rate = prompt_int("输出采样率", default_sample_rate)
-    keep_temp = prompt_yes_no("是否保留 MiMo 原始 WAV", default_keep_temp)
+    style_tags = prompt_with_default("Audio tags (blank for none)", default_style_tags or "") or None
+    output_dir_value = prompt_with_default("Output directory", str(DEFAULT_OUTPUT_DIR))
+    sample_rate = prompt_int("Output sample rate", default_sample_rate)
+    keep_temp = prompt_yes_no("Keep the original MiMo WAV", default_keep_temp)
 
     return {
         "mode": mode,
@@ -429,18 +429,18 @@ def collect_interactive_config(args: argparse.Namespace | None = None) -> dict[s
 
 
 def print_interactive_config(config: dict[str, object]) -> None:
-    print("\n当前配置:")
-    print(f"  模式: {config['mode']}")
+    print("\nCurrent configuration:")
+    print(f"  Mode: {config['mode']}")
     if config["mode"] == VOICE_DESIGN_MODE:
-        print(f"  文本设计音色: {config['voice_design']}")
-        print(f"  文本优化预览: {'开' if config['optimize_text_preview'] else '关'}")
+        print(f"  Voice design: {config['voice_design']}")
+        print(f"  Text optimization preview: {'on' if config['optimize_text_preview'] else 'off'}")
     else:
-        print(f"  内置音色: {config['voice']}")
-        print(f"  风格提示: {config['style']}")
-    print(f"  音频标签: {config['style_tags'] or '无'}")
-    print(f"  输出目录: {config['output_dir']}")
-    print(f"  采样率: {config['sample_rate']}Hz")
-    print(f"  保留原始 WAV: {'是' if config['keep_temp'] else '否'}")
+        print(f"  Built-in voice: {config['voice']}")
+        print(f"  Style prompt: {config['style']}")
+    print(f"  Audio tags: {config['style_tags'] or 'none'}")
+    print(f"  Output directory: {config['output_dir']}")
+    print(f"  Sample rate: {config['sample_rate']} Hz")
+    print(f"  Keep original WAV: {'yes' if config['keep_temp'] else 'no'}")
 
 
 def interactive_mode(args: argparse.Namespace | None = None) -> int:
@@ -448,23 +448,23 @@ def interactive_mode(args: argparse.Namespace | None = None) -> int:
     print_interactive_config(config)
 
     if not os.environ.get("MIMO_API_KEY"):
-        print("\n[WARN] 当前没有设置 MIMO_API_KEY，生成时会失败。")
-        print('       PowerShell 示例: $env:MIMO_API_KEY="your_api_key"')
+        print("\n[WARN] MIMO_API_KEY is not set; generation will fail.")
+        print('       PowerShell example: $env:MIMO_API_KEY="your_api_key"')
 
-    print("\n输入说明:")
-    print("  直接输入文本: 自动按文本生成文件名")
-    print("  文本 => 文件名.wav: 指定输出文件名")
-    print("  :config 重新配置，q 退出")
+    print("\nInput:")
+    print("  Enter text to generate a filename automatically")
+    print("  text => filename.wav to specify the output filename")
+    print("  :config to reconfigure; q to quit")
     print("-" * 72)
 
     index = 1
     while True:
         try:
-            line = input("文本> ").strip()
+            line = input("Text> ").strip()
             if not line:
                 continue
             if line.lower() in ("q", "quit", "exit"):
-                print("已退出。")
+                print("Exited.")
                 return 0
             if line == ":config":
                 config = collect_interactive_config(args)
@@ -473,7 +473,7 @@ def interactive_mode(args: argparse.Namespace | None = None) -> int:
 
             text, output_file = parse_interactive_text_line(line)
             if not text:
-                print("[WARN] 文本不能为空")
+                print("[WARN] Text cannot be empty")
                 continue
 
             output_dir = Path(config["output_dir"])
@@ -502,10 +502,10 @@ def interactive_mode(args: argparse.Namespace | None = None) -> int:
             index += 1
             print()
         except KeyboardInterrupt:
-            print("\n已退出。")
+            print("\nExited.")
             return 0
         except Exception as exc:
-            print(f"[ERROR] 生成失败: {exc}")
+            print(f"[ERROR] Generation failed: {exc}")
             print()
 
 

@@ -8,20 +8,20 @@
 #include "protocol.h"
 #include "espnow.h"
 
-// 系统模式
+// System mode
 enum SysMode {
-    UNPAIRED_MODE,      // 未配对 → 直接睡眠
-    PAIRED_MODE,        // 配对模式
-    WORK_MODE,          // 工作模式（Normal）
-    TEST_MODE,          // 测试模式（预留）
-    CONFIG_MODE,        // 配置模式（预留）
-    FACTORY_RESET_MODE  // 恢复出厂设置
+    UNPAIRED_MODE,      // Not paired → sleep directly
+    PAIRED_MODE,        // Pairing mode
+    WORK_MODE,          // Working mode (Normal)
+    TEST_MODE,          // Test mode (reserved)
+    CONFIG_MODE,        // Configuration mode (reserved)
+    FACTORY_RESET_MODE  // Restore factory settings
 };
 
 
-// ======================== 全局实例 ========================
+// ======================== Global instance ========================
 
-// 串口实例（pins.h 里 extern 声明，这里定义）
+// Serial port instance (extern statement in pins.h, defined here)
 HardwareSerial& LoraSerial = Serial1;
 // #ifdef INSIDE
 //     BeeperControler Beeper;
@@ -37,9 +37,9 @@ LoraManager Lora;
 EspNowManager Espnow;
 MacMatch Matcher(Espnow);
 
-// ======================== 辅助函数 ========================
+// ======================== Auxiliary functions ========================
 
-// 发送结束帧（重发 END_SEND_COUNT 次确保对方收到）
+// Send end frame (resend END_SEND_COUNT times to ensure the other party receives it)
 static void sendEndFrame(const uint8_t* peer_mac, uint8_t head)
 {
     protocol_frame_t frame;
@@ -50,7 +50,7 @@ static void sendEndFrame(const uint8_t* peer_mac, uint8_t head)
     }
 }
 
-// 检查是否收到结束帧
+// Check whether the end frame is received
 static bool checkEndFrame(uint8_t expect_head)
 {
     espnow_msg_t msg;
@@ -62,7 +62,7 @@ static bool checkEndFrame(uint8_t expect_head)
     return false;
 }
 
-// 等待按键释放并返回持续时间（ms）
+// Wait for button release and return duration (ms)
 static uint32_t waitButtonRelease()
 {
     uint32_t t_start = millis();
@@ -85,12 +85,12 @@ static uint32_t waitButtonRelease()
     return hold_time;
 }
 
-// 两键同时按下从机实现比较困难，我把config_mode和factor_reset_mode对换了
+// It is difficult to press two keys at the same time on the slave machine. I swapped config_mode and factor_reset_mode.
 
-// 按键 → 模式判断（USER 和 DEV 分开处理）
-//   USER button: 短按 → WORK_MODE,  长按(3s) → PAIRED_MODE
-//   DEV  button: 短按 → TEST_MODE,  长按(3s) → CONFIG_MODE
-//   两键同按:     → FACTORY_RESET_MODE
+// Key → Mode judgment (USER and DEV are processed separately)
+//   USER button: short press → WORK_MODE, long press (3s) → PAIRED_MODE
+//   DEV button: short press → TEST_MODE, long press (3s) → CONFIG_MODE
+//   Press two keys at the same time: → FACTORY_RESET_MODE
 static SysMode detectButtonMode(WakeupSource wakeup)
 {
     uint32_t hold = waitButtonRelease();
@@ -110,42 +110,42 @@ static SysMode detectButtonMode(WakeupSource wakeup)
     return UNPAIRED_MODE;
 }
 
-// ======================== INSIDE 工作模式 ========================
+// ======================== INSIDE working mode ========================
 
 
-// ======================== OUTSIDE 工作模式 ========================
+// ======================== OUTSIDE working mode ========================
 // #ifdef OUTSIDE
 static void outside_work_mode(uint8_t* peer_mac)
 {
-    // 1) 回复唤醒 ACK
+    // 1) Reply to wake up ACK
     protocol_frame_t ack;
     frame_build(&ack, SLAVE_FRAME_HEAD, FRAME_WAKE_ACK);
     if (Espnow.send(peer_mac, (uint8_t*)&ack, sizeof(ack)) != ESP_OK) {
         ESP_LOGE(MAIN_TAG, "Failed to send WAKE_ACK");
     }
 
-    // Lora 不再需要，关掉串口给雷达让路（共用 Serial1）
+    // Lora is no longer needed, turn off the serial port to make way for the radar (share Serial1)
     LoraSerial.end();
 
-    // 2) 初始化雷达 + 定期发送雷达数据
+    // 2) Initialize radar + send radar data periodically
     Radar.init();
     uint32_t work_start = millis();
 
     while (true) {
-        // 退出条件1：超时
+        // Exit condition 1: timeout
         if (millis() - work_start > WORK_TIMEOUT_MS) {
             ESP_LOGI(MAIN_TAG, "Work timeout, exiting");
             break;
         }
 
-        // 退出条件2：按键按下
+        // Exit condition 2: button pressed
         if (digitalRead(USER_BUTTON_PIN) == BUTTON_PRESSED ||
             digitalRead(DEV_BUTTON_PIN)  == BUTTON_PRESSED) {
             ESP_LOGI(MAIN_TAG, "Button pressed, exiting work mode");
             break;
         }
 
-        // 退出条件3：收到主机结束帧
+        // Exit condition 3: Host end frame received
         {
             espnow_msg_t msg;
             if (Espnow.read(&msg)) {
@@ -156,14 +156,14 @@ static void outside_work_mode(uint8_t* peer_mac)
             }
         }
 
-        // 解析雷达 + 发送
+        // Analyze Radar + Send
         Radar.loop();
         RadarData rd;
         if (Radar.getData(&rd)) {
             protocol_frame_t frame;
             frame_build(&frame, SLAVE_FRAME_HEAD, FRAME_RADAR_DATA,
                         rd.dist_mm, (int16_t)(rd.angle_deg * 100));
-            // 发送的时候随机加个延时，避免长期占线
+            // Add a random delay when sending to avoid being busy for a long time
             // uint8_t delay_ms = random(0, 4);
             // vTaskDelay(pdMS_TO_TICKS(delay_ms));
             vTaskDelay(pdMS_TO_TICKS(10));
@@ -173,14 +173,14 @@ static void outside_work_mode(uint8_t* peer_mac)
         vTaskDelay(pdMS_TO_TICKS(RADAR_SEND_INTERVAL_MS));
     }
 
-    // 3) 退出：通知主机 + 关雷达
+    // 3) Exit: notify host + turn off radar
     sendEndFrame(peer_mac, SLAVE_FRAME_HEAD);
     Radar.shutdown();
     ESP_LOGI(MAIN_TAG, "Work mode finished");
 }
 // #endif
 
-// ======================== 唤醒源 → 模式判断 ========================
+// ======================== Wake-up source → Mode judgment ========================
 
 static SysMode determineMode(WakeupSource wakeup, bool has_peer)
 {
@@ -188,7 +188,7 @@ static SysMode determineMode(WakeupSource wakeup, bool has_peer)
 
 
 // #ifdef OUTSIDE
-    // 车外模块：按键唤醒、Lora 唤醒、上电
+    // External module: key wake-up, Lora wake-up, power-on
     switch (wakeup) {
     case WAKEUP_LORA:
         if (has_peer) {
@@ -204,12 +204,12 @@ static SysMode determineMode(WakeupSource wakeup, bool has_peer)
         mode = detectButtonMode(wakeup);
         break;
     default:
-        // 上电复位 → 保持 UNPAIRED_MODE → 直接睡
+        // Power-on reset → keep UNPAIRED_MODE → sleep directly
         break;
     }
 // #endif
 
-    // 工作模式需要已配对
+    // Working mode needs to be paired
     if (mode == WORK_MODE && !has_peer) {
         ESP_LOGW(MAIN_TAG, "Not paired, cannot enter WORK_MODE");
         mode = UNPAIRED_MODE;
@@ -218,7 +218,7 @@ static SysMode determineMode(WakeupSource wakeup, bool has_peer)
     return mode;
 }
 
-// ======================== 模式处理 ========================
+// ======================== Pattern processing ========================
 
 static void handleMode(SysMode mode)
 {
@@ -227,7 +227,7 @@ static void handleMode(SysMode mode)
     case FACTORY_RESET_MODE:
         ESP_LOGI(MAIN_TAG, "Mode: FACTORY_RESET");
         for (int i = 0; i < 3; i++) Led.blink(LED_PERIOD_3);
-        // 清除
+        // Clear
 // #ifdef INSIDE
 //         Matcher.clear_slave_mac();
 // #endif
@@ -235,12 +235,12 @@ static void handleMode(SysMode mode)
 // #ifdef OUTSIDE
         Matcher.clear_master_mac();
 // #endif
-        Lora.setup();               // 需要先初始化 Lora 才能清配置
+        Lora.setup();               // Lora needs to be initialized before clearing the configuration
         Lora.clearConfigFlag();
         Lora.shutdown();
         break;
     
-    // TODO：unpair模式要不要直接开始配对？
+    // TODO: Should I start pairing directly in unpair mode?
     case UNPAIRED_MODE:
         ESP_LOGI(MAIN_TAG, "Mode: UNPAIRED");
         for (int i = 0; i < 2; i++) Led.blink(LED_PERIOD_2);
@@ -248,24 +248,24 @@ static void handleMode(SysMode mode)
 
     case PAIRED_MODE:
         ESP_LOGI(MAIN_TAG, "Mode: PAIRED");
-        // TODO：这里需不要要用灯来指示配对过程，比如处于配对时用呼吸灯？
+        // TODO: Is it necessary to use a light to indicate the pairing process, such as a breathing light during pairing?
         Led.blink(LED_PERIOD_1);
         if (!Matcher.pair()) {
             ESP_LOGE(MAIN_TAG, "Pair failed, going to sleep");
         } else {
-            for (int i = 0; i < 3; i++) Led.blink(LED_PERIOD_1);  // 配对成功提示
+            for (int i = 0; i < 3; i++) Led.blink(LED_PERIOD_1);  // Pairing success prompt
         }
         break;
 
     case TEST_MODE:
         ESP_LOGI(MAIN_TAG, "Mode: TEST");
-        // TODO：测试模式，用于开发和工厂测试硬件
+        // TODO: Test mode, used for development and factory testing of hardware
         Led.blink(LED_PERIOD_2);
         break;
 
     case CONFIG_MODE:
         ESP_LOGI(MAIN_TAG, "Mode: CONFIG");
-        // TODO：配置模式，预留（OTA 等）
+        // TODO: Configuration mode, reserved (OTA, etc.)
         Led.blink(LED_PERIOD_2);
         break;
 
@@ -276,21 +276,21 @@ static void handleMode(SysMode mode)
 
 
 // #ifdef OUTSIDE
-        // ---- 车外模块工作流程 ----
-        // 1) Lora 初始化（被唤醒后需要就绪状态）
+        // ---- Off-vehicle module work flow ----
+        // 1) Lora initialization (needs ready state after waking up)
         Lora.setup();
 
-        // 2) ESP-NOW 初始化
+        // 2) ESP-NOW initialization
         Espnow.init();
         uint8_t master_mac[6]{};
         Matcher.load_master_mac(master_mac);
         Espnow.addPeer(master_mac);
         Espnow.recvStart();
 
-        // 3) 回复 ACK → 雷达采集循环
+        // 3) Reply ACK → radar acquisition loop
         outside_work_mode(master_mac);
 
-        // 4) 清理
+        // 4) Clean up
         Espnow.recvStop();
         Espnow.deinit();
         Lora.shutdown();
@@ -307,7 +307,7 @@ static void handleMode(SysMode mode)
 void setup()
 {
 
-    // 初始化按键引脚 & 检测唤醒原因
+    // Initialize button pins & detect wake-up reasons
     Power.wakeup_gpio_init();
     Power.detectWakeupSource();
     WakeupSource wakeup = Power.getWakeupSource();
@@ -315,20 +315,20 @@ void setup()
     Led.led_init();
     Power.power_init();
 
-    // 加上打开Lora电源，第一次上电发现不加上打开电源，功率开关的使能引脚会卡在加上上拉电阻后也是0.7V左右不是3.3V导致Lora无法工作
+    // After turning on the power of Lora, I found that without turning on the power for the first time, the enable pin of the power switch will be stuck at about 0.7V instead of 3.3V after adding a pull-up resistor, causing Lora to not work.
     pinMode(LORA_POWER_PIN, OUTPUT);
     digitalWrite(LORA_POWER_PIN, LORA_POWER_ON);
 
-    // 电池电量检测
+    // Battery power detection
     uint8_t bat = Power.get_battery_value();
-    // 这个可以调高一点，bat是0的时候可能不能上电了就
+    // This can be adjusted a little higher. When the bat is 0, it may not be able to be powered on.
     if (bat == 0) {
         ESP_LOGE(MAIN_TAG, "Battery empty, going to sleep");
         Power.deep_sleep();
-        // TODO：是不是可以在电量过低时发个警告？比如闪灯或者蜂鸣？
+        // TODO: Is it possible to send a warning when the battery is too low? Like a flashing light or a buzzer?
     }
 
-    // 读取已配对 MAC（如果有）
+    // Read paired MAC (if available)
 // #ifdef INSIDE
 //     bool has_peer = Matcher.has_slave_a_mac() && Matcher.has_slave_b_mac();
 // #endif
@@ -338,9 +338,9 @@ void setup()
 // #endif
 
 
-    // TODO：这里是不是加个else直接进入unpair模式？
+    // TODO: Should I add an else here to directly enter the unpair mode?
 
-    // 判断模式 → 执行 → 睡眠
+    // Judgment mode → Execute → Sleep
     SysMode mode = determineMode(wakeup, has_peer);
     handleMode(mode);
     Power.deep_sleep();
